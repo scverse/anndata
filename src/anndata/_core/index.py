@@ -2,16 +2,15 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from enum import Enum
-from functools import singledispatch, wraps
+from functools import partial, singledispatch, wraps
 from itertools import repeat
 from types import EllipsisType
-from typing import TYPE_CHECKING, Literal, NamedTuple, cast, overload
+from typing import TYPE_CHECKING, Literal, NamedTuple, Protocol, cast, overload
 
 import h5py
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
-from scipy import sparse
 
 from .._settings import settings
 from ..compat import (
@@ -28,7 +27,7 @@ from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from typing import TypeIs
+    from typing import Self, TypeIs
 
     from ..acc import Array
     from ..typing import AlignedArray, Index1D, _Index, _Index1D, _Index1DNorm
@@ -443,11 +442,98 @@ def _subset[T: AlignedArray](
 @_subset_dispatch.register(DaskArray)
 @_ensure_numpy_idx
 def _subset_dask(a: DaskArray, subset_idx: NumpySubsetIdx) -> DaskArray:
-    if len(subset_idx) > 1 and all(isinstance(x, Iterable) for x in subset_idx):
-        if isinstance(a._meta, sparse.csc_matrix | sparse.csc_array):
-            return a[:, subset_idx[1]][subset_idx[0], :]
-        return a[subset_idx[0], :][:, subset_idx[1]]
-    return a[subset_idx]
+    if len(subset_idx) == 1:
+        return _subset_dask_axis(a, subset_idx[0], axis=0)
+    rows, cols = subset_idx
+    # Subset the axis split into more chunks first: that can drop whole chunks, and for
+    # sparse chunks (split along their major axis) it is a cheap slice of `indptr`,
+    # which leaves fewer stored values for the subset along the other axis.
+    if a.numblocks[1] > a.numblocks[0]:
+        return _subset_dask_axis(_subset_dask_axis(a, cols, axis=1), rows, axis=0)
+    return _subset_dask_axis(_subset_dask_axis(a, rows, axis=0), cols, axis=1)
+
+
+def _subset_dask_axis(
+    a: DaskArray, idx: NumpyIdx1D, *, axis: Literal[0, 1]
+) -> DaskArray:
+    if isinstance(idx, slice) and idx == slice(None):
+        return a
+    sel = (slice(None),) * axis + (idx,)
+    if isinstance(idx, slice):
+        return a[sel]
+    if a.numblocks[axis] > 1:
+        return _subset_chunked_axis(a, idx, axis=axis)
+    # Every chunk holds the whole axis, so subset each chunk on its own.
+    # Dask’s own fancy indexing makes all output chunks depend on a single task,
+    # which e.g. `dask.distributed` then places on a single worker, together with all their inputs.
+    import dask.array as da
+
+    n = int(np.count_nonzero(idx)) if idx.dtype == bool else len(idx)
+    chunks = tuple((n,) if i == axis else c for i, c in enumerate(a.chunks))
+    return da.map_blocks(
+        partial(_getitem_chunk, sel=sel), a, chunks=chunks, dtype=a.dtype, meta=a._meta
+    )
+
+
+def _subset_chunked_axis(
+    a: DaskArray, idx: NDArray[np.bool_] | NDArray[np.integer], *, axis: Literal[0, 1]
+) -> DaskArray:
+    """Subset an axis split into several chunks, keeping every chunk’s own selected items.
+
+    Dask’s own fancy indexing evens out the output chunks, so each is assembled from pieces of
+    several input chunks, which stay in memory (and move between workers) until all their output
+    chunks are done. An order-preserving selection does not need that.
+    """
+    import dask.array as da
+
+    sel = (slice(None),) * axis + (idx,)
+    if idx.dtype == bool:
+        mask = idx
+    elif (idx[:1] >= 0).all() and np.all(idx[1:] > idx[:-1]):  # increasing positions
+        mask = np.zeros(a.shape[axis], dtype=bool)
+        mask[idx] = True
+    else:
+        return a[sel]
+    bounds = np.cumsum((0, *a.chunks[axis]))
+    selected = np.zeros(len(mask) + 1, dtype=np.intp)
+    np.cumsum(mask, out=selected[1:])
+    counts = np.diff(selected[bounds])
+    blocks = np.flatnonzero(counts)
+    if not len(blocks):  # nothing selected: an axis needs at least one (empty) chunk
+        return a[sel]
+    if len(blocks) < len(counts):
+        # chunks without selected items are not read at all (only then: the extra layer
+        # keeps dask from fusing each chunk’s read and subset into one task)
+        a = a.blocks[(slice(None),) * axis + (blocks,)]
+        mask = np.concatenate([mask[bounds[i] : bounds[i + 1]] for i in blocks])
+    ind = tuple(range(a.ndim))  # any number of dimensions, e.g. 3-D `obsm` entries
+    return da.blockwise(
+        partial(_getitem_chunk_mask, axis=axis),
+        ind,
+        a,
+        ind,
+        da.from_array(mask, chunks=(a.chunks[axis],)),
+        (axis,),
+        adjust_chunks={axis: tuple(counts[blocks].tolist())},
+        dtype=a.dtype,
+        meta=a._meta,
+    )
+
+
+def _getitem_chunk_mask[C: _Subsettable](
+    chunk: C, mask: np.ndarray, *, axis: Literal[0, 1]
+) -> C:
+    return _getitem_chunk(chunk, sel=(slice(None),) * axis + (np.flatnonzero(mask),))
+
+
+class _Subsettable(Protocol):
+    def __getitem__(self, sel: tuple[slice | np.ndarray, ...], /) -> Self: ...
+
+
+def _getitem_chunk[C: _Subsettable](
+    chunk: C, *, sel: tuple[slice | np.ndarray, ...]
+) -> C:
+    return chunk[sel]
 
 
 @_subset_dispatch.register(CSMatrix)
