@@ -19,9 +19,12 @@ class SupportsArrayApiBase(Protocol):
         self,
         *,
         api_version: Literal["2021.12", "2022.12", "2023.12", "2024.12"] | None = None,
-    ) -> ArrayNamespace: ...
+    ) -> ArrayNamespace:
+        """See :meth:`array_api.array.__array_namespace__`."""
+
     def to_device(self, device: str, /, *, stream: int | Any | None = ...) -> Any: ...
-    def __getitem__(self, k: object) -> SupportsArrayApiBase: ...
+    def __getitem__(self, k: object) -> SupportsArrayApiBase:
+        """See :meth:`array_api.array.__getitem__`."""
 
 
 @runtime_checkable
@@ -34,8 +37,11 @@ class SupportsArrayApi(SupportsArrayApiBase, Protocol):
         max_version: tuple[int, int] | None = None,
         dl_device: tuple[Enum, int] | None = None,
         copy: bool | None = None,
-    ) -> Any: ...
-    def __dlpack_device__(self) -> tuple[int, int]: ...
+    ) -> Any:
+        """See :meth:`array_api.array.__dlpack__`."""
+
+    def __dlpack_device__(self) -> tuple[int, int]:
+        """See :meth:`array_api.array.__dlpack_device__`."""
 
 
 def __getattr__(key: str):
