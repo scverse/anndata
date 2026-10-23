@@ -213,6 +213,15 @@ class Dataset2D(Mapping[Hashable, XDataArray | Self]):
     def __getitem__(
         self, key: Mapping[Any, Any] | Hashable | Iterable[Hashable]
     ) -> Dataset2D | XDataArray:
+        """Get a column or a subset of columns.
+
+        Parameters
+        ----------
+        key
+            A column name returns that column as an :class:`xarray.DataArray`,
+            a collection of column names returns a :class:`Dataset2D` with those columns.
+            See :meth:`xarray.Dataset.__getitem__` for all supported keys.
+        """
         ret = self.ds.__getitem__(key)
         if is_empty := (len(key) == 0 and not isinstance(key, tuple)):  # empty Dataset
             ret.coords[self.index_dim] = self.xr_index
@@ -300,11 +309,18 @@ class Dataset2D(Mapping[Hashable, XDataArray | Self]):
         self, key: Hashable | Iterable[Hashable] | Mapping, value: Any
     ) -> None:
         """
-        Setting can only be performed when the incoming value is “standalone” like :class:`nump.ndarray` to mimic pandas.
+        Setting can only be performed when the incoming value is “standalone” like :class:`numpy.ndarray` to mimic pandas.
         One can also use the tuple setting style like `ds["foo"] = (ds.index_dim, value)` to set the value, although the index name must match.
-        Similarly, one can use the :class:`xarray.DataArray` but it must have the same (one and only one) dim name/coord name as `self.index_dim`.
+        Similarly, one can use the :class:`xarray.DataArray` but it must have the same (one and only one) dim name/coord name as :attr:`~anndata.experimental.backed.Dataset2D.index_dim`.
 
         For supported setter values see :meth:`xarray.Dataset.__setitem__`.
+
+        Parameters
+        ----------
+        key
+            Name of the column to set.
+        value
+            The column’s data, as described above.
         """
         if key == self.index_dim:
             msg = f"Cannot set the index dimension {self.index_dim} as if it were a variable. Use `ds.index = ...` instead."

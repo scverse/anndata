@@ -160,7 +160,13 @@ class MapAcc[R: RefAcc](abc.ABC):
 
     @abc.abstractmethod
     def __getitem__(self, k: str, /) -> R:
-        """Get a reference accessor for mapped array."""
+        """Get a reference accessor for mapped array.
+
+        Parameters
+        ----------
+        k
+            The key of the mapped array.
+        """
 
 
 @dataclass(frozen=True)
@@ -178,6 +184,14 @@ class RefAcc[R: AdRef[I], I, D: MuData | AnnData](abc.ABC):  # type: ignore
         return idx
 
     def __getitem__(self, idx: Any, /) -> R:
+        """Get a reference to an array.
+
+        Parameters
+        ----------
+        idx
+            Index into the referenced element.
+            Subclasses define which indices are valid.
+        """
         idx = self.process_idx(idx)
         return self.ref_class(self, idx)  # type: ignore
 
@@ -187,7 +201,11 @@ class RefAcc[R: AdRef[I], I, D: MuData | AnnData](abc.ABC):  # type: ignore
 
     @abc.abstractmethod
     def __repr__(self, /) -> str:
-        """Get a string representation of the accessor."""
+        """Get a display representation of the accessor.
+
+        This is not a simplified representation supported by :meth:`AdAcc.resolve`, but instead the code used to create the accessor,
+        e.g. `A.layers['counts']`.
+        """
 
     @abc.abstractmethod
     def idx_repr(self, idx: I, /) -> str:
@@ -244,6 +262,7 @@ class LayerAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D, AnnData]):
     @overload
     def __getitem__(self, idx: Idx2DList, /) -> list[R]: ...
     def __getitem__(self, idx: Idx2D | Idx2DList, /) -> R | list[R]:
+        # TODO: add docstring once sphinx-autodoc-typehints can render `pd.Index[str]` in `Idx2DList`
         if _is_idx2d_list(idx):
             return [self[i] for i in _expand_idx2d_list(idx)]
         return super().__getitem__(idx)
@@ -307,6 +326,13 @@ class LayerMapAcc[R: AdRef](MapAcc[LayerAcc]):
     ref_acc_cls: type[LayerAcc] = LayerAcc
 
     def __getitem__(self, k: str | None, /) -> LayerAcc[R]:
+        """Get a reference accessor for a layer.
+
+        Parameters
+        ----------
+        k
+            The layer’s key, or `None` for :attr:`~anndata.AnnData.X` (see :attr:`AdAcc.X`).
+        """
         if not isinstance(k, str | None):
             msg = f"Unsupported layer {k!r}"
             raise TypeError(msg)
@@ -355,6 +381,7 @@ class MetaAcc[R: AdRef[str | None]](RefAcc[R, str | None, MuData | AnnData]):
     def __getitem__[K: str | None](
         self, k: K | list[K] | pd.Index[str], /
     ) -> R | list[R]:
+        # TODO: add docstring once sphinx-autodoc-typehints can render `pd.Index[str]`
         # _is_t_list doesn’t allow None, so be more liberal when checking for lists
         if isinstance(k, list) or _is_t_list(k, str):
             return [self[i] for i in k]
@@ -446,6 +473,7 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int, MuData | AnnData]):
     @overload
     def __getitem__(self, i: IdxMultiList, /) -> list[R]: ...
     def __getitem__(self, i: int | tuple[slice, int] | IdxMultiList, /) -> R | list[R]:
+        # TODO: add docstring once sphinx-autodoc-typehints can render `pd.Index[int]` in `IdxMultiList`
         i = self.process_idx(i)
         if isinstance(i, list | pd.Index):
             return [self[j] for j in i]
@@ -499,6 +527,13 @@ class MultiMapAcc[R: AdRef](MapAcc[MultiAcc]):
     ref_acc_cls: type[MultiAcc] = MultiAcc
 
     def __getitem__(self, k: str, /) -> MultiAcc[R]:
+        """Get a reference accessor for an array, e.g. `A.obsm["pca"]`.
+
+        Parameters
+        ----------
+        k
+            The array’s key.
+        """
         if not isinstance(k, str):
             msg = f"Unsupported {self.dim}m key {k!r}"
             raise TypeError(msg)
@@ -544,6 +579,7 @@ class GraphAcc[R: AdRef[Idx2D]](RefAcc[R, Idx2D, MuData | AnnData]):
     @overload
     def __getitem__(self, idx: Idx2DList, /) -> list[R]: ...
     def __getitem__(self, idx: Idx2D | Idx2DList, /) -> R | list[R]:
+        # TODO: add docstring once sphinx-autodoc-typehints can render `pd.Index[str]` in `Idx2DList`
         if _is_idx2d_list(idx):
             return [self[i] for i in _expand_idx2d_list(idx)]
         return super().__getitem__(idx)
@@ -597,6 +633,13 @@ class GraphMapAcc[R: AdRef](MapAcc[GraphAcc]):
     ref_acc_cls: type[GraphAcc] = GraphAcc
 
     def __getitem__(self, k: str, /) -> GraphAcc[R]:
+        """Get a reference accessor for a graph, e.g. `A.obsp["distances"]`.
+
+        Parameters
+        ----------
+        k
+            The graph’s key.
+        """
         if not isinstance(k, str):
             msg = f"Unsupported {self.dim}p key {k!r}"
             raise TypeError(msg)
