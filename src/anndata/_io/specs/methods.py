@@ -1200,10 +1200,15 @@ def _object_column_to_writable(
         )
         raise TypeError(msg)
     nullable_dtype, numpy_dtype = conversion
-    missing = pd.isna(values)
     try:
-        if numpy_dtype is not None and not missing.any():
-            # Nothing is missing, so skip the masked array and cast directly
+        if (
+            numpy_dtype is not None
+            and numpy_dtype.kind == "i"
+            and pd.api.types.infer_dtype(values, skipna=False) == kind
+        ):
+            # No missing values at all, so a direct cast is cheapest and lossless.
+            # (Only checked for ints: a bool cast would turn None into False, and
+            # numpy casts some missing markers, e.g. complex NaN, to an int.)
             return values.astype(numpy_dtype)
         converted = pd.array(values, dtype=nullable_dtype)
     except (TypeError, ValueError, OverflowError) as e:
@@ -1213,16 +1218,17 @@ def _object_column_to_writable(
         )
         raise TypeError(msg) from e
     if numpy_dtype is not None:
-        return converted
+        return converted if converted.isna().any() else converted.to_numpy(numpy_dtype)
     floats = converted.to_numpy(dtype=np.float64, na_value=np.nan)
-    # float64 holds integers below 2**53 and all float64/float32 values exactly,
-    # so only larger magnitudes need checking (NaN fails the cutoff, ±inf pass the
-    # comparison below). Extended-precision scalars can be rounded at any magnitude.
-    suspect = ~missing & (np.abs(floats) >= 2.0**53)
+    # float64 holds integers below 2**53 and all float64/float32 values exactly, so only
+    # larger magnitudes need checking (missing values are NaN here and fail the cutoff,
+    # ±inf pass the comparison below). Extended-precision scalars can be rounded at any
+    # magnitude, so if any are present every value is checked.
+    suspect = np.abs(floats) >= 2.0**53
     if _LONGDOUBLE_IS_WIDER and any(
         issubclass(t, np.longdouble) for t in {type(v) for v in values}
     ):
-        suspect = ~missing
+        suspect = ~np.isnan(floats)
     if suspect.any():
         # Python compares int and float exactly, numpy scalars do not (they promote to
         # float64), so compare Python scalars

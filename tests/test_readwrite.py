@@ -863,6 +863,30 @@ def test_write_object_column_longdouble_lossy(
     )
 
 
+@pytest.mark.parametrize(
+    "missing",
+    [
+        pytest.param(np.complex128(complex(2, np.nan)), id="complex-nan"),
+        pytest.param(
+            type("NaNLike", (float,), {"__int__": lambda self: 2})(np.nan),
+            id="float-nan-subclass",
+        ),
+    ],
+)
+def test_write_object_column_int_keeps_exotic_missing(missing: object) -> None:
+    """Missing markers numpy would happily cast to an int stay missing."""
+    from anndata._io.specs.methods import _object_column_to_writable
+
+    values = np.array([1, missing, 3], dtype=object)
+    assert pd.api.types.infer_dtype(values, skipna=True) == "integer"
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        converted = _object_column_to_writable(values, "col")
+    assert converted.dtype == "Int64"
+    assert converted.isna().tolist() == [False, True, False]
+    assert converted[[0, 2]].tolist() == [1, 3]
+
+
 def test_write_object_column_nan_distinct_from_na() -> None:
     """With pandas distinguishing NaN from NA, an object float NaN is written as NaN."""
     from anndata._io.specs.methods import _object_column_to_writable
