@@ -5,14 +5,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import partial, singledispatch, wraps
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
+import zarr
 
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata._settings import settings
 from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
-from anndata.compat import DaskArray, ZarrGroup, _read_attr, has_xp
+from anndata.compat import DaskArray, _read_attr, has_xp
 
 from ...utils import warn
 
@@ -35,9 +36,15 @@ if TYPE_CHECKING:
 
     type LazyDataStructures = DaskArray | Dataset2D | CategoricalArray | MaskedArray
 
+    type WriteSrcType = (
+        type | tuple[type, str] | tuple[type, type] | tuple[type, type, str]
+    )
+
 
 def to_writeable(x):
-    # Convert non-numpy arrays to dlpack
+    # Convert non-numpy array-API arrays to numpy via DLPack. Array-API arrays
+    # that cannot export via DLPack (e.g. pydata/sparse) are left as-is so the
+    # registry can dispatch on their concrete type (or raise a clear error).
     if has_xp(x) and not (isinstance(x, np.ndarray) or np.isscalar(x)):
         return np.from_dlpack(x)
     return x
@@ -63,7 +70,7 @@ class IOSpec:
 class IORegistryError(Exception):
     @classmethod
     def _from_write_parts(
-        cls, dest_type: type, typ: type | tuple[type, str], modifiers: frozenset[str]
+        cls, dest_type: type, typ: WriteSrcType, modifiers: frozenset[str]
     ) -> IORegistryError:
         msg = f"No method registered for writing {typ} into {dest_type}"
         if modifiers:
@@ -86,16 +93,17 @@ class IORegistryError(Exception):
         return cls(msg)
 
 
-def write_spec[W: _WriteInternal](spec: IOSpec) -> Callable[[W], W]:
+def write_spec[W: Callable[..., Any]](spec: IOSpec) -> Callable[[W], W]:
     def decorator(func: W) -> W:
         @wraps(func)
-        def wrapper(g: _GroupStorageType, k: str, *args, **kwargs) -> None:
+        def wrapper(g: _GroupStorageType, k: str, *args, **kwargs):
             result = func(g, k, *args, **kwargs)
             g[k].attrs.setdefault("encoding-type", spec.encoding_type)
             g[k].attrs.setdefault("encoding-version", spec.encoding_version)
             return result
 
-        return wrapper
+        # a wrapper can never structurally match the wrapped function’s type
+        return cast("W", wrapper)
 
     return decorator
 
@@ -103,8 +111,8 @@ def write_spec[W: _WriteInternal](spec: IOSpec) -> Callable[[W], W]:
 class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
     read: dict[tuple[type, IOSpec, frozenset[str]], RI]
     read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable]
-    write: dict[tuple[type, type | tuple[type, str], frozenset[str]], _WriteInternal]
-    write_specs: dict[type | tuple[type, str] | tuple[type, type], IOSpec]
+    write: dict[tuple[type, WriteSrcType, frozenset[str]], _WriteInternal]
+    write_specs: dict[WriteSrcType, IOSpec]
 
     def __init__(self) -> None:
         self.read = {}
@@ -112,13 +120,13 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         self.write = {}
         self.write_specs = {}
 
-    def register_write[T](
+    def register_write[W: _WriteInternal](
         self,
-        dest_type: type,
-        src_type: type | tuple[type, str],
+        dest_type: type[StorageType],
+        src_type: WriteSrcType,
         spec: IOSpec | Mapping[str, str],
         modifiers: Iterable[str] = frozenset(),
-    ) -> Callable[[_WriteInternal[T]], _WriteInternal[T]]:
+    ) -> Callable[[W], W]:
         spec = proc_spec(spec)
         modifiers = frozenset(modifiers)
 
@@ -134,7 +142,7 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         else:
             self.write_specs[src_type] = spec
 
-        def _register(func: _WriteInternal[T]) -> _WriteInternal[T]:
+        def _register(func: W) -> W:
             self.write[(dest_type, src_type, modifiers)] = write_spec(spec)(func)
             return func
 
@@ -143,7 +151,7 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
     def get_write(
         self,
         dest_type: type,
-        src_type: type | tuple[type, str],
+        src_type: WriteSrcType,
         modifiers: frozenset[str] = frozenset(),
         *,
         writer: Writer,
@@ -160,7 +168,7 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
     def has_write(
         self,
         dest_type: type,
-        src_type: type | tuple[type, str],
+        src_type: WriteSrcType,
         modifiers: frozenset[str],
     ) -> bool:
         return (dest_type, src_type, modifiers) in self.write
@@ -190,7 +198,8 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
     ) -> R:
         if (src_type, spec, modifiers) not in self.read:
             raise IORegistryError._from_read_parts("read", self.read, src_type, spec)  # noqa: EM101
-        internal = self.read[(src_type, spec, modifiers)]
+        # the registry cannot express that `RI`’s `_reader` type matches `reader`’s
+        internal: Callable[..., Any] = self.read[(src_type, spec, modifiers)]
         return partial(internal, _reader=reader)
 
     def has_read(
@@ -221,7 +230,7 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         name = "read_partial"
         raise IORegistryError._from_read_parts(name, self.read_partial, src_type, spec)
 
-    def get_spec(self, elem: Any) -> IOSpec:
+    def get_spec(self, elem: StorageType) -> IOSpec:
         if isinstance(elem, DaskArray):
             if (typ_meta := (DaskArray, type(elem._meta))) in self.write_specs:
                 return self.write_specs[typ_meta]
@@ -253,17 +262,13 @@ def proc_spec_mapping(spec: Mapping[str, str]) -> IOSpec:
     return IOSpec(**{k.replace("-", "_"): v for k, v in spec.items()})
 
 
-def get_spec(
-    elem: StorageType,
-) -> IOSpec:
+def get_spec(elem: StorageType) -> IOSpec:
     return proc_spec({
         k: _read_attr(elem.attrs, k, "") for k in ["encoding-type", "encoding-version"]
     })
 
 
-def _iter_patterns(
-    elem,
-) -> Generator[tuple[type, type | str] | tuple[type, type, str], None, None]:
+def _iter_patterns(elem: RWAble) -> Generator[WriteSrcType]:
     """Iterates over possible patterns for an element in order of precedence."""
     from anndata.compat import DaskArray
 
@@ -272,7 +277,8 @@ def _iter_patterns(
     if isinstance(elem, DaskArray):
         yield (t, type(elem._meta), elem.dtype.kind)
         yield (t, type(elem._meta))
-    if hasattr(elem, "dtype"):
+    # Array API dtypes don’t have guaranteed attributes
+    if isinstance(elem, np.ndarray):
         yield (t, elem.dtype.kind)
     yield t
 
@@ -307,7 +313,7 @@ class LazyReader(Reader):
         self,
         elem: StorageType,
         modifiers: frozenset[str] = frozenset(),
-        chunks: tuple[int, ...] | None = None,
+        chunks: tuple[int | None, ...] | None = None,
         **kwargs,
     ) -> LazyDataStructures:
         """Read a dask element from a store. See exported function for more details."""
@@ -338,7 +344,7 @@ class Writer:
         self.callback = callback
 
     def find_write_func(
-        self, dest_type: type, elem: Any, modifiers: frozenset[str]
+        self, dest_type: type, elem: RWAble, modifiers: frozenset[str]
     ) -> Write:
         for pattern in _iter_patterns(elem):
             if self.registry.has_write(dest_type, pattern, modifiers):
@@ -364,53 +370,65 @@ class Writer:
 
         from anndata._io.zarr import is_group_consolidated
 
-        # we allow stores to have a prefix like /uns which are then written to with keys like /uns/foo
-        is_zarr_group = isinstance(store, ZarrGroup)
-        if "/" in k.rsplit(store.name, maxsplit=1)[-1][1:]:
-            if is_zarr_group or settings.disallow_forward_slash_in_h5ad:
-                msg = f"Forward slashes are not allowed in keys in {type(store)}"
-                raise ValueError(msg)
-            else:
-                msg = "Forward slashes will be disallowed in h5 stores in the next minor release"
-                warn(msg, FutureWarning)
-
         if isinstance(store, h5py.File):
             store = store["/"]
-
-        dest_type = type(store)
-
-        # Normalize k to absolute path
-        if isinstance(store, h5py.Group) and not PurePosixPath(k).is_absolute():
-            k = str(PurePosixPath(store.name) / k)
-        is_consolidated = is_group_consolidated(store) if is_zarr_group else False
-        if is_consolidated:
+        elif is_group_consolidated(store, strict=False):
             msg = "Cannot overwrite/edit a store with consolidated metadata"
             raise ValueError(msg)
+
         if k == "/":
-            if isinstance(store, ZarrGroup):
+            if store.name != "/":
+                msg = f"'/' is not in the subpath of {store.name!r}"
+                raise ValueError(msg)
+
+            if isinstance(store, zarr.Group):
                 from zarr.core.sync import sync
 
                 sync(store.store.clear())
             else:
                 store.clear()
-        elif k in store:
-            del store[k]
+        else:
+            # we allow stores to have a prefix like /uns which are then written to with keys like /uns/foo
+            if k.startswith("/"):
+                k = str(PurePosixPath(k).relative_to(store.name, walk_up=False))
+
+            # Apart from this code, we also ban keys containing slashes in `write_adata`/`write_h5ad`
+            # for AnnData elements other than `obs`, `var`, and `uns`.
+            if "/" in k:
+                if (
+                    isinstance(store, zarr.Group)
+                    or settings.disallow_forward_slash_in_h5ad
+                ):
+                    msg = f"Forward slashes are not allowed in keys in {type(store)}"
+                    raise ValueError(msg)
+                msg = "Forward slashes will be written differently in a future anndata version"
+                warn(msg, FutureWarning)
+
+            if k in store:
+                del store[k]
 
         # Normalize array-API (e.g., JAX/CuPy) even if not AnnData
         elem = normalize_nested(elem)
 
-        write_func = self.find_write_func(dest_type, elem, modifiers)
+        write_func = self.find_write_func(type(store), elem, modifiers)
 
-        if self.callback is None:
-            return write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
-        return self.callback(
-            write_func,
-            store,
-            k,
-            elem,
-            dataset_kwargs=dataset_kwargs,
-            iospec=self.registry.get_spec(elem),
-        )
+        if self.callback is not None:
+            write_func = partial(
+                self.callback, write_func, iospec=self.registry.get_spec(elem)
+            )
+        write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
+        _add_to_column_order(store, k)
+
+
+def _add_to_column_order(store: _GroupStorageType, k: str) -> None:
+    """Register a column written into an existing dataframe group in its column order."""
+    if (
+        k != "/"  # writing the dataframe itself to the root
+        and store.attrs.get("encoding-type") == "dataframe"
+        and k != store.attrs["_index"]
+        and k not in (order := list(cast("Iterable[str]", store.attrs["column-order"])))
+    ):
+        store.attrs["column-order"] = [*order, k]
 
 
 def read_elem(elem: StorageType) -> RWAble:
@@ -429,7 +447,7 @@ def read_elem(elem: StorageType) -> RWAble:
 
 
 def read_elem_lazy(
-    elem: StorageType, chunks: tuple[int, ...] | None = None, **kwargs
+    elem: StorageType, chunks: tuple[int | None, ...] | None = None, **kwargs
 ) -> LazyDataStructures:
     """
     Read an element from a store lazily.
@@ -483,8 +501,11 @@ def read_elem_lazy(
 
     Reading a dense matrix from a zarr store lazily:
 
+    ..
+        TODO: remove “SKIP” once https://github.com/zarr-developers/zarr-python/issues/3602 becomes minimum zarr (3.1.6)
+
     >>> adata.layers["dense"] = ad.experimental.read_elem_lazy(g["layers/dense"])
-    >>> adata.layers["dense"]
+    >>> adata.layers["dense"]  # doctest: +SKIP
     dask.array<from-zarr, shape=(2700, 32738), dtype=float32, chunksize=(169, 2047), chunktype=numpy.ndarray>
 
     Making a new anndata object from on-disk, with custom chunks:
@@ -522,8 +543,9 @@ def write_elem(
     store
         The group to write to.
     k
-        The key to write to in the group. Note that absolute paths will be written
-        from the root.
+        The key to write into the group.
+        If the group is the root, set `k` to `"/"` to write directly into it.
+        Passing an absolute path referring to a direct child of the group is also allowed.
     elem
         The element to write. Typically an in-memory object, e.g. an AnnData, pandas
         dataframe, scipy sparse matrix, etc.

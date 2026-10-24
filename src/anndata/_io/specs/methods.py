@@ -1,16 +1,22 @@
 from __future__ import annotations
 
+import math
+import warnings
 from collections.abc import Mapping, MutableMapping
+from contextlib import contextmanager, nullcontext
 from copy import copy
-from functools import partial
+from functools import partial, wraps
+from importlib.metadata import version
 from itertools import product
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 import h5py
 import numpy as np
 import pandas as pd
+import zarr
 from numcodecs import VLenUTF8
+from packaging.version import Version
 from scipy import sparse
 from zarr.core.dtype import VariableLengthUTF8
 
@@ -20,7 +26,13 @@ from anndata._core import views
 from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_dataset
-from anndata._io.utils import check_key, zero_dim_array_as_scalar
+from anndata._core.storage import _check_x_and_layers_are_2d_on_write
+from anndata._io.utils import (
+    _check_has_no_slash_key,
+    check_key,
+    zero_dim_array_as_scalar,
+)
+from anndata._types import StorageType
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
     AwkArray,
@@ -28,47 +40,38 @@ from anndata.compat import (
     CupyCSCMatrix,
     CupyCSRMatrix,
     DaskArray,
-    H5Array,
-    H5File,
-    H5Group,
-    ZarrArray,
-    ZarrGroup,
     _decode_structured_array,
+    _dtype_fields,
     _from_fixed_length_strings,
     _read_attr,
     _require_group_write_dataframe,
 )
 
 from ..._settings import settings
-from ...compat import PANDAS_STRING_ARRAY_TYPES
+from ...compat import PANDAS_3, PANDAS_STRING_ARRAY_TYPES
 from ...utils import iter_outer, warn
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Generator, Iterator
     from os import PathLike
     from typing import Any, Literal
 
     from numpy import typing as npt
     from numpy.typing import NDArray
 
-    from anndata._types import _ArrayStorageType, _GroupStorageType
+    from anndata._core.sparse_dataset import BackedSparseMatrix
+    from anndata._types import _ArrayStorageType, _GroupStorageType, _WriteInternal
     from anndata.compat import CSArray, CSMatrix, CupyCSMatrix
-    from anndata.typing import AxisStorable, _InMemoryArrayOrScalarType
+    from anndata.typing import RWAble, Storable, _StorableArrayOrScalar
 
     from .registry import Reader, Writer
 
-####################
-# Dask utils       #
-####################
+_STORE_TYPES: tuple[type[zarr.Group | h5py.Group], ...] = (
+    h5py.Group,
+    zarr.Group,
+)
 
-try:
-    from dask.utils import SerializableLock as Lock
-except ImportError:
-    from threading import Lock
-
-# to fix https://github.com/dask/distributed/issues/780
-GLOBAL_LOCK = Lock()
 
 ####################
 # Dispatch methods #
@@ -100,7 +103,7 @@ def zarr_v3_compressor_compat(dataset_kwargs: dict) -> dict:
 
     Parameters
     ----------
-    dataset_kwarg
+    dataset_kwargs
         The kwarg dict potentially containing "compressor"
 
     Returns
@@ -112,10 +115,68 @@ def zarr_v3_compressor_compat(dataset_kwargs: dict) -> dict:
     return dataset_kwargs
 
 
-def zarr_v3_sharding(dataset_kwargs) -> dict:
-    if "shards" not in dataset_kwargs and ad.settings.auto_shard_zarr_v3:
+@contextmanager
+def zarr_v3_sharding(dataset_kwargs: dict, format: Literal[2, 3]) -> Generator[dict]:
+    auto_sharding = (
+        "shards" not in dataset_kwargs
+        and ad.settings.auto_shard_zarr_v3
+        and format == 3
+    )
+    if auto_sharding:
         dataset_kwargs = {**dataset_kwargs, "shards": "auto"}
-    return dataset_kwargs
+    # Auto shard sizes are a relatively recent feature
+    supports_auto_shard_size = Version(version("zarr")) >= Version("3.1.4")
+    has_auto_shard_size = supports_auto_shard_size and isinstance(
+        zarr.config.get("array.target_shard_size_bytes"), int
+    )
+    # 1GB uncompressed shard size seems reasonable.
+    # Shards need to generally held completely in memory before writing.
+    # Even at a compression ration of 6x, that's still a ~20x improvement on number of files.
+    # Users can ovetrride this nonetheless, hence the above checks.
+    with (
+        zarr.config.set({"array.target_shard_size_bytes": 1_000_000_000})
+        if supports_auto_shard_size and not has_auto_shard_size and auto_sharding
+        else nullcontext()
+    ):
+        yield dataset_kwargs
+
+
+# Only warn about small shards for arrays big enough that the file count matters.
+SMALL_SHARD_WARNING_MIN_ARRAY_MB = 10_000
+
+
+def is_greater_than_n_mb(shape: tuple[int, ...], dtype: np.dtype, n: int) -> bool:
+    return math.prod(shape) * np.dtype(dtype).itemsize > n * 1_000_000
+
+
+def try_create_one_mb_subchunks(
+    shape: tuple[int, ...], dtype: np.dtype, target_bytes: int = 1_000_000
+) -> tuple[int, ...] | None:
+    """Inner chunk shape of at most ~`target_bytes` that evenly divides `shape` (the shard shape).
+
+    Repeatedly shrinks the currently longest axis to its next smaller divisor,
+    so inner chunks end up roughly balanced across axes.
+    Returns `None` (with a warning) if no divisor of `shape` gets reasonably close to `target_bytes`.
+    """
+    itemsize = np.dtype(dtype).itemsize
+    # shard shape must be a multiple of the inner chunk shape
+    divisors = [
+        {d for i in range(1, math.isqrt(n) + 1) if n % i == 0 for d in (i, n // i)}
+        for n in shape
+    ]
+    chunks = list(shape)
+    while math.prod(chunks) * itemsize > target_bytes and max(chunks) > 1:
+        i = chunks.index(max(chunks))
+        chunks[i] = max(d for d in divisors[i] if d < chunks[i])
+    if chunks != list(shape) and math.prod(chunks) * itemsize < target_bytes // 4:
+        warn(
+            f"Could not find inner chunks of ~{target_bytes} bytes evenly dividing "
+            f"the dask chunk shape {shape}. Writing each dask chunk as a single "
+            "unsharded zarr chunk instead. Consider rechunking.",
+            UserWarning,
+        )
+        return None
+    return tuple(chunks)
 
 
 def _to_cpu_mem_wrapper(write_func):
@@ -140,6 +201,32 @@ def _to_cpu_mem_wrapper(write_func):
     return wrapper
 
 
+def suppress_autoshard_warning[S: StorageType, T: RWAble](
+    func: _WriteInternal[S, T],
+) -> _WriteInternal[S, T]:
+    @wraps(func)
+    def wrapper(
+        f: S,
+        k: str,
+        val: T,
+        *,
+        _writer: Writer,
+        dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    ):
+        with warnings.catch_warnings():
+            # Suppress warnings only if the user has opted into autosharding at the top level.
+            # If someone provides `shards` explicitly, then they should get the warning.
+            if ad.settings.auto_shard_zarr_v3 and "shards" not in dataset_kwargs:
+                warnings.filterwarnings(
+                    "ignore",
+                    r"Automatic shard shape inference is experimental",
+                    UserWarning,
+                )
+            return func(f, k, val, _writer=_writer, dataset_kwargs=dataset_kwargs)
+
+    return wrapper
+
+
 ################################
 # Fallbacks / backwards compat #
 ################################
@@ -147,13 +234,15 @@ def _to_cpu_mem_wrapper(write_func):
 # Note: there is no need for writing in a backwards compatible format, maybe
 
 
-@_REGISTRY.register_read(H5File, IOSpec("", ""))
-@_REGISTRY.register_read(H5Group, IOSpec("", ""))
-@_REGISTRY.register_read(H5Array, IOSpec("", ""))
+@_REGISTRY.register_read(h5py.File, IOSpec("", ""))
+@_REGISTRY.register_read(h5py.Group, IOSpec("", ""))
+@_REGISTRY.register_read(h5py.Dataset, IOSpec("", ""))
 def read_basic(
-    elem: H5File | H5Group | H5Array, *, _reader: Reader
-) -> dict[str, _InMemoryArrayOrScalarType] | npt.NDArray | CSMatrix | CSArray:
-    from anndata._io import h5ad
+    elem: h5py.File | h5py.Group | h5py.Dataset, *, _reader: Reader
+) -> (
+    dict[str, _StorableArrayOrScalar] | npt.NDArray | CSMatrix | CSArray | CupyCSMatrix
+):
+    from anndata._io.h5ad import read_dataset
 
     msg = f"Element '{elem.name}' was written without encoding metadata."
     warn(msg, OldFormatWarning)
@@ -163,26 +252,27 @@ def read_basic(
         if "h5sparse_format" in elem.attrs:
             return sparse_dataset(elem).to_memory()
         return {k: _reader.read_elem(v) for k, v in dict(elem).items()}
-    elif isinstance(elem, h5py.Dataset):
-        return h5ad.read_dataset(elem)  # TODO: Handle legacy
+    return read_dataset(elem)  # TODO: Handle legacy
 
 
-@_REGISTRY.register_read(ZarrGroup, IOSpec("", ""))
-@_REGISTRY.register_read(ZarrArray, IOSpec("", ""))
+@_REGISTRY.register_read(zarr.Group, IOSpec("", ""))
+@_REGISTRY.register_read(zarr.Array, IOSpec("", ""))
 def read_basic_zarr(
-    elem: ZarrGroup | ZarrArray, *, _reader: Reader
-) -> dict[str, _InMemoryArrayOrScalarType] | npt.NDArray | CSMatrix | CSArray:
-    from anndata._io import zarr
+    elem: zarr.Group | zarr.Array, *, _reader: Reader
+) -> (
+    dict[str, _StorableArrayOrScalar] | npt.NDArray | CSMatrix | CSArray | CupyCSMatrix
+):
+    from anndata._io.zarr import read_dataset
 
     msg = f"Element '{elem.name}' was written without encoding metadata."
     warn(msg, OldFormatWarning)
-    if isinstance(elem, ZarrGroup):
+    if isinstance(elem, zarr.Group):
         # Backwards compat sparse arrays
         if "h5sparse_format" in elem.attrs:
             return sparse_dataset(elem).to_memory()
         return {k: _reader.read_elem(v) for k, v in dict(elem).items()}
-    elif isinstance(elem, ZarrArray):
-        return zarr.read_dataset(elem)  # TODO: Handle legacy
+    elif isinstance(elem, zarr.Array):
+        return read_dataset(elem)  # TODO: Handle legacy
 
 
 # @_REGISTRY.register_read_partial(IOSpec("", ""))
@@ -275,8 +365,9 @@ def _read_partial(group, *, items=None, indices=(slice(None), slice(None))):
     return result
 
 
-@_REGISTRY.register_write(ZarrGroup, AnnData, IOSpec("anndata", "0.1.0"))
-@_REGISTRY.register_write(H5Group, AnnData, IOSpec("anndata", "0.1.0"))
+@_REGISTRY.register_write(zarr.Group, AnnData, IOSpec("anndata", "0.1.0"))
+@_REGISTRY.register_write(h5py.Group, AnnData, IOSpec("anndata", "0.1.0"))
+@suppress_autoshard_warning
 def write_anndata(
     f: _GroupStorageType,
     k: str,
@@ -285,33 +376,33 @@ def write_anndata(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
+    _check_x_and_layers_are_2d_on_write(adata)
     g = f.require_group(k)
     for sub_key, elem in iter_outer(adata):
-        if not (sub_key == "X" and elem is None):
-            if sub_key == "layers":
-                if None in elem:
-                    _writer.write_elem(
-                        g,
-                        "X",
-                        elem[None],
-                        dataset_kwargs=dataset_kwargs,
-                    )
-                elem = {k: v for k, v in elem.items() if k is not None}
-            _writer.write_elem(
-                g,
-                sub_key,
-                dict(elem) if isinstance(elem, MutableMapping) else elem,
-                dataset_kwargs=dataset_kwargs,
-            )
+        if sub_key == "X" and elem is None:
+            continue
+        _check_has_no_slash_key(sub_key, elem)
+        if sub_key == "layers":
+            assert isinstance(elem, MutableMapping)
+            layers: Mapping[Any, Any] = elem
+            if None in layers:
+                _writer.write_elem(g, "X", layers[None], dataset_kwargs=dataset_kwargs)
+            elem = {k: v for k, v in layers.items() if k is not None}
+        _writer.write_elem(
+            g,
+            sub_key,
+            dict(elem) if isinstance(elem, MutableMapping) else elem,
+            dataset_kwargs=dataset_kwargs,
+        )
 
 
-@_REGISTRY.register_read(H5Group, IOSpec("anndata", "0.1.0"))
-@_REGISTRY.register_read(H5Group, IOSpec("raw", "0.1.0"))
-@_REGISTRY.register_read(H5File, IOSpec("anndata", "0.1.0"))
-@_REGISTRY.register_read(H5File, IOSpec("raw", "0.1.0"))
-@_REGISTRY.register_read(ZarrGroup, IOSpec("anndata", "0.1.0"))
-@_REGISTRY.register_read(ZarrGroup, IOSpec("raw", "0.1.0"))
-def read_anndata(elem: _GroupStorageType | H5File, *, _reader: Reader) -> AnnData:
+@_REGISTRY.register_read(h5py.Group, IOSpec("anndata", "0.1.0"))
+@_REGISTRY.register_read(h5py.Group, IOSpec("raw", "0.1.0"))
+@_REGISTRY.register_read(h5py.File, IOSpec("anndata", "0.1.0"))
+@_REGISTRY.register_read(h5py.File, IOSpec("raw", "0.1.0"))
+@_REGISTRY.register_read(zarr.Group, IOSpec("anndata", "0.1.0"))
+@_REGISTRY.register_read(zarr.Group, IOSpec("raw", "0.1.0"))
+def read_anndata(elem: _GroupStorageType | h5py.File, *, _reader: Reader) -> AnnData:
     d = {}
     for k in [
         "X",
@@ -327,11 +418,16 @@ def read_anndata(elem: _GroupStorageType | H5File, *, _reader: Reader) -> AnnDat
     ]:
         if k in elem:
             d[k] = _reader.read_elem(elem[k])
+    # Older / non-conforming files may contain higher-dimensional `X` or
+    # `layers`; the on-disk spec forbids that. We don't block reading,
+    # but the AnnData setters surface the spec violation as a warning
+    # during construction below.
     return AnnData(**d)
 
 
-@_REGISTRY.register_write(H5Group, Raw, IOSpec("raw", "0.1.0"))
-@_REGISTRY.register_write(ZarrGroup, Raw, IOSpec("raw", "0.1.0"))
+@_REGISTRY.register_write(h5py.Group, Raw, IOSpec("raw", "0.1.0"))
+@_REGISTRY.register_write(zarr.Group, Raw, IOSpec("raw", "0.1.0"))
+@suppress_autoshard_warning
 def write_raw(
     f: _GroupStorageType,
     k: str,
@@ -351,19 +447,20 @@ def write_raw(
 ########
 
 
-@_REGISTRY.register_read(H5Array, IOSpec("null", "0.1.0"))
-@_REGISTRY.register_read(ZarrArray, IOSpec("null", "0.1.0"))
+@_REGISTRY.register_read(h5py.Dataset, IOSpec("null", "0.1.0"))
+@_REGISTRY.register_read(zarr.Array, IOSpec("null", "0.1.0"))
 def read_null(_elem, _reader) -> None:
     return None
 
 
-@_REGISTRY.register_write(H5Group, type(None), IOSpec("null", "0.1.0"))
+@_REGISTRY.register_write(h5py.Group, type(None), IOSpec("null", "0.1.0"))
 def write_null_h5py(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
     dataset_kwargs = _remove_scalar_compression_args(dataset_kwargs)
     f.create_dataset(k, data=h5py.Empty("f"), **dataset_kwargs)
 
 
-@_REGISTRY.register_write(ZarrGroup, type(None), IOSpec("null", "0.1.0"))
+@_REGISTRY.register_write(zarr.Group, type(None), IOSpec("null", "0.1.0"))
+@suppress_autoshard_warning
 def write_null_zarr(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
     dataset_kwargs = _remove_scalar_compression_args(dataset_kwargs)
     # zarr has no first-class null dataset
@@ -377,20 +474,19 @@ def write_null_zarr(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
 ############
 
 
-@_REGISTRY.register_read(H5Group, IOSpec("dict", "0.1.0"))
-@_REGISTRY.register_read(ZarrGroup, IOSpec("dict", "0.1.0"))
-def read_mapping(
-    elem: _GroupStorageType, *, _reader: Reader
-) -> dict[str, AxisStorable]:
+@_REGISTRY.register_read(h5py.Group, IOSpec("dict", "0.1.0"))
+@_REGISTRY.register_read(zarr.Group, IOSpec("dict", "0.1.0"))
+def read_mapping(elem: _GroupStorageType, *, _reader: Reader) -> dict[str, Storable]:
     return {k: _reader.read_elem(v) for k, v in dict(elem).items()}
 
 
-@_REGISTRY.register_write(H5Group, dict, IOSpec("dict", "0.1.0"))
-@_REGISTRY.register_write(ZarrGroup, dict, IOSpec("dict", "0.1.0"))
+@_REGISTRY.register_write(h5py.Group, dict, IOSpec("dict", "0.1.0"))
+@_REGISTRY.register_write(zarr.Group, dict, IOSpec("dict", "0.1.0"))
+@suppress_autoshard_warning
 def write_mapping(
     f: _GroupStorageType,
     k: str,
-    v: dict[str, AxisStorable],
+    v: dict[str, Storable],
     *,
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
@@ -405,12 +501,13 @@ def write_mapping(
 ##############
 
 
-@_REGISTRY.register_write(H5Group, list, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(ZarrGroup, list, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(h5py.Group, list, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(zarr.Group, list, IOSpec("array", "0.2.0"))
+@suppress_autoshard_warning
 def write_list(
     f: _GroupStorageType,
     k: str,
-    elem: list[AxisStorable],
+    elem: list[Storable],
     *,
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
@@ -420,42 +517,45 @@ def write_list(
 
 # TODO: Is this the right behavior for MaskedArrays?
 # It's in the `AnnData.concatenate` docstring, but should we keep it?
-@_REGISTRY.register_write(H5Group, views.ArrayView, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(H5Group, np.ndarray, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(H5Group, np.ma.MaskedArray, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(ZarrGroup, views.ArrayView, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(ZarrGroup, np.ndarray, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(ZarrGroup, np.ma.MaskedArray, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(ZarrGroup, ZarrArray, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(ZarrGroup, H5Array, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(h5py.Group, views.ArrayView, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(h5py.Group, np.ndarray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(h5py.Group, np.ma.MaskedArray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(zarr.Group, views.ArrayView, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(zarr.Group, np.ndarray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(zarr.Group, np.ma.MaskedArray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(zarr.Group, zarr.Array, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(zarr.Group, h5py.Dataset, IOSpec("array", "0.2.0"))
+@suppress_autoshard_warning
 @zero_dim_array_as_scalar
 def write_basic(
     f: _GroupStorageType,
     k: str,
-    elem: views.ArrayView | np.ndarray | h5py.Dataset | np.ma.MaskedArray | ZarrArray,
+    elem: views.ArrayView | np.ndarray | h5py.Dataset | np.ma.MaskedArray | zarr.Array,
     *,
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     """Write methods which underlying library handles natively."""
-    dataset_kwargs = dataset_kwargs.copy()
+    dataset_kwargs = dict(dataset_kwargs)
     dtype = dataset_kwargs.pop("dtype", elem.dtype)
-    if isinstance(f, H5Group):
+    if isinstance(f, h5py.Group):
         f.create_dataset(k, data=elem, shape=elem.shape, dtype=dtype, **dataset_kwargs)
     else:
         dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
-        dataset_kwargs = zarr_v3_sharding(dataset_kwargs)
-        f.create_array(k, shape=elem.shape, dtype=dtype, **dataset_kwargs)
+        with zarr_v3_sharding(
+            dataset_kwargs, format=f.metadata.zarr_format
+        ) as dataset_kwargs:
+            arr = f.create_array(k, shape=elem.shape, dtype=dtype, **dataset_kwargs)
         # see https://github.com/zarr-developers/zarr-python/discussions/2712
-        if isinstance(elem, ZarrArray | H5Array):
-            f[k][...] = elem[...]
+        if isinstance(elem, zarr.Array | h5py.Dataset):
+            arr[...] = elem[...]
         else:
-            f[k][...] = elem
+            arr[...] = elem
 
 
 def _iter_chunks_for_copy(
     elem: _ArrayStorageType, dest: _ArrayStorageType
-) -> Iterator[slice | tuple[list[slice]]]:
+) -> Iterator[slice | tuple[slice, ...]]:
     """
     Returns an iterator of tuples of slices for copying chunks from `elem` to `dest`.
 
@@ -474,10 +574,10 @@ def _iter_chunks_for_copy(
         return (slice(i, min(i + n_rows, shape[0])) for i in range(0, shape[0], n_rows))
 
 
-@_REGISTRY.register_write(H5Group, H5Array, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(H5Group, ZarrArray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(h5py.Group, h5py.Dataset, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(h5py.Group, zarr.Array, IOSpec("array", "0.2.0"))
 def write_chunked_dense_array_to_group(
-    f: H5Group,
+    f: h5py.Group,
     k: str,
     elem: _ArrayStorageType,
     *,
@@ -498,20 +598,20 @@ def write_chunked_dense_array_to_group(
         dest[chunk] = elem[chunk]
 
 
-_REGISTRY.register_write(H5Group, CupyArray, IOSpec("array", "0.2.0"))(
+_REGISTRY.register_write(h5py.Group, CupyArray, IOSpec("array", "0.2.0"))(
     _to_cpu_mem_wrapper(write_basic)
 )
-_REGISTRY.register_write(ZarrGroup, CupyArray, IOSpec("array", "0.2.0"))(
-    _to_cpu_mem_wrapper(write_basic)
+_REGISTRY.register_write(zarr.Group, CupyArray, IOSpec("array", "0.2.0"))(
+    suppress_autoshard_warning(_to_cpu_mem_wrapper(write_basic))
 )
 
 
-@_REGISTRY.register_write(ZarrGroup, views.DaskArrayView, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(ZarrGroup, DaskArray, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(H5Group, views.DaskArrayView, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(H5Group, DaskArray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(zarr.Group, views.DaskArrayView, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(zarr.Group, DaskArray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(h5py.Group, views.DaskArrayView, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(h5py.Group, DaskArray, IOSpec("array", "0.2.0"))
 def write_basic_dask_dask_dense(
-    f: ZarrGroup | H5Group,
+    f: zarr.Group | h5py.Group,
     k: str,
     elem: DaskArray,
     *,
@@ -520,59 +620,100 @@ def write_basic_dask_dask_dense(
 ):
     import dask.array as da
 
-    dataset_kwargs = dataset_kwargs.copy()
-    is_h5 = isinstance(f, H5Group)
-    if not is_h5:
-        dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
-        dataset_kwargs = zarr_v3_sharding(dataset_kwargs)
-    if is_h5:
+    dataset_kwargs = dict(dataset_kwargs)
+
+    if isinstance(f, h5py.Group):
+        if "chunks" not in dataset_kwargs and da.core._check_regular_chunks(
+            elem.chunks
+        ):
+            dataset_kwargs["chunks"] = tuple(c[0] for c in elem.chunks)
         g = f.require_dataset(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
     else:
+        dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
+        if (
+            "shards" not in dataset_kwargs
+            and "chunks" not in dataset_kwargs
+            and da.core._check_regular_chunks(elem.chunks)
+        ):
+            dask_chunks = tuple(max(int(c), 1) for c in elem.chunksize)
+            # without sharding, zarr chunks must still align with dask chunks
+            # so that no two dask tasks write to the same zarr chunk - chunks being None triggers that.
+            zarr_chunks = None
+            if ad.settings.auto_shard_zarr_v3:
+                if not is_greater_than_n_mb(
+                    dask_chunks, elem.dtype, 100
+                ) and is_greater_than_n_mb(
+                    elem.shape, elem.dtype, SMALL_SHARD_WARNING_MIN_ARRAY_MB
+                ):
+                    warn(
+                        "Auto-sharding is enabled, but the dask chunk size is less than 100MB. "
+                        "This may result in a large number of files. Consider rechunking.",
+                        UserWarning,
+                    )
+                zarr_chunks = try_create_one_mb_subchunks(dask_chunks, elem.dtype)
+            dataset_kwargs = {
+                **dataset_kwargs,
+                **(
+                    {"chunks": dask_chunks}
+                    if zarr_chunks is None
+                    else {"chunks": zarr_chunks, "shards": dask_chunks}
+                ),
+            }
         g = f.require_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
-    da.store(elem, g, scheduler="threads")
+    # use threaded scheduler with dask<=2025.3.0 avoid "Could not serialize object of type HighLevelGraph" error
+    if isinstance(f, h5py.Group) or Version(version("dask")) <= Version("2025.3.0"):
+        da.store(elem, g, scheduler="threads")
+    else:
+        da.store(elem, g)
 
 
-@_REGISTRY.register_read(H5Array, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_read(ZarrArray, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_read(ZarrArray, IOSpec("string-array", "0.2.0"))
+@_REGISTRY.register_read(h5py.Dataset, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_read(zarr.Array, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_read(zarr.Array, IOSpec("string-array", "0.2.0"))
 def read_array(elem: _ArrayStorageType, *, _reader: Reader) -> npt.NDArray:
-    return elem[()]
+    return np.asarray(elem[()])
 
 
-@_REGISTRY.register_read_partial(H5Array, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_read_partial(ZarrArray, IOSpec("string-array", "0.2.0"))
+@_REGISTRY.register_read_partial(h5py.Dataset, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_read_partial(zarr.Array, IOSpec("string-array", "0.2.0"))
 def read_array_partial(elem, *, items=None, indices=(slice(None, None))):
     return elem[indices]
 
 
-@_REGISTRY.register_read_partial(ZarrArray, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_read_partial(zarr.Array, IOSpec("array", "0.2.0"))
 def read_zarr_array_partial(elem, *, items=None, indices=(slice(None, None))):
     return elem.oindex[indices]
 
 
 # arrays of strings
-@_REGISTRY.register_read(H5Array, IOSpec("string-array", "0.2.0"))
-def read_string_array(d: H5Array, *, _reader: Reader):
+@_REGISTRY.register_read(h5py.Dataset, IOSpec("string-array", "0.2.0"))
+def read_string_array(d: h5py.Dataset, *, _reader: Reader):
     return read_array(d.asstr(), _reader=_reader)
 
 
-@_REGISTRY.register_read_partial(H5Array, IOSpec("string-array", "0.2.0"))
+@_REGISTRY.register_read_partial(h5py.Dataset, IOSpec("string-array", "0.2.0"))
 def read_string_array_partial(d, items=None, indices=slice(None)):
     return read_array_partial(d.asstr(), items=items, indices=indices)
 
 
 @_REGISTRY.register_write(
-    H5Group, (views.ArrayView, "U"), IOSpec("string-array", "0.2.0")
+    h5py.Group, (views.ArrayView, "U"), IOSpec("string-array", "0.2.0")
 )
 @_REGISTRY.register_write(
-    H5Group, (views.ArrayView, "O"), IOSpec("string-array", "0.2.0")
+    h5py.Group, (views.ArrayView, "O"), IOSpec("string-array", "0.2.0")
 )
-@_REGISTRY.register_write(H5Group, (np.ndarray, "U"), IOSpec("string-array", "0.2.0"))
-@_REGISTRY.register_write(H5Group, (np.ndarray, "O"), IOSpec("string-array", "0.2.0"))
-@_REGISTRY.register_write(H5Group, (np.ndarray, "T"), IOSpec("string-array", "0.2.0"))
+@_REGISTRY.register_write(
+    h5py.Group, (np.ndarray, "U"), IOSpec("string-array", "0.2.0")
+)
+@_REGISTRY.register_write(
+    h5py.Group, (np.ndarray, "O"), IOSpec("string-array", "0.2.0")
+)
+@_REGISTRY.register_write(
+    h5py.Group, (np.ndarray, "T"), IOSpec("string-array", "0.2.0")
+)
 @zero_dim_array_as_scalar
 def write_vlen_string_array(
-    f: H5Group,
+    f: h5py.Group,
     k: str,
     elem: np.ndarray,
     *,
@@ -585,39 +726,50 @@ def write_vlen_string_array(
 
 
 @_REGISTRY.register_write(
-    ZarrGroup, (views.ArrayView, "U"), IOSpec("string-array", "0.2.0")
+    zarr.Group, (views.ArrayView, "U"), IOSpec("string-array", "0.2.0")
 )
 @_REGISTRY.register_write(
-    ZarrGroup, (views.ArrayView, "O"), IOSpec("string-array", "0.2.0")
+    zarr.Group, (views.ArrayView, "O"), IOSpec("string-array", "0.2.0")
 )
-@_REGISTRY.register_write(ZarrGroup, (np.ndarray, "U"), IOSpec("string-array", "0.2.0"))
-@_REGISTRY.register_write(ZarrGroup, (np.ndarray, "O"), IOSpec("string-array", "0.2.0"))
-@_REGISTRY.register_write(ZarrGroup, (np.ndarray, "T"), IOSpec("string-array", "0.2.0"))
+@_REGISTRY.register_write(
+    zarr.Group, (np.ndarray, "U"), IOSpec("string-array", "0.2.0")
+)
+@_REGISTRY.register_write(
+    zarr.Group, (np.ndarray, "O"), IOSpec("string-array", "0.2.0")
+)
+@_REGISTRY.register_write(
+    zarr.Group, (np.ndarray, "T"), IOSpec("string-array", "0.2.0")
+)
+@suppress_autoshard_warning
 @zero_dim_array_as_scalar
 def write_vlen_string_array_zarr(
-    f: ZarrGroup,
+    f: zarr.Group,
     k: str,
     elem: np.ndarray,
     *,
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
-    dataset_kwargs = dataset_kwargs.copy()
+    dataset_kwargs = dict(dataset_kwargs)
     dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
-    dtype = VariableLengthUTF8()
+    filters: list[VLenUTF8] | None
+    fill_value: str | None
     filters, fill_value = None, None
     if f.metadata.zarr_format == 2:
         filters, fill_value = [VLenUTF8()], ""
-    dataset_kwargs = zarr_v3_sharding(dataset_kwargs)
-    f.create_array(
-        k,
-        shape=elem.shape,
-        dtype=dtype,
-        filters=filters,
-        fill_value=fill_value,
-        **dataset_kwargs,
-    )
-    f[k][:] = elem
+    with zarr_v3_sharding(
+        dataset_kwargs, format=f.metadata.zarr_format
+    ) as dataset_kwargs:
+        arr = f.create_array(
+            k,
+            shape=elem.shape,
+            # zarr’s `ZDTypeLike` is invariant, so its own dtypes don’t satisfy it
+            dtype=VariableLengthUTF8(),  # type: ignore[arg-type]
+            filters=filters,
+            fill_value=fill_value,
+            **dataset_kwargs,
+        )
+    arr[:] = elem
 
 
 ###############
@@ -628,7 +780,7 @@ def write_vlen_string_array_zarr(
 def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
     """This corrects compound dtypes to work with hdf5 files."""
     new_dtype = []
-    for dt_name, (dt_type, _) in value.dtype.fields.items():
+    for dt_name, (dt_type, *_) in _dtype_fields(value.dtype).items():
         if dt_type.kind in {"U", "O"}:
             new_dtype.append((dt_name, h5py.special_dtype(vlen=str)))
         else:
@@ -636,22 +788,21 @@ def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
     return value.astype(new_dtype)
 
 
-@_REGISTRY.register_read(H5Array, IOSpec("rec-array", "0.2.0"))
-@_REGISTRY.register_read(ZarrArray, IOSpec("rec-array", "0.2.0"))
+@_REGISTRY.register_read(h5py.Dataset, IOSpec("rec-array", "0.2.0"))
+@_REGISTRY.register_read(zarr.Array, IOSpec("rec-array", "0.2.0"))
 def read_recarray(
     d: _ArrayStorageType, *, _reader: Reader
 ) -> np.recarray | npt.NDArray:
-    value = d[()]
-    value = _decode_structured_array(
+    value = np.asarray(d[()])
+    return _decode_structured_array(
         _from_fixed_length_strings(value), dtype=value.dtype
     )
-    return value
 
 
-@_REGISTRY.register_write(H5Group, (np.ndarray, "V"), IOSpec("rec-array", "0.2.0"))
-@_REGISTRY.register_write(H5Group, np.recarray, IOSpec("rec-array", "0.2.0"))
+@_REGISTRY.register_write(h5py.Group, (np.ndarray, "V"), IOSpec("rec-array", "0.2.0"))
+@_REGISTRY.register_write(h5py.Group, np.recarray, IOSpec("rec-array", "0.2.0"))
 def write_recarray(
-    f: H5Group,
+    f: h5py.Group,
     k: str,
     elem: np.ndarray | np.recarray,
     *,
@@ -661,10 +812,10 @@ def write_recarray(
     f.create_dataset(k, data=_to_hdf5_vlen_strings(elem), **dataset_kwargs)
 
 
-@_REGISTRY.register_write(ZarrGroup, (np.ndarray, "V"), IOSpec("rec-array", "0.2.0"))
-@_REGISTRY.register_write(ZarrGroup, np.recarray, IOSpec("rec-array", "0.2.0"))
+@_REGISTRY.register_write(zarr.Group, (np.ndarray, "V"), IOSpec("rec-array", "0.2.0"))
+@_REGISTRY.register_write(zarr.Group, np.recarray, IOSpec("rec-array", "0.2.0"))
 def write_recarray_zarr(
-    f: ZarrGroup,
+    f: zarr.Group,
     k: str,
     elem: np.ndarray | np.recarray,
     *,
@@ -674,13 +825,14 @@ def write_recarray_zarr(
     from anndata.compat import _to_fixed_length_strings
 
     elem = _to_fixed_length_strings(elem)
-    dataset_kwargs = dataset_kwargs.copy()
+    dataset_kwargs = dict(dataset_kwargs)
     dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
     # https://github.com/zarr-developers/zarr-python/issues/3546
-    # if "shards" not in dataset_kwargs and ad.settings.auto_shard_zarr_v3:
-    #     dataset_kwargs = {**dataset_kwargs, "shards": "auto"}
-    f.create_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
-    f[k][...] = elem
+    # with zarr_v3_sharding(
+    #     dataset_kwargs, format=f.metadata.zarr_format
+    # ) as dataset_kwargs:
+    arr = f.create_array(k, shape=elem.shape, dtype=elem.dtype, **dataset_kwargs)
+    arr[...] = elem
 
 
 #################
@@ -688,22 +840,30 @@ def write_recarray_zarr(
 #################
 
 
-def write_sparse_compressed(
+@suppress_autoshard_warning
+def write_cs(
     f: _GroupStorageType,
     key: str,
-    value: CSMatrix | CSArray,
+    value: CSMatrix | CSArray | BackedSparseMatrix,
     *,
     _writer: Writer,
-    fmt: Literal["csr", "csc"],
     dataset_kwargs=MappingProxyType({}),
-):
-    g = f.require_group(key)
+) -> None:
+    if value.indptr.shape[0] != value.shape[0 if value.format == "csr" else 1] + 1:
+        maj = "row" if value.format == "csr" else "column"
+        msg = f"Corrupt sparse array: the number of {maj}s does not match the index pointer size."
+        raise ValueError(msg)
+    if value.indices.shape != value.data.shape:
+        msg = "Corrupt sparse array: indices and data should have the same size."
+        raise ValueError(msg)
+
+    g: _GroupStorageType = f.require_group(key)
     g.attrs["shape"] = value.shape
     dataset_kwargs = dict(dataset_kwargs)
     indptr_dtype = dataset_kwargs.pop("indptr_dtype", value.indptr.dtype)
 
     # Allow resizing for hdf5
-    if isinstance(f, H5Group):
+    if isinstance(f, h5py.Group):
         dataset_kwargs = dict(maxshape=(None,), **dataset_kwargs)
     dataset_kwargs = zarr_v3_compressor_compat(dataset_kwargs)
 
@@ -728,57 +888,56 @@ def write_sparse_compressed(
                 dtype = np.dtype("uint32")
             elif minor_axis_size <= np.iinfo(np.uint64).max:
                 dtype = np.dtype("uint64")
-        if isinstance(f, H5Group):
+        if isinstance(g, h5py.Group):
             g.create_dataset(
                 attr_name, data=attr, shape=attr.shape, dtype=dtype, **dataset_kwargs
             )
         else:
-            dataset_kwargs = zarr_v3_sharding(dataset_kwargs)
-            arr = g.create_array(
-                attr_name, shape=attr.shape, dtype=dtype, **dataset_kwargs
-            )
+            with zarr_v3_sharding(
+                dataset_kwargs, format=g.metadata.zarr_format
+            ) as dataset_kwargs_local:
+                arr = g.create_array(
+                    attr_name, shape=attr.shape, dtype=dtype, **dataset_kwargs_local
+                )
             # see https://github.com/zarr-developers/zarr-python/discussions/2712
             arr[...] = attr[...]
 
 
-write_csr = partial(write_sparse_compressed, fmt="csr")
-write_csc = partial(write_sparse_compressed, fmt="csc")
-
 for store_type, (cls, spec, func) in product(
-    (H5Group, ZarrGroup),
+    _STORE_TYPES,
     [
         # spmatrix
-        (sparse.csr_matrix, IOSpec("csr_matrix", "0.1.0"), write_csr),
-        (views.SparseCSRMatrixView, IOSpec("csr_matrix", "0.1.0"), write_csr),
-        (sparse.csc_matrix, IOSpec("csc_matrix", "0.1.0"), write_csc),
-        (views.SparseCSCMatrixView, IOSpec("csc_matrix", "0.1.0"), write_csc),
+        (sparse.csr_matrix, IOSpec("csr_matrix", "0.1.0"), write_cs),
+        (views.SparseCSRMatrixView, IOSpec("csr_matrix", "0.1.0"), write_cs),
+        (sparse.csc_matrix, IOSpec("csc_matrix", "0.1.0"), write_cs),
+        (views.SparseCSCMatrixView, IOSpec("csc_matrix", "0.1.0"), write_cs),
         # sparray
-        (sparse.csr_array, IOSpec("csr_matrix", "0.1.0"), write_csr),
-        (views.SparseCSRArrayView, IOSpec("csr_matrix", "0.1.0"), write_csr),
-        (sparse.csc_array, IOSpec("csc_matrix", "0.1.0"), write_csc),
-        (views.SparseCSCArrayView, IOSpec("csc_matrix", "0.1.0"), write_csc),
+        (sparse.csr_array, IOSpec("csr_matrix", "0.1.0"), write_cs),
+        (views.SparseCSRArrayView, IOSpec("csr_matrix", "0.1.0"), write_cs),
+        (sparse.csc_array, IOSpec("csc_matrix", "0.1.0"), write_cs),
+        (views.SparseCSCArrayView, IOSpec("csc_matrix", "0.1.0"), write_cs),
         # cupy spmatrix
-        (CupyCSRMatrix, IOSpec("csr_matrix", "0.1.0"), _to_cpu_mem_wrapper(write_csr)),
+        (CupyCSRMatrix, IOSpec("csr_matrix", "0.1.0"), _to_cpu_mem_wrapper(write_cs)),
         (
             views.CupySparseCSRView,
             IOSpec("csr_matrix", "0.1.0"),
-            _to_cpu_mem_wrapper(write_csr),
+            _to_cpu_mem_wrapper(write_cs),
         ),
-        (CupyCSCMatrix, IOSpec("csc_matrix", "0.1.0"), _to_cpu_mem_wrapper(write_csc)),
+        (CupyCSCMatrix, IOSpec("csc_matrix", "0.1.0"), _to_cpu_mem_wrapper(write_cs)),
         (
             views.CupySparseCSCView,
             IOSpec("csc_matrix", "0.1.0"),
-            _to_cpu_mem_wrapper(write_csc),
+            _to_cpu_mem_wrapper(write_cs),
         ),
     ],
 ):
     _REGISTRY.register_write(store_type, cls, spec)(func)
 
 
-@_REGISTRY.register_write(H5Group, _CSRDataset, IOSpec("csr_matrix", "0.1.0"))
-@_REGISTRY.register_write(H5Group, _CSCDataset, IOSpec("csc_matrix", "0.1.0"))
-@_REGISTRY.register_write(ZarrGroup, _CSRDataset, IOSpec("csr_matrix", "0.1.0"))
-@_REGISTRY.register_write(ZarrGroup, _CSCDataset, IOSpec("csc_matrix", "0.1.0"))
+@_REGISTRY.register_write(h5py.Group, _CSRDataset, IOSpec("csr_matrix", "0.1.0"))
+@_REGISTRY.register_write(h5py.Group, _CSCDataset, IOSpec("csc_matrix", "0.1.0"))
+@_REGISTRY.register_write(zarr.Group, _CSRDataset, IOSpec("csr_matrix", "0.1.0"))
+@_REGISTRY.register_write(zarr.Group, _CSCDataset, IOSpec("csc_matrix", "0.1.0"))
 def write_sparse_dataset(
     f: _GroupStorageType,
     k: str,
@@ -787,14 +946,7 @@ def write_sparse_dataset(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
-    write_sparse_compressed(
-        f,
-        k,
-        elem._to_backed(),
-        _writer=_writer,
-        fmt=elem.format,
-        dataset_kwargs=dataset_kwargs,
-    )
+    write_cs(f, k, elem._to_backed(), _writer=_writer, dataset_kwargs=dataset_kwargs)
 
 
 def write_cupy_dask(f, k, elem, _writer, dataset_kwargs=MappingProxyType({})):
@@ -829,10 +981,9 @@ def write_dask_sparse(
         msg = f"Cannot write dask sparse arrays with format {sparse_format}"
         raise NotImplementedError(msg)
 
-    def chunk_slice(start: int, stop: int) -> tuple[slice | None, slice | None]:
-        result = [slice(None), slice(None)]
-        result[axis] = slice(start, stop)
-        return tuple(result)
+    def chunk_slice(start: int, stop: int) -> tuple[slice, slice]:
+        chunk = slice(start, stop)
+        return (chunk, slice(None)) if axis == 0 else (slice(None), chunk)
 
     axis_chunks = elem.chunks[axis]
     chunk_start = 0
@@ -845,7 +996,11 @@ def write_dask_sparse(
         dataset_kwargs=dataset_kwargs,
     )
 
-    disk_mtx = sparse_dataset(f[k])
+    group = f[k]
+    assert isinstance(group, h5py.Group | zarr.Group)
+    # `append` is not part of the public `CSRDataset`/`CSCDataset` API
+    disk_mtx = sparse_dataset(group)
+    assert isinstance(disk_mtx, _CSRDataset | _CSCDataset)
 
     for chunk_size in axis_chunks[1:]:
         chunk_start = chunk_stop
@@ -854,9 +1009,7 @@ def write_dask_sparse(
         disk_mtx.append(elem[chunk_slice(chunk_start, chunk_stop)].compute())
 
 
-for array_type, group_type in product(
-    [DaskArray, views.DaskArrayView], [H5Group, ZarrGroup]
-):
+for array_type, group_type in product([DaskArray, views.DaskArrayView], _STORE_TYPES):
     for cupy_array_type, spec in [
         (CupyArray, IOSpec("array", "0.2.0")),
         (CupyCSCMatrix, IOSpec("csc_matrix", "0.1.0")),
@@ -876,18 +1029,20 @@ for array_type, group_type in product(
         )
 
 
-@_REGISTRY.register_read(H5Group, IOSpec("csc_matrix", "0.1.0"))
-@_REGISTRY.register_read(H5Group, IOSpec("csr_matrix", "0.1.0"))
-@_REGISTRY.register_read(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
-@_REGISTRY.register_read(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
-def read_sparse(elem: _GroupStorageType, *, _reader: Reader) -> CSMatrix | CSArray:
+@_REGISTRY.register_read(h5py.Group, IOSpec("csc_matrix", "0.1.0"))
+@_REGISTRY.register_read(h5py.Group, IOSpec("csr_matrix", "0.1.0"))
+@_REGISTRY.register_read(zarr.Group, IOSpec("csc_matrix", "0.1.0"))
+@_REGISTRY.register_read(zarr.Group, IOSpec("csr_matrix", "0.1.0"))
+def read_sparse(
+    elem: _GroupStorageType, *, _reader: Reader
+) -> CSMatrix | CSArray | CupyCSMatrix:
     return sparse_dataset(elem).to_memory()
 
 
-@_REGISTRY.register_read_partial(H5Group, IOSpec("csc_matrix", "0.1.0"))
-@_REGISTRY.register_read_partial(H5Group, IOSpec("csr_matrix", "0.1.0"))
-@_REGISTRY.register_read_partial(ZarrGroup, IOSpec("csc_matrix", "0.1.0"))
-@_REGISTRY.register_read_partial(ZarrGroup, IOSpec("csr_matrix", "0.1.0"))
+@_REGISTRY.register_read_partial(h5py.Group, IOSpec("csc_matrix", "0.1.0"))
+@_REGISTRY.register_read_partial(h5py.Group, IOSpec("csr_matrix", "0.1.0"))
+@_REGISTRY.register_read_partial(zarr.Group, IOSpec("csc_matrix", "0.1.0"))
+@_REGISTRY.register_read_partial(zarr.Group, IOSpec("csr_matrix", "0.1.0"))
 def read_sparse_partial(elem, *, items=None, indices=(slice(None), slice(None))):
     return sparse_dataset(elem)[indices]
 
@@ -897,14 +1052,15 @@ def read_sparse_partial(elem, *, items=None, indices=(slice(None), slice(None)))
 #################
 
 
-@_REGISTRY.register_write(H5Group, AwkArray, IOSpec("awkward-array", "0.1.0"))
-@_REGISTRY.register_write(ZarrGroup, AwkArray, IOSpec("awkward-array", "0.1.0"))
+@_REGISTRY.register_write(h5py.Group, AwkArray, IOSpec("awkward-array", "0.1.0"))
+@_REGISTRY.register_write(zarr.Group, AwkArray, IOSpec("awkward-array", "0.1.0"))
 @_REGISTRY.register_write(
-    H5Group, views.AwkwardArrayView, IOSpec("awkward-array", "0.1.0")
+    h5py.Group, views.AwkwardArrayView, IOSpec("awkward-array", "0.1.0")
 )
 @_REGISTRY.register_write(
-    ZarrGroup, views.AwkwardArrayView, IOSpec("awkward-array", "0.1.0")
+    zarr.Group, views.AwkwardArrayView, IOSpec("awkward-array", "0.1.0")
 )
+@suppress_autoshard_warning
 def write_awkward(
     f: _GroupStorageType,
     k: str,
@@ -927,13 +1083,14 @@ def write_awkward(
         _writer.write_elem(group, k, v, dataset_kwargs=dataset_kwargs)
 
 
-@_REGISTRY.register_read(H5Group, IOSpec("awkward-array", "0.1.0"))
-@_REGISTRY.register_read(ZarrGroup, IOSpec("awkward-array", "0.1.0"))
+@_REGISTRY.register_read(h5py.Group, IOSpec("awkward-array", "0.1.0"))
+@_REGISTRY.register_read(zarr.Group, IOSpec("awkward-array", "0.1.0"))
 def read_awkward(elem: _GroupStorageType, *, _reader: Reader) -> AwkArray:
     from anndata.compat import awkward as ak
 
-    form = _read_attr(elem.attrs, "form")
-    length = _read_attr(elem.attrs, "length")
+    attrs: Mapping[str, Any] = elem.attrs
+    form = _read_attr(attrs, "form")
+    length = _read_attr(attrs, "length")
     container = {k: _reader.read_elem(elem[k]) for k in elem}
 
     return ak.from_buffers(form, int(length), container)
@@ -944,10 +1101,11 @@ def read_awkward(elem: _GroupStorageType, *, _reader: Reader) -> AwkArray:
 ##############
 
 
-@_REGISTRY.register_write(H5Group, views.DataFrameView, IOSpec("dataframe", "0.2.0"))
-@_REGISTRY.register_write(H5Group, pd.DataFrame, IOSpec("dataframe", "0.2.0"))
-@_REGISTRY.register_write(ZarrGroup, views.DataFrameView, IOSpec("dataframe", "0.2.0"))
-@_REGISTRY.register_write(ZarrGroup, pd.DataFrame, IOSpec("dataframe", "0.2.0"))
+@_REGISTRY.register_write(h5py.Group, views.DataFrameView, IOSpec("dataframe", "0.2.0"))
+@_REGISTRY.register_write(h5py.Group, pd.DataFrame, IOSpec("dataframe", "0.2.0"))
+@_REGISTRY.register_write(zarr.Group, views.DataFrameView, IOSpec("dataframe", "0.2.0"))
+@_REGISTRY.register_write(zarr.Group, pd.DataFrame, IOSpec("dataframe", "0.2.0"))
+@suppress_autoshard_warning
 def write_dataframe(
     f: _GroupStorageType,
     key: str,
@@ -984,12 +1142,15 @@ def write_dataframe(
         index_name = "_index"
     group.attrs["_index"] = check_key(index_name)
 
-    # ._values is "the best" array representation. It's the true array backing the
-    # object, where `.values` is always a np.ndarray and .array is always a pandas
-    # array.
-    _writer.write_elem(
-        group, index_name, df.index._values, dataset_kwargs=dataset_kwargs
+    if TYPE_CHECKING:  # `pd.DataFrame.index` is `Index[Any]`
+        assert isinstance(df.index.array, pd.arrays.ExtensionArray)
+    # We support non-nullable numpy arrays and nullable pandas string/numeric extension arrays
+    index_values = (
+        df.index.to_numpy()
+        if isinstance(df.index.array, pd.arrays.NumpyExtensionArray)
+        else df.index.array
     )
+    _writer.write_elem(group, index_name, index_values, dataset_kwargs=dataset_kwargs)
     for colname, series in df.items():
         # TODO: this should write the "true" representation of the series (i.e. the underlying array or ndarray depending)
         _writer.write_elem(
@@ -997,11 +1158,12 @@ def write_dataframe(
         )
 
 
-@_REGISTRY.register_read(H5Group, IOSpec("dataframe", "0.2.0"))
-@_REGISTRY.register_read(ZarrGroup, IOSpec("dataframe", "0.2.0"))
+@_REGISTRY.register_read(h5py.Group, IOSpec("dataframe", "0.2.0"))
+@_REGISTRY.register_read(zarr.Group, IOSpec("dataframe", "0.2.0"))
 def read_dataframe(elem: _GroupStorageType, *, _reader: Reader) -> pd.DataFrame:
-    columns = list(_read_attr(elem.attrs, "column-order"))
-    idx_key = _read_attr(elem.attrs, "_index")
+    attrs: Mapping[str, Any] = elem.attrs
+    columns = list(_read_attr(attrs, "column-order"))
+    idx_key = _read_attr(attrs, "_index")
     df = pd.DataFrame(
         {k: _reader.read_elem(elem[k]) for k in columns},
         index=_reader.read_elem(elem[idx_key]),
@@ -1013,8 +1175,8 @@ def read_dataframe(elem: _GroupStorageType, *, _reader: Reader) -> pd.DataFrame:
 
 
 # TODO: Figure out what indices is allowed to be at each element
-@_REGISTRY.register_read_partial(H5Group, IOSpec("dataframe", "0.2.0"))
-@_REGISTRY.register_read_partial(ZarrGroup, IOSpec("dataframe", "0.2.0"))
+@_REGISTRY.register_read_partial(h5py.Group, IOSpec("dataframe", "0.2.0"))
+@_REGISTRY.register_read_partial(zarr.Group, IOSpec("dataframe", "0.2.0"))
 def read_dataframe_partial(
     elem, *, items=None, indices=(slice(None, None), slice(None, None))
 ):
@@ -1038,11 +1200,12 @@ def read_dataframe_partial(
 # Backwards compat dataframe reading
 
 
-@_REGISTRY.register_read(H5Group, IOSpec("dataframe", "0.1.0"))
-@_REGISTRY.register_read(ZarrGroup, IOSpec("dataframe", "0.1.0"))
+@_REGISTRY.register_read(h5py.Group, IOSpec("dataframe", "0.1.0"))
+@_REGISTRY.register_read(zarr.Group, IOSpec("dataframe", "0.1.0"))
 def read_dataframe_0_1_0(elem: _GroupStorageType, *, _reader: Reader) -> pd.DataFrame:
-    columns = _read_attr(elem.attrs, "column-order")
-    idx_key = _read_attr(elem.attrs, "_index")
+    attrs: Mapping[str, Any] = elem.attrs
+    columns = _read_attr(attrs, "column-order")
+    idx_key = _read_attr(attrs, "_index")
     df = pd.DataFrame(
         {k: read_series(elem[k]) for k in columns},
         index=read_series(elem[idx_key]),
@@ -1053,28 +1216,27 @@ def read_dataframe_0_1_0(elem: _GroupStorageType, *, _reader: Reader) -> pd.Data
     return df
 
 
-def read_series(dataset: h5py.Dataset) -> np.ndarray | pd.Categorical:
+def read_series(dataset: StorageType) -> np.ndarray | pd.Categorical:
     # For reading older dataframes
-    if "categories" in dataset.attrs:
-        if isinstance(dataset, ZarrArray):
-            import zarr
-
-            parent_name = dataset.name.rstrip(dataset.basename).strip("/")
-            parent = zarr.open(dataset.store, mode="r")[parent_name]
-        else:
-            parent = dataset.parent
-        categories_dset = parent[_read_attr(dataset.attrs, "categories")]
-        categories = read_elem(categories_dset)
-        ordered = bool(_read_attr(categories_dset.attrs, "ordered", default=False))
-        return pd.Categorical.from_codes(
-            read_elem(dataset), categories, ordered=ordered
-        )
+    attrs: Mapping[str, Any] = dataset.attrs
+    values = read_elem(dataset)
+    assert isinstance(values, np.ndarray)
+    if "categories" not in attrs:
+        return values
+    if isinstance(dataset, zarr.Array | zarr.Group):
+        parent_name = dataset.name.rstrip(dataset.basename).strip("/")
+        parent = zarr.open_group(dataset.store, mode="r", path=parent_name)
     else:
-        return read_elem(dataset)
+        parent = dataset.parent
+    categories_dset = parent[_read_attr(attrs, "categories")]
+    categories = read_elem(categories_dset)
+    assert isinstance(categories, np.ndarray | pd.api.extensions.ExtensionArray)
+    ordered = bool(_read_attr(categories_dset.attrs, "ordered", default=False))
+    return pd.Categorical.from_codes(values, pd.Index(categories), ordered=ordered)
 
 
-@_REGISTRY.register_read_partial(H5Group, IOSpec("dataframe", "0.1.0"))
-@_REGISTRY.register_read_partial(ZarrGroup, IOSpec("dataframe", "0.1.0"))
+@_REGISTRY.register_read_partial(h5py.Group, IOSpec("dataframe", "0.1.0"))
+@_REGISTRY.register_read_partial(zarr.Group, IOSpec("dataframe", "0.1.0"))
 def read_partial_dataframe_0_1_0(
     elem, *, items=None, indices=(slice(None), slice(None))
 ):
@@ -1087,8 +1249,9 @@ def read_partial_dataframe_0_1_0(
 ###############
 
 
-@_REGISTRY.register_write(H5Group, pd.Categorical, IOSpec("categorical", "0.2.0"))
-@_REGISTRY.register_write(ZarrGroup, pd.Categorical, IOSpec("categorical", "0.2.0"))
+@_REGISTRY.register_write(h5py.Group, pd.Categorical, IOSpec("categorical", "0.2.0"))
+@_REGISTRY.register_write(zarr.Group, pd.Categorical, IOSpec("categorical", "0.2.0"))
+@suppress_autoshard_warning
 def write_categorical(
     f: _GroupStorageType,
     k: str,
@@ -1109,8 +1272,8 @@ def write_categorical(
     )
 
 
-@_REGISTRY.register_read(H5Group, IOSpec("categorical", "0.2.0"))
-@_REGISTRY.register_read(ZarrGroup, IOSpec("categorical", "0.2.0"))
+@_REGISTRY.register_read(h5py.Group, IOSpec("categorical", "0.2.0"))
+@_REGISTRY.register_read(zarr.Group, IOSpec("categorical", "0.2.0"))
 def read_categorical(elem: _GroupStorageType, *, _reader: Reader) -> pd.Categorical:
     return pd.Categorical.from_codes(
         codes=_reader.read_elem(elem["codes"]),
@@ -1119,8 +1282,8 @@ def read_categorical(elem: _GroupStorageType, *, _reader: Reader) -> pd.Categori
     )
 
 
-@_REGISTRY.register_read_partial(H5Group, IOSpec("categorical", "0.2.0"))
-@_REGISTRY.register_read_partial(ZarrGroup, IOSpec("categorical", "0.2.0"))
+@_REGISTRY.register_read_partial(h5py.Group, IOSpec("categorical", "0.2.0"))
+@_REGISTRY.register_read_partial(zarr.Group, IOSpec("categorical", "0.2.0"))
 def read_partial_categorical(elem, *, items=None, indices=(slice(None),)):
     return pd.Categorical.from_codes(
         codes=read_elem_partial(elem["codes"], indices=indices),
@@ -1135,16 +1298,16 @@ def read_partial_categorical(elem, *, items=None, indices=(slice(None),)):
 
 
 @_REGISTRY.register_write(
-    H5Group, pd.arrays.IntegerArray, IOSpec("nullable-integer", "0.1.0")
+    h5py.Group, pd.arrays.IntegerArray, IOSpec("nullable-integer", "0.1.0")
 )
 @_REGISTRY.register_write(
-    ZarrGroup, pd.arrays.IntegerArray, IOSpec("nullable-integer", "0.1.0")
+    zarr.Group, pd.arrays.IntegerArray, IOSpec("nullable-integer", "0.1.0")
 )
 @_REGISTRY.register_write(
-    H5Group, pd.arrays.BooleanArray, IOSpec("nullable-boolean", "0.1.0")
+    h5py.Group, pd.arrays.BooleanArray, IOSpec("nullable-boolean", "0.1.0")
 )
 @_REGISTRY.register_write(
-    ZarrGroup, pd.arrays.BooleanArray, IOSpec("nullable-boolean", "0.1.0")
+    zarr.Group, pd.arrays.BooleanArray, IOSpec("nullable-boolean", "0.1.0")
 )
 def write_nullable(
     f: _GroupStorageType,
@@ -1175,6 +1338,7 @@ def write_nullable(
         # if implicitly set to `False`, we error out
         if (
             settings.allow_write_nullable_strings is None
+            and not PANDAS_3
             and not pd.options.future.infer_string
         ):
             msg = (
@@ -1198,26 +1362,27 @@ def write_nullable(
     values = (
         v.to_numpy(na_value="")
         if isinstance(v, pd.arrays.StringArray | pd.arrays.ArrowStringArray)
-        else v.to_numpy(na_value=0, dtype=v.dtype.numpy_dtype)
+        else v.to_numpy(na_value=0, dtype=v.dtype.type)
     )
     _writer.write_elem(g, "values", values, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "mask", v.isna(), dataset_kwargs=dataset_kwargs)
 
 
-for store_type, array_type in product([H5Group, ZarrGroup], PANDAS_STRING_ARRAY_TYPES):
+for store_type, array_type in product(_STORE_TYPES, PANDAS_STRING_ARRAY_TYPES):
     _REGISTRY.register_write(
         store_type, array_type, IOSpec("nullable-string-array", "0.1.0")
     )(write_nullable)
 
 
+class _BaseMaskedArray(Protocol):
+    # `IntegerArray` and `BooleanArray` take disjoint dtypes, so nothing narrower fits both
+    def __call__(
+        self, values: NDArray[Any], /, *, mask: NDArray[np.bool_]
+    ) -> pd.api.extensions.ExtensionArray: ...
+
+
 def _read_nullable(
-    elem: _GroupStorageType,
-    *,
-    _reader: Reader,
-    # BaseMaskedArray
-    array_type: Callable[
-        [NDArray[np.number], NDArray[np.bool_]], pd.api.extensions.ExtensionArray
-    ],
+    elem: _GroupStorageType, *, _reader: Reader, array_type: _BaseMaskedArray
 ) -> pd.api.extensions.ExtensionArray:
     return array_type(
         _reader.read_elem(elem["values"]),
@@ -1225,23 +1390,23 @@ def _read_nullable(
     )
 
 
-_REGISTRY.register_read(H5Group, IOSpec("nullable-integer", "0.1.0"))(
+_REGISTRY.register_read(h5py.Group, IOSpec("nullable-integer", "0.1.0"))(
     read_nullable_integer := partial(_read_nullable, array_type=pd.arrays.IntegerArray)
 )
-_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-integer", "0.1.0"))(
+_REGISTRY.register_read(zarr.Group, IOSpec("nullable-integer", "0.1.0"))(
     read_nullable_integer
 )
 
-_REGISTRY.register_read(H5Group, IOSpec("nullable-boolean", "0.1.0"))(
+_REGISTRY.register_read(h5py.Group, IOSpec("nullable-boolean", "0.1.0"))(
     read_nullable_boolean := partial(_read_nullable, array_type=pd.arrays.BooleanArray)
 )
-_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-boolean", "0.1.0"))(
+_REGISTRY.register_read(zarr.Group, IOSpec("nullable-boolean", "0.1.0"))(
     read_nullable_boolean
 )
 
 
-@_REGISTRY.register_read(H5Group, IOSpec("nullable-string-array", "0.1.0"))
-@_REGISTRY.register_read(ZarrGroup, IOSpec("nullable-string-array", "0.1.0"))
+@_REGISTRY.register_read(h5py.Group, IOSpec("nullable-string-array", "0.1.0"))
+@_REGISTRY.register_read(zarr.Group, IOSpec("nullable-string-array", "0.1.0"))
 def _read_nullable_string(
     elem: _GroupStorageType, *, _reader: Reader
 ) -> pd.api.extensions.ExtensionArray:
@@ -1266,12 +1431,12 @@ def _read_nullable_string(
 ###########
 
 
-@_REGISTRY.register_read(H5Array, IOSpec("numeric-scalar", "0.2.0"))
-@_REGISTRY.register_read(ZarrArray, IOSpec("numeric-scalar", "0.2.0"))
+@_REGISTRY.register_read(h5py.Dataset, IOSpec("numeric-scalar", "0.2.0"))
+@_REGISTRY.register_read(zarr.Array, IOSpec("numeric-scalar", "0.2.0"))
 def read_scalar(elem: _ArrayStorageType, *, _reader: Reader) -> np.number:
     # TODO: `item` ensures the return is in fact a scalar (needed after zarr v3 which now returns a 1 elem array)
     # https://github.com/zarr-developers/zarr-python/issues/2713
-    return elem[()].item()
+    return np.asarray(elem[()]).item()
 
 
 def _remove_scalar_compression_args(dataset_kwargs: Mapping[str, Any]) -> dict:
@@ -1291,7 +1456,7 @@ def _remove_scalar_compression_args(dataset_kwargs: Mapping[str, Any]) -> dict:
 
 
 def write_scalar_zarr(
-    f: ZarrGroup,
+    f: zarr.Group,
     key: str,
     value,
     *,
@@ -1302,6 +1467,9 @@ def write_scalar_zarr(
     # and error out in v3
     dataset_kwargs = _remove_scalar_compression_args(dataset_kwargs)
 
+    filters: list[VLenUTF8] | None
+    dtype: VariableLengthUTF8 | np.dtype
+    fill_value: str | None
     match f.metadata.zarr_format, value:
         case 2, str():
             filters, dtype, fill_value = [VLenUTF8()], VariableLengthUTF8(), ""
@@ -1312,7 +1480,8 @@ def write_scalar_zarr(
     a = f.create_array(
         key,
         shape=(),
-        dtype=dtype,
+        # zarr’s `ZDTypeLike` is invariant, so its own dtypes don’t satisfy it
+        dtype=dtype,  # type: ignore[arg-type]
         filters=filters,
         fill_value=fill_value,
         **dataset_kwargs,
@@ -1321,7 +1490,7 @@ def write_scalar_zarr(
 
 
 def write_hdf5_scalar(
-    f: H5Group,
+    f: h5py.Group,
     key: str,
     value,
     *,
@@ -1333,51 +1502,53 @@ def write_hdf5_scalar(
     f.create_dataset(key, data=np.array(value), **dataset_kwargs)
 
 
-for numeric_scalar_type in [
+_NUMERIC_SCALAR_TYPES: list[type] = [
     *(bool, np.bool_),
     *(np.uint8, np.uint16, np.uint32, np.uint64),
     *(int, np.int8, np.int16, np.int32, np.int64),
-    *(float, *np.floating.__subclasses__()),
+    float,
+    *np.floating.__subclasses__(),
     *np.complexfloating.__subclasses__(),
-]:
+]
+for numeric_scalar_type in _NUMERIC_SCALAR_TYPES:
     _REGISTRY.register_write(
-        H5Group, numeric_scalar_type, IOSpec("numeric-scalar", "0.2.0")
+        h5py.Group, numeric_scalar_type, IOSpec("numeric-scalar", "0.2.0")
     )(write_hdf5_scalar)
     _REGISTRY.register_write(
-        ZarrGroup, numeric_scalar_type, IOSpec("numeric-scalar", "0.2.0")
+        zarr.Group, numeric_scalar_type, IOSpec("numeric-scalar", "0.2.0")
     )(write_scalar_zarr)
 
-_REGISTRY.register_write(ZarrGroup, str, IOSpec("string", "0.2.0"))(write_scalar_zarr)
-_REGISTRY.register_write(ZarrGroup, np.str_, IOSpec("string", "0.2.0"))(
+_REGISTRY.register_write(zarr.Group, str, IOSpec("string", "0.2.0"))(write_scalar_zarr)
+_REGISTRY.register_write(zarr.Group, np.str_, IOSpec("string", "0.2.0"))(
     write_scalar_zarr
 )
 
 
-@_REGISTRY.register_read(H5Array, IOSpec("string", "0.2.0"))
-def read_hdf5_string(elem: H5Array, *, _reader: Reader) -> str:
+@_REGISTRY.register_read(h5py.Dataset, IOSpec("string", "0.2.0"))
+def read_hdf5_string(elem: h5py.Dataset, *, _reader: Reader) -> str:
     return elem.asstr()[()]
 
 
-@_REGISTRY.register_read(ZarrArray, IOSpec("string", "0.2.0"))
-def read_zarr_string(elem: ZarrArray, *, _reader: Reader) -> str:
+@_REGISTRY.register_read(zarr.Array, IOSpec("string", "0.2.0"))
+def read_zarr_string(elem: zarr.Array, *, _reader: Reader) -> str:
     return str(elem[()])
 
 
-_REGISTRY.register_read(H5Array, IOSpec("bytes", "0.2.0"))(read_scalar)
-_REGISTRY.register_read(ZarrArray, IOSpec("bytes", "0.2.0"))(read_scalar)
+_REGISTRY.register_read(h5py.Dataset, IOSpec("bytes", "0.2.0"))(read_scalar)
+_REGISTRY.register_read(zarr.Array, IOSpec("bytes", "0.2.0"))(read_scalar)
 
 
-@_REGISTRY.register_write(H5Group, np.str_, IOSpec("string", "0.2.0"))
-@_REGISTRY.register_write(H5Group, str, IOSpec("string", "0.2.0"))
+@_REGISTRY.register_write(h5py.Group, np.str_, IOSpec("string", "0.2.0"))
+@_REGISTRY.register_write(h5py.Group, str, IOSpec("string", "0.2.0"))
 def write_string(
-    f: H5Group,
+    f: h5py.Group,
     k: str,
     v: np.str_ | str,
     *,
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any],
 ):
-    dataset_kwargs = dataset_kwargs.copy()
+    dataset_kwargs = dict(dataset_kwargs)
     dataset_kwargs.pop("compression", None)
     dataset_kwargs.pop("compression_opts", None)
     f.create_dataset(

@@ -1,5 +1,5 @@
 {
-    "[python][toml][json][jsonc]": {
+    "[python][json][jsonc]": {
         "editor.formatOnSave": true,
         "editor.codeActionsOnSave": {
             "source.organizeImports": "explicit",
@@ -8,9 +8,6 @@
     },
     "[python]": {
         "editor.defaultFormatter": "charliermarsh.ruff",
-    },
-    "[toml]": {
-        "editor.defaultFormatter": "tamasfe.even-better-toml",
     },
     "[json][jsonc]": {
         "editor.defaultFormatter": "biomejs.biome",
@@ -25,4 +22,6 @@
     ],
     "python.terminal.activateEnvironment": true,
     "python.analysis.include": ["src/**/*", "ci/scripts/**/*", "tests/**/*"],
+    "python-envs.defaultEnvManager": "pypa.hatch:hatch",
+    "python-envs.defaultPackageManager": "pypa.hatch:hatch",
 }

@@ -151,16 +151,15 @@ def test_copy_view():
 ############
 
 
-def test_io_missing_X(tmp_path, diskfmt):
-    file_pth = tmp_path / f"x_none_adata.{diskfmt}"
+def test_io_missing_X(diskfmt_store, diskfmt):
     write = lambda obj, pth: getattr(obj, f"write_{diskfmt}")(pth)
     read = getattr(ad, f"read_{diskfmt}")
 
     adata = gen_adata((20, 30), **GEN_ADATA_NO_XARRAY_ARGS)
     del adata.X
 
-    write(adata, file_pth)
-    from_disk = read(file_pth)
+    write(adata, diskfmt_store)
+    from_disk = read(diskfmt_store)
 
     assert_equal(from_disk, adata)
 
@@ -172,3 +171,33 @@ def test_fail_on_non_csr_csc_matrix():
         match=r"Only CSR and CSC.*",
     ):
         ad.AnnData(X=X)
+
+
+class _ArrayApiNoDLPack:
+    def __init__(self, arr: np.ndarray):
+        self._arr = arr
+        self.shape = arr.shape
+        self.size = arr.size
+        self.device = "cpu"
+        self.dtype = arr.dtype
+        self.ndim = arr.ndim
+
+    def __array_namespace__(self, *, api_version=None):
+        return np
+
+    def to_device(self, device, /, *, stream=None):
+        return self
+
+    def __getitem__(self, k):
+        return _ArrayApiNoDLPack(self._arr[k])
+
+
+def test_store_array_api_without_dlpack():
+    X = _ArrayApiNoDLPack(np.arange(6.0).reshape(2, 3))
+    adata = ad.AnnData(X)
+    assert adata.X is X
+    assert adata.shape == (2, 3)
+
+    # also usable as a layer, and survives subsetting
+    adata.layers["copy"] = _ArrayApiNoDLPack(np.zeros((2, 3)))
+    assert isinstance(adata[0:1].X, _ArrayApiNoDLPack)

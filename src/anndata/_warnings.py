@@ -2,13 +2,8 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import legacy_api_wrap
-
-if TYPE_CHECKING:
-    from typing import Any
-
 
 _FILE_PREFIXES: tuple[str, ...] = (
     str(Path(__file__).parent),
@@ -52,7 +47,7 @@ class ExperimentalFeatureWarning(Warning):
 def warn(
     msg: str,
     category: type[Warning],
-    source: Any = None,
+    source: object | None = None,
     *,
     skip_file_prefixes: tuple[str, ...] = (),
     more_file_prefixes: tuple[str, ...] = (),

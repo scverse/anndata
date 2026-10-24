@@ -11,10 +11,8 @@ See {doc}`/release-notes/index`.
 
 tutorials/index
 api
-concatenation
 fileformat-prose
 interoperability
-benchmarks
 contributing
 release-notes/index
 references

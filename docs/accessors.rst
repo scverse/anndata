@@ -35,9 +35,11 @@ For these purposes, they are
 
     or to extract the referenced vector:
 
-    >>> ref = A.obs["louvain"]
-    >>> adata[ref].categories[:2]  # doctest: +ELLIPSIS
+    >>> adata[A.obs["louvain"]].categories[:2]  # doctest: +ELLIPSIS
     Index(['CD4 T cells', 'CD14+ Monocytes'], dtype=...)
+    >>> adata[A.varm["PCs"]] # doctest: +ELLIPSIS
+    array([[...
+          ...]],... dtype=float32)
 
 #.  introspectible:
 
@@ -165,6 +167,7 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
         :toctree: generated/
 
         Idx2D
+        NO_IDX
 
 ..  toctree::
     :hidden:
@@ -174,6 +177,39 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
     generated/anndata.acc.MultiAcc
     generated/anndata.acc.GraphAcc
     generated/anndata.acc.Idx2D
+    generated/anndata.acc.NO_IDX
+
+Serialization
+-------------
+
+:term:`reference`\ s round-trip through JSON-compatible lists
+via :meth:`AdAcc.to_json` and :meth:`AdAcc.from_json`:
+
+>>> A.to_json(A.obsm["pca"][:, 0])
+['obsm', 'pca', 0]
+>>> A.from_json(["obsm", "pca", 0])
+A.obsm['pca'][:, 0]
+
+So do the :term:`reference accessor`\ s they came from,
+as the same lists without the trailing index:
+
+>>> A.to_json(A.obsm["pca"])
+['obsm', 'pca']
+>>> A.from_json(["layers", None])
+A.X
+
+Pass `vec=True` or `vec=False` to :meth:`~AdAcc.from_json`
+to accept only :term:`reference`\ s or only :term:`reference accessor`\ s,
+like :meth:`AdAcc.resolve` does for strings.
+:class:`MetaAcc` (i.e. :attr:`~AdAcc.obs`/:attr:`~AdAcc.var`) is the exception:
+only its :term:`reference`\ s are serializable, as it has no array of its own.
+
+Both are described by `acc-schema-v1.json <acc-schema-v1.json>`_,
+as separate subschemas you can validate against independently
+using JSON pointers into it:
+`#/$defs/ref` matches :term:`reference`\ s,
+`#/$defs/acc` :term:`reference accessor`\ s,
+and the schema itself either.
 
 .. _extending accessors:
 
@@ -182,7 +218,7 @@ Extending accessors
 
 There are three layers of extensibility:
 
-#.  subclassing :class:`RefAcc` and creating a new :class:`AdRef` instance for creating them:
+#.  subclassing :class:`AdRef` and creating a new :class:`AdAcc` instance for creating them:
 
     ..  code-block:: python
 
@@ -200,7 +236,6 @@ There are three layers of extensibility:
 
         adata = sc.datasets.pbmc3k_processed()
         plt.scatter(*A.obsm["X_umap"][:, [0, 1]], c=A.obs["n_counts"], data=adata)
-
 
 #.  subclass one or more of the :term:`reference accessor`\ s, and create a new :class:`AdAcc` instance:
 
@@ -220,6 +255,9 @@ There are three layers of extensibility:
     >>> A = AdAcc(ref_class=TwoDRef, meta_cls=MyMetaAcc)
     >>> A.obs[["a", "b"]]
     A.obs[['a', 'b']]
+
+    Note that for implementing :meth:`RefAcc.get` when subclassing, you will need :class:`NO_IDX`.
+
 
 #.  subclass :class:`AdAcc` to add new accessors:
 

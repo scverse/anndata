@@ -1,25 +1,35 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from functools import singledispatch
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 from pandas.api.types import is_string_dtype
 
+from .._settings import settings
 from .._warnings import ImplicitModificationWarning
 from ..compat import XDataset, pandas_as_str
 from ..utils import warn
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
-    from typing import Any, Literal
+    from typing import Literal
+
+type IntoAlignedDf = (
+    Mapping[str, Iterable[Any]]
+    | pd.DataFrame
+    | pd.Series
+    | pd.Index
+    | XDataset
+    | Dataset2D
+    | None
+)
 
 
 @singledispatch
 def _gen_dataframe(
-    anno: Any,
+    anno: IntoAlignedDf,
     index_names: Iterable[str],
     *,
     source: Literal["X", "shape"],
@@ -78,17 +88,20 @@ def _gen_dataframe_df(
     attr: Literal["obs", "var"],
     length: int | None = None,
 ):
-    if isinstance(anno.index, pd.MultiIndex):
+    if isinstance(anno.index, pd.MultiIndex) and settings.restrict_index_types:
         msg = (
-            "pandas.MultiIndex not supported as index for obs or var on declaration.\n\
-            You can set `obs_names` manually although most operations after will error or convert to str.\n\
-            This behavior will likely be clarified in a future breaking release."
+            "pandas.MultiIndex not supported as index for obs or var on declaration.\n"
+            "You can set `obs_names` manually although most operations after will error or convert to str.\n"
+            "You can also opt out of `settings.restrict_index_types` which will allow pandas.MultiIndex."
         )
         raise ValueError(msg)
     if length is not None and length != len(anno):
         raise _mk_df_error(source, attr, length, len(anno))
     anno = anno.copy(deep=False)
-    if not is_string_dtype(anno.index[~anno.index.isna()]):
+    if (
+        settings.restrict_index_types
+        and not is_string_dtype(anno.index[anno.index.notna()])
+    ) or pd.api.types.is_integer_dtype(anno.index):
         msg = "Transforming to str index."
         warn(msg, ImplicitModificationWarning)
         anno.index = pandas_as_str(anno.index)

@@ -28,15 +28,19 @@ def adata():
 
 
 def test_assigmnent_dict(adata: AnnData):
-    d_obsp = dict(
+    obsp_sparse = sparse.random(M, M, format="csr")
+    assert isinstance(obsp_sparse, sparse.csr_matrix)
+    varp_sparse = sparse.random(N, N, format="csr")
+    assert isinstance(varp_sparse, sparse.csr_matrix)
+    d_obsp: dict[str, pd.DataFrame | np.ndarray | sparse.csr_matrix] = dict(
         a=pd.DataFrame(np.ones((M, M)), columns=adata.obs_names, index=adata.obs_names),
         b=np.zeros((M, M)),
-        c=sparse.random(M, M, format="csr"),
+        c=obsp_sparse,
     )
-    d_varp = dict(
+    d_varp: dict[str, pd.DataFrame | np.ndarray | sparse.csr_matrix] = dict(
         a=pd.DataFrame(np.ones((N, N)), columns=adata.var_names, index=adata.var_names),
         b=np.zeros((N, N)),
-        c=sparse.random(N, N, format="csr"),
+        c=varp_sparse,
     )
     adata.obsp = d_obsp
     for k, v in d_obsp.items():
@@ -66,20 +70,24 @@ def test_setting_ndarray(adata: AnnData):
 
 def test_setting_sparse(adata: AnnData):
     obsp_sparse = sparse.random(M, M, format="csr")
+    assert isinstance(obsp_sparse, sparse.csr_matrix)
     adata.obsp["a"] = obsp_sparse
-    assert not np.any((adata.obsp["a"] != obsp_sparse).data)
+    assert not np.any(asarray(adata.obsp["a"]) != asarray(obsp_sparse))
 
     varp_sparse = sparse.random(N, N, format="csr")
+    assert isinstance(varp_sparse, sparse.csr_matrix)
     adata.varp["a"] = varp_sparse
-    assert not np.any((adata.varp["a"] != varp_sparse).data)
+    assert not np.any(asarray(adata.varp["a"]) != asarray(varp_sparse))
 
     h = joblib.hash(adata)
 
     bad_obsp_sparse = sparse.random(M * 2, M, format="csr")
+    assert isinstance(bad_obsp_sparse, sparse.csr_matrix)
     with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.obsp["b"] = bad_obsp_sparse
 
     bad_varp_sparse = sparse.random(N * 2, N, format="csr")
+    assert isinstance(bad_varp_sparse, sparse.csr_matrix)
     with pytest.raises(ValueError, match=r"incorrect shape"):
         adata.varp["b"] = bad_varp_sparse
 

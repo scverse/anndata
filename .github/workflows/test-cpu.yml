@@ -18,16 +18,20 @@ concurrency:
 jobs:
   get-environments:
     runs-on: ubuntu-latest
+    permissions: {}
     outputs:
       envs: ${{ steps.get-envs.outputs.envs }}
     steps:
-      - uses: actions/checkout@v6
+      - &clone
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          filter: blob:none
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v7
+          filter: blob:none
+          persist-credentials: false
+      - &setup-uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
-          enable-cache: false
+          enable-cache: true
       - id: get-envs
         run: |
           ENVS_JSON=$(NO_COLOR=1 uvx hatch env show --json | jq -c 'to_entries
@@ -47,26 +51,20 @@ jobs:
         io_mark: ["zarr_io", "not zarr_io", "dask_distributed"] # dask_distributed should not be run with -n auto as it uses a client with processes
         exclude:
           - { env: { name: "hatch-test.array_api" }, io_mark: "dask_distributed" }
-
     permissions:
       id-token: write  # for codecov OIDC
-    env:  # environment variables for use in codecov’s env_vars tagging
+    env:
+      # environment variables for use in codecov’s env_vars tagging
       ENV_NAME: ${{ matrix.env.name }}
       IO_MARK: ${{ matrix.io_mark }}
+      UV_PYTHON: ${{ matrix.env.python }}
     steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          filter: blob:none
+      - *clone
 
       - name: Install system dependencies
         run: sudo apt install -y hdf5-tools
 
-      - name: Install UV
-        uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-          python-version: ${{ matrix.env.python }}
+      - *setup-uv
 
       - name: Install dependencies
         run: |
@@ -82,7 +80,7 @@ jobs:
 
       - name: Upload test results
         if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           report_type: test_results
           env_vars: ENV_NAME,IO_MARK
@@ -91,7 +89,7 @@ jobs:
           fail_ci_if_error: true
 
       - name: Upload coverage data
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           env_vars: ENV_NAME,IO_MARK
           files: test-data/coverage.xml
@@ -100,14 +98,12 @@ jobs:
 
   build:
     runs-on: ubuntu-24.04
+    permissions: {}
     steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          filter: blob:none
+      - *clone
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.x'
           cache: pip
@@ -131,8 +127,10 @@ jobs:
       - get-environments
       - test
       - build
+    permissions:
+      actions: read
     runs-on: ubuntu-latest
     steps:
-      - uses: re-actors/alls-green@release/v1
+      - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
         with:
           jobs: ${{ toJSON(needs) }}

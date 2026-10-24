@@ -6,17 +6,19 @@ from importlib.metadata import version
 from typing import TYPE_CHECKING
 
 import joblib
+import numpy as np
 import pytest
 from dask.base import normalize_token, tokenize
 from packaging.version import Version
 
-if Version(version("dask")) < Version("2024.8.0"):
+if not TYPE_CHECKING and Version(version("dask")) < Version("2024.8.0"):
     from dask.base import normalize_seq
 else:
     from dask.tokenize import normalize_seq
 
 from filelock import FileLock
 from scipy import sparse
+from zarr.storage import MemoryStore
 
 import anndata as ad
 from anndata.tests.helpers import subset_func  # noqa: F401
@@ -24,8 +26,9 @@ from anndata.tests.helpers import subset_func  # noqa: F401
 if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
-    from types import EllipsisType
     from typing import Literal
+
+    from anndata.typing import Index
 
 
 @pytest.fixture
@@ -33,29 +36,63 @@ def backing_h5ad(tmp_path: Path) -> Path:
     return tmp_path / "test.h5ad"
 
 
+@pytest.fixture
+def arr2d() -> np.ndarray:
+    return np.zeros((3, 4))
+
+
+@pytest.fixture
+def arr3d() -> np.ndarray:
+    return np.arange(3 * 4 * 5).reshape((3, 4, 5))
+
+
+@pytest.fixture(params=["X", "layers"])
+def which(request: pytest.FixtureRequest) -> Literal["X", "layers"]:
+    """Which of ``X`` / ``layers`` should hold the non-2-D payload."""
+    return request.param
+
+
 @pytest.fixture(
-    params=[("h5ad", None), ("zarr", 2), ("zarr", 3)],
-    ids=["h5ad", "zarr2", "zarr3"],
+    params=["h5ad", "zarr"],
+    ids=["h5ad", "zarr"],
 )
 def diskfmt(
     request: pytest.FixtureRequest,
-) -> Generator[Literal["h5ad", "zarr"], None, None]:
-    if (fmt := request.param[0]) == "h5ad":
-        yield fmt
-    else:
-        with ad.settings.override(zarr_write_format=request.param[1]):
-            yield fmt
+) -> Literal["h5ad", "zarr"]:
+    return request.param
 
 
 @pytest.fixture
 def diskfmt2(
-    diskfmt: Literal["h5ad", "zarr"],
-) -> Generator[Literal["zarr", "h5ad"], None, None]:
+    diskfmt: Literal["zarr"],
+) -> Literal["zarr", "h5ad"]:
     if diskfmt == "h5ad":
-        with ad.settings.override(zarr_write_format=2):
-            yield "zarr"
-    else:
-        yield "h5ad"
+        return "zarr"
+    pytest.skip(
+        "diskfmt / diskfmt2 tests should be symmetric so h5ad in diskfmt and zarr and diskfmt2 should be sufficient."
+    )
+
+
+def _store_for(tmp_path: Path, diskfmt: str, name: str) -> Path | MemoryStore:
+    """Where to write: a file path for `h5ad`, an in-memory store for `zarr`.
+
+    Tests should not touch the file system unless that is what they test.
+    """
+    return tmp_path / f"{name}.h5ad" if diskfmt == "h5ad" else MemoryStore()
+
+
+@pytest.fixture
+def diskfmt_store(
+    tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]
+) -> Path | MemoryStore:
+    return _store_for(tmp_path, diskfmt, "test")
+
+
+@pytest.fixture
+def diskfmt2_store(
+    tmp_path: Path, diskfmt2: Literal["h5ad", "zarr"]
+) -> Path | MemoryStore:
+    return _store_for(tmp_path, diskfmt2, "test2")
 
 
 @pytest.fixture(
@@ -84,24 +121,20 @@ def diskfmt2(
 )
 def ellipsis_index_with_equivalent(
     request,
-) -> tuple[tuple[EllipsisType | slice, ...] | EllipsisType, tuple[slice, slice]]:
+) -> tuple[Index, tuple[slice, slice]]:
     return request.param
 
 
 @pytest.fixture
 def ellipsis_index(
-    ellipsis_index_with_equivalent: tuple[
-        tuple[EllipsisType | slice, ...] | EllipsisType, tuple[slice, slice]
-    ],
-) -> tuple[EllipsisType | slice, ...] | EllipsisType:
+    ellipsis_index_with_equivalent: tuple[Index, tuple[slice, slice]],
+) -> Index:
     return ellipsis_index_with_equivalent[0]
 
 
 @pytest.fixture
 def equivalent_ellipsis_index(
-    ellipsis_index_with_equivalent: tuple[
-        tuple[EllipsisType | slice, ...] | EllipsisType, tuple[slice, slice]
-    ],
+    ellipsis_index_with_equivalent: tuple[Index, tuple[slice, slice]],
 ) -> tuple[slice, slice]:
     return ellipsis_index_with_equivalent[1]
 
@@ -109,7 +142,7 @@ def equivalent_ellipsis_index(
 @pytest.fixture(scope="session")
 def local_cluster_addr(
     tmp_path_factory: pytest.TempPathFactory, worker_id: str
-) -> Generator[str, None, None]:
+) -> Generator[str]:
     # Adapted from https://pytest-xdist.readthedocs.io/en/latest/how-to.html#making-session-scoped-fixtures-execute-only-once
     import dask.distributed as dd
 

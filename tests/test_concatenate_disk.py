@@ -9,17 +9,20 @@ import numpy as np
 import pandas as pd
 import pytest
 from scipy import sparse
+from zarr.storage import MemoryStore
 
 import anndata as ad
-from anndata import AnnData, concat, settings
+from anndata import AnnData, concat
 from anndata._core import merge
 from anndata._core.merge import _resolve_axis
+from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata.experimental.merge import as_group, concat_on_disk
 from anndata.io import read_elem, write_elem
-from anndata.tests.helpers import assert_equal, check_all_sharded, gen_adata
+from anndata.tests.helpers import assert_equal, gen_adata
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
     from pathlib import Path
     from typing import Literal
 
@@ -70,49 +73,55 @@ def max_loaded_elems(request) -> int:
     return request.param
 
 
-def _adatas_to_paths(adatas, tmp_path, file_format):
-    """
-    Gets list of adatas, writes them and returns their paths as zarr
-    """
-    paths = None
+def _make_store(
+    tmp_path: Path, file_format: str, name: str, *, on_disk_zarr: bool
+) -> Path | MemoryStore:
+    if file_format == "h5ad" or on_disk_zarr:
+        return tmp_path / f"{name}.{file_format}"
+    return MemoryStore()
 
-    if isinstance(adatas, Mapping):
-        paths = {}
-        for k, v in adatas.items():
-            p = tmp_path / (f"{k}." + file_format)
-            with as_group(p, mode="a") as f:
-                write_elem(f, "", v)
-            paths[k] = p
-    else:
-        paths = []
-        for i, a in enumerate(adatas):
-            p = tmp_path / (f"{i}." + file_format)
-            with as_group(p, mode="a") as f:
-                write_elem(f, "", a)
-            paths += [p]
-    return paths
+
+def _adatas_to_stores(
+    adatas: Mapping[str, AnnData] | Collection[AnnData],
+    tmp_path: Path,
+    file_format: str,
+    *,
+    on_disk_zarr: bool,
+) -> dict[str, Path | MemoryStore] | list[Path | MemoryStore]:
+    """Gets list of adatas, writes them and returns their stores."""
+    stores: dict[str, Path | MemoryStore] = {}
+    for k, v in adatas.items() if isinstance(adatas, Mapping) else enumerate(adatas):
+        store = _make_store(tmp_path, file_format, str(k), on_disk_zarr=on_disk_zarr)
+        with as_group(store, mode="a") as f:
+            write_elem(f, "/", v)
+        stores[str(k)] = store
+    return stores if isinstance(adatas, Mapping) else list(stores.values())
 
 
 def assert_eq_concat_on_disk(
-    adatas,
+    adatas: Mapping[str, AnnData] | Collection[AnnData],
     tmp_path: Path,
     file_format: Literal["zarr", "h5ad"],
     max_loaded_elems: int | None = None,
     *args,
     merge_strategy: merge.StrategiesLiteral | None = None,
+    on_disk_zarr: bool = False,
     **kwargs,
-):
+) -> Path | MemoryStore:
+    """Concatenate on disk and compare to the in-memory result, returning the output store."""
     # create one from the concat function
     res1 = concat(adatas, *args, merge=merge_strategy, **kwargs)
     # create one from the on disk concat function
-    paths = _adatas_to_paths(adatas, tmp_path, file_format)
-    out_name = tmp_path / f"out.{file_format}"
+    stores = _adatas_to_stores(adatas, tmp_path, file_format, on_disk_zarr=on_disk_zarr)
     if max_loaded_elems is not None:
         kwargs["max_loaded_elems"] = max_loaded_elems
-    concat_on_disk(paths, out_name, *args, merge=merge_strategy, **kwargs)
-    with as_group(out_name, mode="r") as rg:
+
+    out = _make_store(tmp_path, file_format, "out", on_disk_zarr=on_disk_zarr)
+    concat_on_disk(stores, out, *args, merge=merge_strategy, **kwargs)
+    with as_group(out, mode="r") as rg:
         res2 = read_elem(rg)
     assert_equal(res1, res2, exact=False)
+    return out
 
 
 def get_array_type(array_type, axis):
@@ -139,9 +148,10 @@ def test_anndatas(
     reindex: bool,
     merge_strategy: merge.StrategiesLiteral,
 ):
-    _, off_axis_name = _resolve_axis(1 - axis)
+    off_axis: Literal[0, 1] = 1 if axis == 0 else 0
+    _, off_axis_name = _resolve_axis(off_axis)
     random_axes = {0, 1} if reindex else {axis}
-    sparse_fmt = "csr" if axis == 0 else "csc"
+    sparse_fmt: Literal["csr", "csc"] = "csr" if axis == 0 else "csc"
     kw = (
         GEN_ADATA_OOC_CONCAT_ARGS
         if not reindex
@@ -164,7 +174,7 @@ def test_anndatas(
             **kw,
         )
         # ensure some names overlap, others do not, for the off-axis so that inner/outer is properly tested
-        off_names = getattr(a, f"{off_axis_name}_names").array
+        off_names = getattr(a, f"{off_axis_name}_names").array.copy()
         off_names[1::2] = f"{i}-" + off_names[1::2]
         setattr(a, f"{off_axis_name}_names", off_names)
         adatas.append(a)
@@ -261,19 +271,12 @@ def test_concatenate_xxxm(xxxm_adatas, tmp_path, file_format, join_type):
     assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format, join=join_type)
 
 
-def test_concatenate_zarr_v3_shard(xxxm_adatas, tmp_path):
-    import zarr
-
-    with settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
-        assert_eq_concat_on_disk(xxxm_adatas, tmp_path, file_format="zarr")
-    g = zarr.open(tmp_path)
-    assert g.metadata.zarr_format == 3
-
-    check_all_sharded(g)
-
-
 def test_singleton(xxxm_adatas, tmp_path, file_format):
-    assert_eq_concat_on_disk(xxxm_adatas[:1], tmp_path, file_format=file_format)
+    # A single input written to a path takes the `shutil` copy shortcut,
+    # so this test needs the file system.
+    assert_eq_concat_on_disk(
+        xxxm_adatas[:1], tmp_path, file_format=file_format, on_disk_zarr=True
+    )
 
 
 def test_output_dir_exists(tmp_path):
@@ -315,24 +318,72 @@ def test_no_open_h5_file_handles_after_error(tmp_path):
 
 
 def test_write_using_groups(tmp_path, file_format):
-    in_pth = tmp_path / f"in.{file_format}"
-    in_pth2 = tmp_path / f"in2.{file_format}"
-    out_pth = tmp_path / f"out.{file_format}"
+    in_store, in_store2, out_store = (
+        _make_store(tmp_path, file_format, name, on_disk_zarr=False)
+        for name in ["in", "in2", "out"]
+    )
 
     adata = AnnData(X=np.ones((2, 1)))
-    getattr(adata, f"write_{file_format}")(in_pth)
-    getattr(adata, f"write_{file_format}")(in_pth2)
+    getattr(adata, f"write_{file_format}")(in_store)
+    getattr(adata, f"write_{file_format}")(in_store2)
 
     with (
-        as_group(in_pth, mode="r") as f1,
-        as_group(in_pth2, mode="r") as f2,
-        as_group(out_pth, mode="w") as fout,
+        as_group(in_store, mode="r") as f1,
+        as_group(in_store2, mode="r") as f2,
+        as_group(out_store, mode="w") as fout,
     ):
         concat_on_disk([f1, f2], fout)
-    adata_out = getattr(ad, f"read_{file_format}")(out_pth)
+    adata_out = getattr(ad, f"read_{file_format}")(out_store)
     assert_equal(adata_out, concat([adata, adata]))
 
 
 def test_failure_w_no_args(tmp_path):
     with pytest.raises(ValueError, match=r"No objects to concatenate"):
         concat_on_disk([], tmp_path / "out.h5ad")
+
+
+@pytest.mark.parametrize("reindex", [True, False], ids=["reindex", "no_reindex"])
+@pytest.mark.filterwarnings("ignore:Misaligned chunks detected")
+def test_max_loaded_elems_chunks_sparse_x(
+    tmp_path, file_format, join_type, reindex, monkeypatch
+):
+    # chunking must not depend on whether the inputs need to be reindexed
+    n_obs, n_vars, max_loaded_elems = 40, 10, 50
+    kw = (
+        GEN_ADATA_OOC_CONCAT_ARGS
+        if not reindex
+        else dict(
+            obsm_types=(sparse.csc_matrix, np.ndarray, pd.DataFrame),
+            varm_types=(sparse.csc_matrix, np.ndarray, pd.DataFrame),
+            layers_types=(sparse.csr_matrix, np.ndarray, pd.DataFrame),
+        )
+    )
+    adatas = []
+    for i in range(3):
+        a = gen_adata(
+            (n_obs, n_vars),
+            X_type=sparse.csr_matrix,
+            obs_dtypes=[pd.CategoricalDtype(ordered=False)],
+            var_dtypes=[pd.CategoricalDtype(ordered=False)],
+            **kw,
+        )
+        # some names overlap, others do not, so that inner/outer is tested
+        var_names = np.array([f"var{j}" for j in range(n_vars)], dtype=object)
+        if reindex:
+            var_names[1::2] = f"{i}-" + var_names[1::2]
+        a.var_names = var_names
+        adatas.append(a)
+
+    appended_rows: list[int] = []
+    append = BaseCompressedSparseDataset.append
+
+    def spy(self, sparse_matrix):
+        appended_rows.append(sparse_matrix.shape[0])
+        return append(self, sparse_matrix)
+
+    monkeypatch.setattr(BaseCompressedSparseDataset, "append", spy)
+    assert_eq_concat_on_disk(
+        adatas, tmp_path, file_format, max_loaded_elems, axis=0, join=join_type
+    )
+    assert appended_rows
+    assert max(appended_rows) * n_vars <= max_loaded_elems
