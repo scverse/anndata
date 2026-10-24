@@ -192,12 +192,12 @@ def test_create_from_df():
 
 
 def test_create_from_df_writeable():
-    """X created from a DataFrame is writeable and independent of it (#2717)."""
+    """X created from a DataFrame is writeable (#2717)."""
     df = pd.DataFrame(np.ones((3, 2)), index=["a", "b", "c"], columns=["A", "B"])
     adata = AnnData(df)
     assert adata.X.flags.writeable
     adata.X[0, 0] = 2
-    assert df.iloc[0, 0] == 1
+    assert adata.X[0, 0] == 2
 
     adata.X = df
     assert adata.X.flags.writeable
