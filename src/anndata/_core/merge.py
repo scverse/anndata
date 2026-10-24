@@ -884,13 +884,13 @@ def concat_arrays(  # noqa: PLR0911, PLR0912
             msg = "Cannot concatenate a dataframe with other array types."
             raise NotImplementedError(msg)
         # TODO: behaviour here should be chosen through a merge strategy
-        frame = pd.concat(
+        df = pd.concat(
             unify_dtypes(f(x) for f, x in zip(reindexers, arrays, strict=True)),
             axis=axis,
             ignore_index=True,
         )
-        frame.index = index
-        return frame
+        df.index = index
+        return df
     elif any(isinstance(a, AwkArray) for a in arrays):
         from ..compat import awkward as ak
 

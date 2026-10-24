@@ -179,11 +179,11 @@ def fix_known_differences(orig: AnnData, result: AnnData):
     for attrname in ("obs", "var"):
         if isinstance(getattr(result, attrname), Dataset2D):
             for adata in (orig, result):
-                frame = getattr(adata, attrname).ds.to_dataframe()[
+                df = getattr(adata, attrname).ds.to_dataframe()[
                     getattr(orig, attrname).columns
                 ]
-                frame.index.name = "index"
-                setattr(adata, attrname, frame)
+                df.index.name = "index"
+                setattr(adata, attrname, df)
             resattr = getattr(result, attrname)
             origattr = getattr(orig, attrname)
             for colname, col in resattr.items():
