@@ -1963,40 +1963,76 @@ def test_aligned_axis_key_join_default_falls_back_to_join(axis_name):
     assert list(getattr(inner, f"{axis_name}m").keys()) == ["shared_m"]
 
 
+@pytest.mark.parametrize(
+    ("join", "aligned_axis_key_join", "expected_columns", "expected_keys"),
+    [
+        (
+            "inner",
+            "outer",
+            {"shared", "only_a", "only_b"},
+            {"shared_m", "only_a_m", "only_b_m"},
+        ),
+        ("outer", "inner", {"shared"}, {"shared_m"}),
+    ],
+)
 @pytest.mark.parametrize("axis_name", ["obs", "var"])
-def test_aligned_axis_key_join_outer_with_inner_join(axis_name):
-    """`aligned_axis_key_join="outer"` unions on-axis keys while leaving off-axis as inner."""
+def test_aligned_axis_key_join_controls_on_axis_keys(
+    axis_name, join, aligned_axis_key_join, expected_columns, expected_keys
+):
+    """The key join controls on-axis keys independently of the off-axis join."""
     a, b = _adatas_with_partial_overlap_along_axis(axis_name)
     axis = 0 if axis_name == "obs" else 1
 
-    res = concat([a, b], axis=axis, join="inner", aligned_axis_key_join="outer")
+    res = concat(
+        [a, b], axis=axis, join=join, aligned_axis_key_join=aligned_axis_key_join
+    )
     cols = list(getattr(res, axis_name).columns)
     keys = list(getattr(res, f"{axis_name}m").keys())
-    assert set(cols) == {"shared", "only_a", "only_b"}
-    assert set(keys) == {"shared_m", "only_a_m", "only_b_m"}
+    assert set(cols) == expected_columns
+    assert set(keys) == expected_keys
 
 
-@pytest.mark.parametrize("axis_name", ["obs", "var"])
-def test_aligned_axis_key_join_inner_with_outer_join(axis_name):
-    """`aligned_axis_key_join="inner"` intersects on-axis keys while leaving off-axis as outer."""
-    a, b = _adatas_with_partial_overlap_along_axis(axis_name)
-    axis = 0 if axis_name == "obs" else 1
-
-    res = concat([a, b], axis=axis, join="outer", aligned_axis_key_join="inner")
-    cols = list(getattr(res, axis_name).columns)
-    keys = list(getattr(res, f"{axis_name}m").keys())
-    assert cols == ["shared"]
-    assert keys == ["shared_m"]
-
-
-def test_aligned_axis_key_join_layer_keys_unioned_with_inner_content():
-    """`aligned_axis_key_join="outer"` + `join="inner"` unions layer keys
-    while aligning each layer's off-axis (var) to the inner intersection.
-
-    Mirrors the obsm contract: which keys appear is on-axis (controlled by
-    `aligned_axis_key_join`); how each kept value aligns along the alt-axis
-    is off-axis (controlled by `join`).
-    """
+@pytest.mark.parametrize(
+    (
+        "join",
+        "aligned_axis_key_join",
+        "expected_layer_keys",
+        "expected_n_vars",
+        "expected_shared_layer",
+        "expected_only_a_layer",
+        "expected_only_b_layer",
+    ),
+    [
+        (
+            "inner",
+            "outer",
+            {None, "only_a_layer", "only_b_layer", "shared_layer"},
+            2,
+            [[1, 1], [1, 1], [2, 2], [2, 2]],
+            [[7, 7], [7, 7], [0, 0], [0, 0]],
+            [[0, 0], [0, 0], [9, 9], [9, 9]],
+        ),
+        (
+            "outer",
+            "inner",
+            {None, "shared_layer"},
+            3,
+            [[1, 1, 1], [1, 1, 1], [2, 2, np.nan], [2, 2, np.nan]],
+            None,
+            None,
+        ),
+    ],
+)
+def test_aligned_axis_key_join_layer_keys(
+    join,
+    aligned_axis_key_join,
+    expected_layer_keys,
+    expected_n_vars,
+    expected_shared_layer,
+    expected_only_a_layer,
+    expected_only_b_layer,
+):
+    """Layer keys follow the key join; each layer's content follows `join`."""
     a = AnnData(
         X=np.ones((2, 3), dtype=np.float64),
         obs=pd.DataFrame(index=["s1", "s2"]),
@@ -2016,77 +2052,30 @@ def test_aligned_axis_key_join_layer_keys_unioned_with_inner_content():
         },
     )
 
-    res = concat([a, b], join="inner", aligned_axis_key_join="outer")
+    res = concat([a, b], join=join, aligned_axis_key_join=aligned_axis_key_join)
 
     # Outer key join: every layer name appears. Post #1707, X is stored
     # under the `None` layer key, so it shows up here too.
-    assert set(res.layers.keys()) == {
-        None,
-        "only_a_layer",
-        "only_b_layer",
-        "shared_layer",
-    }
+    assert set(res.layers.keys()) == expected_layer_keys
 
-    # Inner content join: alt-axis (var) is the intersection {v1, v2}.
     n_total_cells = 4
-    n_inner_genes = 2
-    assert res.shape == (n_total_cells, n_inner_genes)
-    for k in ("shared_layer", "only_a_layer", "only_b_layer"):
-        assert res.layers[k].shape == (n_total_cells, n_inner_genes), (
-            f"layer {k!r} should be aligned to inner alt-axis, "
+    assert res.shape == (n_total_cells, expected_n_vars)
+    for k in expected_layer_keys - {None}:
+        assert res.layers[k].shape == (n_total_cells, expected_n_vars), (
+            f"layer {k!r} should be aligned to the joined alt-axis, "
             f"got shape {res.layers[k].shape}"
         )
 
-    # Spot-check content. shared_layer is present in both; values 1.0 from a
-    # and 2.0 from b stack into the inner gene set.
     np.testing.assert_array_equal(
-        np.asarray(res.layers["shared_layer"]),
-        np.array([[1.0, 1.0], [1.0, 1.0], [2.0, 2.0], [2.0, 2.0]]),
+        np.asarray(res.layers["shared_layer"]), expected_shared_layer
     )
-    # only_a_layer is filled (with the missing-element default) for b's rows.
-    only_a = np.asarray(res.layers["only_a_layer"])
-    np.testing.assert_array_equal(only_a[:2], np.array([[7.0, 7.0], [7.0, 7.0]]))
-    # only_b_layer is filled for a's rows; b's rows carry 9.0.
-    only_b = np.asarray(res.layers["only_b_layer"])
-    np.testing.assert_array_equal(only_b[2:], np.array([[9.0, 9.0], [9.0, 9.0]]))
-
-
-def test_aligned_axis_key_join_layer_keys_intersected_with_outer_content():
-    """`aligned_axis_key_join="inner"` + `join="outer"` intersects layer
-    keys while aligning each kept layer's off-axis (var) to the outer
-    union.
-    """
-    a = AnnData(
-        X=np.ones((2, 3), dtype=np.float64),
-        obs=pd.DataFrame(index=["s1", "s2"]),
-        var=pd.DataFrame(index=["v1", "v2", "v3"]),
-        layers={
-            "shared_layer": np.full((2, 3), 1.0),
-            "only_a_layer": np.full((2, 3), 7.0),
-        },
-    )
-    b = AnnData(
-        X=np.ones((2, 2), dtype=np.float64),
-        obs=pd.DataFrame(index=["s3", "s4"]),
-        var=pd.DataFrame(index=["v1", "v2"]),
-        layers={
-            "shared_layer": np.full((2, 2), 2.0),
-            "only_b_layer": np.full((2, 2), 9.0),
-        },
-    )
-
-    res = concat([a, b], join="outer", aligned_axis_key_join="inner")
-
-    # Inner key join: only the layer keys present in every input survive.
-    # Post #1707, X is stored under the `None` layer key and is present in
-    # both inputs, so it survives the intersection alongside "shared_layer".
-    assert set(res.layers.keys()) == {None, "shared_layer"}
-
-    # Outer content join: alt-axis (var) is the union {v1, v2, v3}.
-    n_total_cells = 4
-    n_outer_genes = 3
-    assert res.shape == (n_total_cells, n_outer_genes)
-    assert res.layers["shared_layer"].shape == (n_total_cells, n_outer_genes)
+    if expected_only_a_layer is not None:
+        np.testing.assert_array_equal(
+            np.asarray(res.layers["only_a_layer"]), expected_only_a_layer
+        )
+        np.testing.assert_array_equal(
+            np.asarray(res.layers["only_b_layer"]), expected_only_b_layer
+        )
 
 
 def test_aligned_axis_key_join_does_not_affect_alt_axis_mappings():
@@ -2274,7 +2263,18 @@ def test_aligned_axis_key_join_inner_content_with_missing_key():
     assert res_arr.obsm["arr"].shape == (6, 3)
 
 
-def test_aligned_axis_key_join_reproduces_issue_2374_example():
+@pytest.mark.parametrize(
+    ("join", "aligned_join", "expected_columns", "expected_var_names"),
+    [
+        ("inner", None, ["1"], ["1"]),
+        ("outer", None, ["1", "2", "3"], ["1", "2", "3"]),
+        ("inner", "outer", ["1", "2", "3"], ["1"]),
+        ("outer", "inner", ["1"], ["1", "2", "3"]),
+    ],
+)
+def test_aligned_axis_key_join_reproduces_issue_2374_example(
+    join, aligned_join, expected_columns, expected_var_names
+):
     """Direct reproduction of the example from issue #2374. Verifies that
     `aligned_axis_key_join` controls on-axis annotation columns (obs/var)
     independently from `join`, which keeps controlling the off-axis index
@@ -2293,20 +2293,6 @@ def test_aligned_axis_key_join_reproduces_issue_2374_example():
         ),
     ]
 
-    # Existing behaviour (unchanged): join controls both axes.
-    r = concat(adatas, join="inner")
-    assert list(r.obs.columns) == ["1"]
-    assert list(r.var_names) == ["1"]
-    r = concat(adatas, join="outer")
-    assert sorted(r.obs.columns) == ["1", "2", "3"]
-    assert sorted(r.var_names) == ["1", "2", "3"]
-
-    # New behaviour: outer on-axis columns, inner off-axis index.
-    r = concat(adatas, join="inner", aligned_axis_key_join="outer")
-    assert sorted(r.obs.columns) == ["1", "2", "3"]
-    assert list(r.var_names) == ["1"]
-
-    # Converse: inner on-axis columns, outer off-axis index.
-    r = concat(adatas, join="outer", aligned_axis_key_join="inner")
-    assert list(r.obs.columns) == ["1"]
-    assert sorted(r.var_names) == ["1", "2", "3"]
+    result = concat(adatas, join=join, aligned_axis_key_join=aligned_join)
+    assert sorted(result.obs.columns) == expected_columns
+    assert sorted(result.var_names) == expected_var_names
