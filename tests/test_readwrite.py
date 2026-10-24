@@ -695,6 +695,8 @@ def test_write_object_column_converted(
 
     See https://github.com/scverse/anndata/issues/1068
     """
+    # `dtype=object` keeps pandas from coercing e.g. `[1.5, None]` to float64 up front;
+    # `test_write_object_column_realistic` covers the idioms that produce such columns
     col = pd.Series(np.array(values, dtype=object), index=[f"c{i}" for i in range(4)])
     assert col.dtype == object
     orig = ad.AnnData(obs=pd.DataFrame({"col": col}), var=pd.DataFrame(index=col.index))
@@ -809,18 +811,81 @@ def test_write_object_column_roundtrip_values(
     ]
 
 
-def test_write_object_column_elem_and_empty_view(diskfmt, diskfmt_store) -> None:
+def _realistic_object_columns() -> dict[str, tuple[pd.Series, str]]:
+    """Object columns the way users actually produce them, with the dtype expected on disk."""
+    rng = np.random.default_rng(0)
+    counts = pd.Series(
+        rng.integers(100, 5000, size=8), index=[f"c{i}" for i in range(8)]
+    )
+    flags = counts > 2000
+    ints_nullable = pd.array([1, None, 3, 4, None, 6, 7, 8], dtype="Int64")
+    bools_nullable = pd.array(
+        [True, None, False, True, None, True, False, True], dtype="boolean"
+    )
+    partial = pd.DataFrame({"rank": counts.iloc[:4].astype(object)})
+    return {
+        "np.where-int-none": (
+            pd.Series(np.where(flags, counts, None), index=counts.index),
+            "Int64",
+        ),
+        "np.where-bool-none": (
+            pd.Series(np.where(flags, flags, None), index=counts.index),
+            "boolean",
+        ),
+        "Int64-astype-object": (
+            pd.Series(ints_nullable, index=counts.index).astype(object),
+            "Int64",
+        ),
+        "boolean-astype-object": (
+            pd.Series(bools_nullable, index=counts.index).astype(object),
+            "boolean",
+        ),
+        # a join that leaves rows unmatched fills them with NaN, keeping dtype object
+        "join-unmatched-rows": (counts.to_frame().join(partial)["rank"], "Int64"),
+        "float-where-astype-object": (
+            counts.astype(float).where(flags).astype(object),
+            "float64",
+        ),
+        # scirpy's case (scverse/scirpy#434): a plain list of bools and None
+        "list-bool-none": (
+            pd.Series(
+                [True, None, False, True, None, True, False, True], index=counts.index
+            ),
+            "boolean",
+        ),
+    }
+
+
+@pytest.mark.parametrize("case", list(_realistic_object_columns()))
+def test_write_object_column_realistic(
+    *,
+    diskfmt: Literal["h5ad", "zarr"],
+    diskfmt_store: Path | MemoryStore,
+    case: str,
+) -> None:
+    """Object columns produced by common pandas/numpy idioms round-trip."""
+    col, expected_dtype = _realistic_object_columns()[case]
+    assert col.dtype == object
+    orig = ad.AnnData(obs=pd.DataFrame({"col": col}))
+    getattr(orig, f"write_{diskfmt}")(diskfmt_store)
+    curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
+    read = curr.obs["col"]
+    assert read.dtype == expected_dtype
+    assert read.isna().tolist() == col.isna().tolist()
+    assert read.dropna().tolist() == col.dropna().tolist()
+
+
+def test_write_object_column_elem_and_empty_view(
+    *, diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore
+) -> None:
     """Object columns are converted for direct `write_elem` calls and zero-row views."""
     col = pd.Series([1, None, 3], index=list("abc"), dtype=object)
     df = pd.DataFrame({"col": col, "s": pd.Series(list("xyz"), index=list("abc"))})
-    if diskfmt == "h5ad":
-        with h5py.File(diskfmt_store, "w") as f:
-            ad.io.write_elem(f, "df", df)
-            read = ad.io.read_elem(f["df"])
-    else:
-        g = zarr.open_group(diskfmt_store, mode="w")
-        ad.io.write_elem(g, "df", df)
-        read = ad.io.read_elem(g["df"])
+    store = open_store(diskfmt_store)
+    ad.io.write_elem(store, "df", df)
+    read = ad.io.read_elem(store["df"])
+    if isinstance(store, h5py.File):
+        store.close()  # the h5ad write below reopens the file
     assert read["col"].dtype == "Int64"
     assert read["col"].tolist()[::2] == [1, 3]
     assert df["col"].dtype == object
@@ -891,9 +956,7 @@ def test_write_object_column_nan_distinct_from_na() -> None:
     """With pandas distinguishing NaN from NA, an object float NaN is written as NaN."""
     from anndata._io.specs.methods import _object_column_to_writable
 
-    if "future.distinguish_nan_and_na" not in pd.describe_option(
-        "future", _print_desc=False
-    ):
+    if not hasattr(pd.options.future, "distinguish_nan_and_na"):
         pytest.skip("pandas has no `future.distinguish_nan_and_na` option")
     values = np.array([0.5, np.nan, None], dtype=object)
     with pd.option_context("future.distinguish_nan_and_na", True):  # noqa: FBT003

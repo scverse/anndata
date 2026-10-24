@@ -50,6 +50,7 @@ from anndata.compat import (
 from ..._settings import settings
 from ...compat import PANDAS_3, PANDAS_STRING_ARRAY_TYPES
 from ...utils import iter_outer, warn
+from ..utils import _get_display_path, add_key_note
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
@@ -1149,7 +1150,12 @@ def write_dataframe(
         # TODO: this should write the "true" representation of the series (i.e. the underlying array or ndarray depending)
         values = series._values
         if isinstance(values, np.ndarray) and values.dtype == object:
-            values = _object_column_to_writable(values, colname)
+            try:
+                values = _object_column_to_writable(values, colname)
+            except TypeError as e:
+                # match the note `write_elem` would have added for this column
+                add_key_note(e, group, _get_display_path(group), str(colname), "writ")
+                raise
         _writer.write_elem(group, colname, values, dataset_kwargs=dataset_kwargs)
 
 
@@ -1180,7 +1186,7 @@ def _object_column_to_writable(
     Columns inferred as floating become numpy float64 (missing values become NaN)
     if that loses no precision.
     String/bytes columns without missing values and empty columns are returned unchanged.
-    Everything else raises a :class:`TypeError` naming the column.
+    Everything else raises a :exc:`TypeError` naming the column.
     """
     kind = pd.api.types.infer_dtype(values, skipna=True)
     hint = (
@@ -1189,9 +1195,10 @@ def _object_column_to_writable(
     )
     if (conversion := _OBJECT_COLUMN_CONVERSIONS.get(kind)) is None:
         # The string writers handle (mixtures of) str and bytes without missing values
-        if len(values) == 0 or (
-            kind in {"string", "bytes", "mixed"}
-            and all(isinstance(v, str | bytes) for v in values)
+        if (
+            len(values) == 0
+            or pd.api.types.infer_dtype(values, skipna=False) in {"string", "bytes"}
+            or (kind == "mixed" and all(isinstance(v, str | bytes) for v in values))
         ):
             return values
         msg = (
@@ -1202,13 +1209,13 @@ def _object_column_to_writable(
     nullable_dtype, numpy_dtype = conversion
     try:
         if (
-            numpy_dtype is not None
-            and numpy_dtype.kind == "i"
-            and pd.api.types.infer_dtype(values, skipna=False) == kind
+            kind == "integer"
+            and pd.api.types.infer_dtype(values, skipna=False) == "integer"
         ):
             # No missing values at all, so a direct cast is cheapest and lossless.
-            # (Only checked for ints: a bool cast would turn None into False, and
+            # (Only done for ints: a bool cast would turn None into False, and
             # numpy casts some missing markers, e.g. complex NaN, to an int.)
+            assert numpy_dtype is not None
             return values.astype(numpy_dtype)
         converted = pd.array(values, dtype=nullable_dtype)
     except (TypeError, ValueError, OverflowError) as e:
