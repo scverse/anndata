@@ -621,14 +621,16 @@ def test_readwrite_empty(diskfmt, diskfmt_store, xp_array) -> None:
     assert ad_read.uns["empty"].shape == (0,)
 
 
-def test_read_excel():
+@pytest.mark.parametrize("dtype", [int, "float32"])
+def test_read_excel(dtype) -> None:
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore",
             message=r"datetime.datetime.utcnow\(\) is deprecated",
             category=DeprecationWarning,
         )
-        adata = ad.io.read_excel(HERE / "data/excel.xlsx", "Sheet1", dtype=int)
+        adata = ad.io.read_excel(HERE / "data/excel.xlsx", "Sheet1", dtype=dtype)
+    assert adata.X.dtype == np.dtype(dtype)
     assert adata.X.tolist() == X_list
 
 
