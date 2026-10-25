@@ -216,7 +216,7 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
 
         When `idx` is omitted (i.e., `idx` is :class:`~anndata.acc.NO_IDX`), return the full array one level up instead.
         This has the same semantics as the `AdRef` path but one level up:
-        `adata[A.obs]` returns the full :class:`~pandas.DataFrame` and `adata[A.obsm["pca"]]` the full :class:`numpy.ndarray`.
+        `adata[A.obs]` returns the full :class:`~pandas.DataFrame`, `adata[A.obsm["pca"]]` the full :class:`numpy.ndarray`, and `adata[A.layers]` the full :class:`Mapping`.
         These both have defined `shape`-like properties (or :class:`awkward.Array`), unlike, for example, :attr:`~anndata.AnnData.obsm` or similar.
         """
 
