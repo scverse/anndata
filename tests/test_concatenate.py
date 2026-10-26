@@ -1917,6 +1917,13 @@ def test_1d_concat():
     assert concated.obsm["1d-array"].shape == (10, 1)
 
 
+def test_concat_sparse_non_numeric_fill_value() -> None:
+    a = AnnData(sparse.random(3, 2, format="csr"), var=pd.DataFrame(index=["a", "b"]))
+    b = AnnData(sparse.random(3, 2, format="csr"), var=pd.DataFrame(index=["b", "c"]))
+    with pytest.raises(TypeError, match=r"only be filled with numbers"):
+        concat([a, b], join="outer", fill_value="x")
+
+
 # ------------------------------------------------------------------
 # aligned_axis_key_join (issue #2374)
 # ------------------------------------------------------------------

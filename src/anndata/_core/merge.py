@@ -720,6 +720,7 @@ class Reindexer:
         fill_value: Scalar | None = None,
     ) -> CSMatrix | CSArray | CupyCSMatrix:
         if isinstance(el, CupyCSMatrix):
+            import cupy as cp
             import cupyx.scipy.sparse as cpsparse
 
             csr_cls, coo_cls = cpsparse.csr_matrix, cpsparse.coo_matrix
@@ -730,16 +731,17 @@ class Reindexer:
         else:
             assert_never(el)
 
-        import array_api_compat
-
-        xp = array_api_compat.array_namespace(el.data)
-
         if fill_value is None:
             fill_value = default_fill_value([el])
+        if not isinstance(
+            fill_value, bool | int | float | complex | np.bool | np.number
+        ):
+            msg = f"Sparse arrays can only be filled with numbers, not {fill_value!r}."
+            raise TypeError(msg)
         if fill_value != 0:
             to_fill = self.new_idx.get_indexer(self.new_idx.difference(self.old_idx))
         else:
-            to_fill = xp.asarray([])
+            to_fill = np.array([], dtype=np.intp)
 
         # Fixing outer indexing for missing values
         if el.shape[axis] == 0:
@@ -750,21 +752,26 @@ class Reindexer:
             )
             if fill_value == 0:
                 return csr_cls(shape)
+            elif isinstance(el, CupyCSMatrix):
+                return type(el)(cp.broadcast_to(cp.asarray(fill_value), shape))
             else:
-                return type(el)(xp.broadcast_to(xp.asarray(fill_value), shape))
+                return type(el)(np.broadcast_to(np.asarray(fill_value), shape))
 
         if len(to_fill) > 0 or isinstance(el, CupyCSMatrix):
-            idxmtx_dtype = xp.result_type(el.dtype, xp.asarray(fill_value).dtype)
+            idxmtx_dtype = np.result_type(el.dtype, np.asarray(fill_value).dtype)
         else:
-            idxmtx_dtype = bool
-        # maps old to new positions along `axis`
-        old_new = (xp.asarray(self.old_pos), xp.asarray(self.new_pos))
+            idxmtx_dtype = np.dtype(bool)
+        # `old_new` maps old to new positions along `axis`
+        # TODO: dedupe once https://github.com/python/mypy/issues/22302 is fixed
+        if isinstance(el, CupyCSMatrix):
+            ones = cp.ones(len(self.new_pos), dtype=idxmtx_dtype)
+            old_new = (cp.asarray(self.old_pos), cp.asarray(self.new_pos))
+        else:
+            ones = np.ones(len(self.new_pos), dtype=idxmtx_dtype)
+            old_new = (np.asarray(self.old_pos), np.asarray(self.new_pos))
         shape_old_new = (len(self.old_idx), len(self.new_idx))
         idxmtx = coo_cls(
-            (
-                xp.ones(len(self.new_pos), dtype=idxmtx_dtype),
-                old_new if axis == 1 else old_new[::-1],
-            ),
+            (ones, old_new if axis == 1 else old_new[::-1]),
             shape=shape_old_new if axis == 1 else shape_old_new[::-1],
             dtype=idxmtx_dtype,
         )
@@ -774,8 +781,7 @@ class Reindexer:
             # CSC/CSR can efficiently set whole columns/rows
             filled = product.tocsc() if axis == 1 else product.tocsr()
             fill_idx = (slice(None), to_fill) if axis == 1 else (to_fill, slice(None))
-            # sparse matrices reject non-numeric fill values at runtime
-            filled[fill_idx] = fill_value  # type: ignore[assignment]
+            filled[fill_idx] = fill_value
             return filled.tocsr() if el.format == "csr" else filled.tocsc()
         return product.tocsr() if el.format == "csr" else product.tocsc()
 
