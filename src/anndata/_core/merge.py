@@ -990,6 +990,7 @@ def inner_concat_aligned_mapping(  # noqa: PLR0913
 
     result = {}
     ns = [m.parent.shape[axis] for m in mappings]
+    cur_reindexers: Sequence[Reindexer | Callable]
 
     for k in keys:
         els = [m.get(k, MissingVal) for m in mappings]
