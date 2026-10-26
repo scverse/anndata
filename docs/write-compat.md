@@ -40,6 +40,15 @@ can read all files written with profile `"X.Y"`.
     Older versions can’t read it.
 ```
 
+## Picking individual features
+
+Each profile is a {class}`~anndata.WriteConfig` with one boolean flag per feature.
+To pick features individually, pass a {class}`~anndata.WriteConfig` as `compat`:
+
+```python
+adata.write_h5ad("new.h5ad", compat=ad.WriteConfig(accessor=True))
+```
+
 ## Checking before writing
 
 {meth}`anndata.AnnData.unwriteable` takes the same `compat` argument,

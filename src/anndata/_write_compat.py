@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import operator
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from enum import Enum
 from types import MethodType
 from typing import TYPE_CHECKING
@@ -59,6 +59,9 @@ class WriteConfig:
     Configs compare by their sets of enabled features,
     e.g. `a < b` means `b` enables every feature `a` does, and more.
     """
+
+    accessor: bool = field(default_factory=_min_version("0.14"))
+    """Write :mod:`anndata.acc` accessors using the `accessor` encoding (anndata ≥0.14)."""
 
     @property
     def _features(self) -> frozenset[str]:
