@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from zarr.storage import StoreLike
 
     from .._types import _GroupStorageType
+    from .._write_compat import WriteConfig
     from ..types import WriteCompatStr
     from ..acc import AdRef, MapAcc, RefAcc
     from ..typing import RWAble
@@ -101,7 +102,7 @@ def write_zarr(
     convert_strings_to_categoricals: bool = True,
     consolidate_metadata: bool = True,
     use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
-    compat: WriteCompat | WriteCompatStr = WriteCompat.DEFAULT,
+    compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
     **ds_kwargs,
 ) -> None:
     """See :meth:`~anndata.AnnData.write_zarr`."""

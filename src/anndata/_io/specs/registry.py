@@ -30,6 +30,7 @@ if TYPE_CHECKING:
         _GroupStorageType,
         _WriteInternal,
     )
+    from anndata._write_compat import WriteConfig
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
     from anndata.types import WriteCompatStr
     from anndata.typing import RWAble
@@ -346,11 +347,11 @@ class Writer:
         registry: IORegistry,
         callback: WriteCallback | None = None,
         *,
-        compat: WriteCompat | WriteCompatStr = WriteCompat.DEFAULT,
+        compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
     ):
         self.registry = registry
         self.callback = callback
-        self.compat = WriteCompat(compat)
+        self.compat = WriteCompat(compat) if isinstance(compat, str) else compat
 
     def find_write_func(
         self, dest_type: type, elem: RWAble, modifiers: frozenset[str]
@@ -543,7 +544,7 @@ def write_elem(
     elem: RWAble,
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    compat: WriteCompat | WriteCompatStr = WriteCompat.DEFAULT,
+    compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
 ) -> None:
     """
     Write an element to a storage group using anndata encoding.

@@ -5,14 +5,15 @@ from __future__ import annotations
 from typing import get_args
 
 import pytest
-from packaging.version import Version
 
 import anndata as ad
 
 
-def test_write_compat_compares_as_versions() -> None:
-    assert Version("0.9") < ad.WriteCompat.V0_13
-    assert Version("0.13") == ad.WriteCompat.V0_13
+def test_compares_by_features() -> None:
+    assert ad.WriteConfig() == ad.WriteCompat.DEFAULT
+    assert hash(ad.WriteConfig()) == hash(ad.WriteCompat.DEFAULT)
+    assert ad.WriteConfig() <= ad.WriteCompat.V0_13
+    assert not ad.WriteConfig() < ad.WriteCompat.V0_13
 
 
 def test_literal_matches_enum() -> None:

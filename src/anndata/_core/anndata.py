@@ -86,6 +86,7 @@ if TYPE_CHECKING:
     from anndata.typing import RWAble
 
     from .._types import ReduceFunc
+    from .._write_compat import WriteConfig
     from ..acc import (
         AdRef,
         Array,
@@ -1548,7 +1549,7 @@ class AnnData:  # noqa: PLW1641
         self,
         *,
         store_type: Literal["h5", "zarr"] | None = None,
-        compat: WriteCompat | WriteCompatStr = WriteCompat.DEFAULT,
+        compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
     ) -> bool:
         """Whether or not an `AnnData` object can be written to disk for a given store type.
 
@@ -1567,7 +1568,8 @@ class AnnData:  # noqa: PLW1641
             this new type's evaluation as a boolean will not change from the current behavior i.e.,
             `bool(adata.unwriteable())` will always evaluate the same.
         """
-        WriteCompat(compat)  # validate: no profile changes this check yet
+        if isinstance(compat, str):
+            WriteCompat(compat)  # validate: no profile changes this check yet
         if _non_2d_message(self.X, name="X") is not None:
             return True
         for value in self.layers.values():
@@ -1721,7 +1723,7 @@ class AnnData:  # noqa: PLW1641
         compression_opts: int | object = None,
         as_dense: Sequence[str] = (),
         use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
-        compat: WriteCompat | WriteCompatStr = WriteCompat.DEFAULT,
+        compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
     ):
         """\
         Write `.h5ad`-formatted hdf5 file.
@@ -1874,7 +1876,7 @@ class AnnData:  # noqa: PLW1641
         convert_strings_to_categoricals: bool = True,
         consolidate_metadata: bool = True,
         use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
-        compat: WriteCompat | WriteCompatStr = WriteCompat.DEFAULT,
+        compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
     ):
         """\
         Write a hierarchical Zarr array store.
