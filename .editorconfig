@@ -12,7 +12,7 @@ max_line_length = 88
 [pyproject.toml]
 max_line_length = 120
 
-[{*.{yml,yaml},.cruft.json}]
+[{*.yml,*.yaml,.cruft.json}]
 indent_size = 2
 
 [Makefile]
