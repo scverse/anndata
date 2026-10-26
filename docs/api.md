@@ -130,6 +130,7 @@ All of these take a `compat` argument, see {doc}`/write-compat` for what the com
    :template: class-minimal
 
    WriteCompat
+   WriteConfig
 ```
 
 ```{eval-rst}

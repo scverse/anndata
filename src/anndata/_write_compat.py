@@ -1,17 +1,80 @@
 from __future__ import annotations
 
+import operator
+from dataclasses import dataclass, fields
 from enum import Enum
-from functools import total_ordering
+from types import MethodType
 from typing import TYPE_CHECKING
 
 from packaging.version import Version
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+    from typing import Self
+
     from .types import WriteCompatStr
 
 
-@total_ordering
-class WriteCompat(Enum):
+def _min_version(version: str) -> Callable[[], bool]:
+    """Make a flag’s default factory: enabled in profiles from `version` on.
+
+    Called without arguments, it checks :attr:`WriteCompat.DEFAULT`.
+    """
+
+    def enabled(profile: str | None = None) -> bool:
+        if profile is None:
+            profile = WriteCompat.DEFAULT._value_
+        return Version(profile) >= Version(version)
+
+    return enabled
+
+
+class _CompareFeatures:
+    """Comparison method applying the `operator` of the same name to both configs’ features."""
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        self.op: Callable[[frozenset[str], frozenset[str]], bool] = getattr(
+            operator, name
+        )
+
+    def __get__(
+        self, obj: WriteConfig | None, owner: type | None = None
+    ) -> Callable[..., bool]:
+        return self if obj is None else MethodType(self, obj)
+
+    def __call__(self, obj: WriteConfig, other: object) -> bool:
+        if not isinstance(other, WriteConfig):
+            return NotImplemented
+        return self.op(obj._features, other._features)
+
+
+@dataclass(kw_only=True, eq=False)
+class WriteConfig:
+    """Fine-grained write behavior: one flag per on-disk feature.
+
+    Pass this to a write function’s `compat` argument to pick features individually.
+    Flags you leave out are taken from :attr:`WriteCompat.DEFAULT`.
+    :class:`WriteCompat` profiles are preset instances of this.
+
+    Configs compare by their sets of enabled features,
+    e.g. `a < b` means `b` enables every feature `a` does, and more.
+    """
+
+    @property
+    def _features(self) -> frozenset[str]:
+        return frozenset(f.name for f in fields(self) if getattr(self, f.name))
+
+    def __hash__(self) -> int:
+        return hash(self._features)
+
+    __eq__ = _CompareFeatures()
+    __lt__ = _CompareFeatures()
+    __le__ = _CompareFeatures()
+    __gt__ = _CompareFeatures()
+    __ge__ = _CompareFeatures()
+
+
+class WriteCompat(WriteConfig, Enum):
     """Which anndata version’s write behavior to target.
 
     Each member is the oldest anndata version whose I/O behavior we promise to be
@@ -25,7 +88,7 @@ class WriteCompat(Enum):
     DEFAULT = V0_13
     """Alias for the profile write functions use by default, currently :attr:`V0_13`."""
 
-    _version: Version
+    _value_: str
 
     if TYPE_CHECKING:  # https://github.com/python/mypy/issues/16712
 
@@ -33,27 +96,18 @@ class WriteCompat(Enum):
 
     else:
 
-        def __init__(self, version: str, /) -> None:
-            self._version = Version(version)
+        def __new__(cls, version: str) -> Self:
+            self = object.__new__(cls)
+            self._value_ = version
+            return self
+
+        def __init__(self, version: str) -> None:
+            # explicit `version`, since `DEFAULT` doesn’t exist yet
+            for f in fields(WriteConfig):
+                setattr(self, f.name, f.default_factory(version))
 
     def __str__(self) -> str:
-        return str(self._version)
+        return self._value_
 
-    @staticmethod
-    def _coerce(other: object) -> Version | None:
-        if isinstance(other, Version):
-            return other
-        if isinstance(other, WriteCompat):
-            return other._version
-        return None
-
-    def __eq__(self, other: object) -> bool:
-        v = self._coerce(other)
-        return NotImplemented if v is None else self._version == v
-
-    def __lt__(self, other: object) -> bool:
-        v = self._coerce(other)
-        return NotImplemented if v is None else self._version < v
-
-    def __hash__(self) -> int:
-        return hash(self._version)
+    def __repr__(self) -> str:  # Enum’s would use the dataclass repr for `_value_`
+        return f"<{type(self).__name__}.{self._name_}: {self._value_!r}>"

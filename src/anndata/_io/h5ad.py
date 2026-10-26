@@ -46,6 +46,7 @@ if TYPE_CHECKING:
 
     from .._core.raw import Raw
     from .._types import StorageType
+    from .._write_compat import WriteConfig
     from ..types import WriteCompatStr
     from ..acc import AdRef, MapAcc, RefAcc
     from ..typing import RWAble
@@ -60,11 +61,11 @@ def write_h5ad(  # noqa: PLR0912
     convert_strings_to_categoricals: bool = True,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
     use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
-    compat: WriteCompat | WriteCompatStr = WriteCompat.DEFAULT,
+    compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
     **kwargs,
 ) -> None:
     """See :meth:`~anndata.AnnData.write_h5ad`."""
-    compat = WriteCompat(compat)
+    compat = WriteCompat(compat) if isinstance(compat, str) else compat
     _check_x_and_layers_are_2d_on_write(adata)
     if isinstance(as_dense, str):
         as_dense = [as_dense]
@@ -142,7 +143,7 @@ def _write_x(
     is_backed: bool,
     as_dense: Container[str],
     dataset_kwargs: Mapping[str, Any],
-    compat: WriteCompat,
+    compat: WriteConfig,
 ) -> None:
     if "X" in as_dense and isinstance(adata.X, CSMatrix | BaseCompressedSparseDataset):
         write_sparse_as_dense(f, "X", adata.X, dataset_kwargs=dataset_kwargs)
@@ -160,7 +161,7 @@ def _write_raw(
     *,
     as_dense: Container[str],
     dataset_kwargs: Mapping[str, Any],
-    compat: WriteCompat,
+    compat: WriteConfig,
 ) -> None:
     if "raw/X" in as_dense and isinstance(
         raw.X, CSMatrix | BaseCompressedSparseDataset
