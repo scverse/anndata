@@ -1632,8 +1632,8 @@ class AnnData:  # noqa: PLW1641
                     predicate(v, accumulate=accumulate) for v in elem.values()
                 )
             if isinstance(elem, acc_types):
-                # writeable, but only from the 0.14 profile on
-                return accumulate or compat < WriteCompat.V0_14
+                # writeable, but only with the `accessor` flag
+                return accumulate or not compat.accessor
             return (
                 (accumulate or type(elem) not in writeable_elems)
                 if not isinstance(elem, SupportsArrayApiBase)

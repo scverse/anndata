@@ -49,7 +49,6 @@ from anndata.compat import (
 )
 
 from ..._settings import settings
-from ..._write_compat import WriteCompat
 from ...compat import PANDAS_3, PANDAS_STRING_ARRAY_TYPES
 from ...utils import iter_outer, warn
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
@@ -1575,7 +1574,7 @@ def write_accessor(
 
     Byte-compatible with the zarr v3 `json` data type (encoded via `vlen-utf8`).
     """
-    if _writer.compat < WriteCompat.V0_14:
+    if not _writer.compat.accessor:
         msg = (
             f"Cannot write {type(elem).__name__}. "
             'Pass `compat="0.14"` to the write function to write it '
