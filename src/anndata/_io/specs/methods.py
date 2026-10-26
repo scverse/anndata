@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 import math
 import warnings
-from collections.abc import Mapping, MutableMapping, Sequence
+from collections.abc import Mapping, MutableMapping
 from contextlib import contextmanager, nullcontext
 from copy import copy
 from functools import partial, wraps
@@ -497,118 +498,23 @@ def write_mapping(
         _writer.write_elem(g, sub_k, sub_v, dataset_kwargs=dataset_kwargs)
 
 
-#############
-# Sequences #
-#############
+##############
+# np.ndarray #
+##############
 
 
-@_REGISTRY.register_write(h5py.Group, Sequence, IOSpec("array", "0.2.0"))
-@_REGISTRY.register_write(zarr.Group, Sequence, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(h5py.Group, list, IOSpec("array", "0.2.0"))
+@_REGISTRY.register_write(zarr.Group, list, IOSpec("array", "0.2.0"))
 @suppress_autoshard_warning
-def write_sequence(
+def write_list(
     f: _GroupStorageType,
     k: str,
-    elem: Sequence[Storable],
+    elem: list[Storable],
     *,
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     _writer.write_elem(f, k, np.array(elem), dataset_kwargs=dataset_kwargs)
-
-
-@_REGISTRY.register_read(h5py.Group, IOSpec("sequence", "0.1.0"))
-@_REGISTRY.register_read(zarr.Group, IOSpec("sequence", "0.1.0"))
-def read_sequence(elem: _GroupStorageType, *, _reader: Reader) -> list[Storable]:
-    return [_reader.read_elem(elem[str(i)]) for i in range(len(elem))]
-
-
-@_REGISTRY.register_write(h5py.Group, (Sequence, "O"), IOSpec("sequence", "0.1.0"))
-@_REGISTRY.register_write(zarr.Group, (Sequence, "O"), IOSpec("sequence", "0.1.0"))
-@suppress_autoshard_warning
-def write_sequence_elemwise(
-    f: _GroupStorageType,
-    k: str,
-    elem: Sequence[Storable],
-    *,
-    _writer: Writer,
-    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
-):
-    """Write a sequence numpy can’t represent, e.g. a heterogeneous or ragged one."""
-    if _writer.compat < WriteCompat.V0_14:
-        msg = (
-            f"Cannot write {type(elem).__name__} with heterogeneous or nested contents "
-            'as an array. Pass `compat="0.14"` to the write function to write it '
-            "as a `sequence` group instead."
-        )
-        raise ValueError(msg)
-    _write_sequence_group(f, k, elem, _writer=_writer, dataset_kwargs=dataset_kwargs)
-
-
-def _write_sequence_group(
-    f: _GroupStorageType,
-    k: str,
-    elem: Sequence[Storable],
-    *,
-    _writer: Writer,
-    dataset_kwargs: Mapping[str, Any],
-) -> None:
-    g = f.require_group(k)
-    for i, sub_v in enumerate(elem):
-        _writer.write_elem(g, str(i), sub_v, dataset_kwargs=dataset_kwargs)
-
-
-#############
-# Accessors #
-#############
-
-
-def write_accessor(
-    f: _GroupStorageType,
-    k: str,
-    elem: acc.AdRef | acc.LayerAcc | acc.MultiAcc | acc.GraphAcc,
-    *,
-    _writer: Writer,
-    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
-):
-    """Write an :mod:`anndata.acc` accessor as its :meth:`~anndata.acc.AdAcc.to_json` form."""
-    if _writer.compat < WriteCompat.V0_14:
-        msg = (
-            f"Cannot write {type(elem).__name__}. "
-            'Pass `compat="0.14"` to the write function to write it '
-            "as an `accessor` group."
-        )
-        raise ValueError(msg)
-    _write_sequence_group(
-        f, k, acc.A.to_json(elem), _writer=_writer, dataset_kwargs=dataset_kwargs
-    )
-
-
-# `MetaAcc` (e.g. `A.obs`) is missing on purpose: `to_json` cannot serialize it
-for store_type, acc_type in product(
-    _STORE_TYPES, [acc.AdRef, acc.LayerAcc, acc.MultiAcc, acc.GraphAcc]
-):
-    _REGISTRY.register_write(store_type, acc_type, IOSpec("accessor", "0.1.0"))(
-        write_accessor
-    )
-del store_type, acc_type
-
-
-@_REGISTRY.register_read(h5py.Group, IOSpec("accessor", "0.1.0"))
-@_REGISTRY.register_read(zarr.Group, IOSpec("accessor", "0.1.0"))
-def read_accessor(
-    elem: _GroupStorageType, *, _reader: Reader
-) -> acc.AdRef | acc.LayerAcc | acc.MultiAcc | acc.GraphAcc:
-    # `parse_json` matches on `str`/`int`, which `np.str_` satisfies but `np.int64` does not
-    data = [
-        v.item() if isinstance(v, np.generic) else v
-        for v in read_sequence(elem, _reader=_reader)
-    ]
-    return acc.A.from_json(data)
-
-
-##############
-# np.ndarray #
-##############
 
 
 # TODO: Is this the right behavior for MaskedArrays?
@@ -1650,6 +1556,56 @@ def write_string(
     f.create_dataset(
         k, data=np.array(v, dtype=h5py.string_dtype(encoding="utf-8")), **dataset_kwargs
     )
+
+
+#############
+# Accessors #
+#############
+
+
+def write_accessor(
+    f: _GroupStorageType,
+    k: str,
+    elem: acc.AdRef | acc.LayerAcc | acc.MultiAcc | acc.GraphAcc,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
+    """Write an :mod:`anndata.acc` accessor as a JSON-encoded string scalar.
+
+    Byte-compatible with the zarr v3 `json` data type (encoded via `vlen-utf8`).
+    """
+    if _writer.compat < WriteCompat.V0_14:
+        msg = (
+            f"Cannot write {type(elem).__name__}. "
+            'Pass `compat="0.14"` to the write function to write it '
+            "as an `accessor` encoded element."
+        )
+        raise ValueError(msg)
+    data = json.dumps(acc.A.to_json(elem), separators=(",", ":"))
+    if isinstance(f, h5py.Group):
+        write_string(f, k, data, _writer=_writer, dataset_kwargs=dataset_kwargs)
+    else:
+        write_scalar_zarr(f, k, data, _writer=_writer, dataset_kwargs=dataset_kwargs)
+
+
+# `MetaAcc` (e.g. `A.obs`) is missing on purpose: `to_json` cannot serialize it
+for store_type, acc_type in product(
+    _STORE_TYPES, [acc.AdRef, acc.LayerAcc, acc.MultiAcc, acc.GraphAcc]
+):
+    _REGISTRY.register_write(store_type, acc_type, IOSpec("accessor", "0.1.0"))(
+        write_accessor
+    )
+del store_type, acc_type
+
+
+@_REGISTRY.register_read(h5py.Dataset, IOSpec("accessor", "0.1.0"))
+@_REGISTRY.register_read(zarr.Array, IOSpec("accessor", "0.1.0"))
+def read_accessor(
+    elem: _ArrayStorageType, *, _reader: Reader
+) -> acc.AdRef | acc.LayerAcc | acc.MultiAcc | acc.GraphAcc:
+    read = read_hdf5_string if isinstance(elem, h5py.Dataset) else read_zarr_string
+    return acc.A.from_json(json.loads(read(elem, _reader=_reader)))
 
 
 # @_REGISTRY.register_write(np.bytes_, IOSpec("bytes", "0.2.0"))

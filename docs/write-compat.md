@@ -25,10 +25,8 @@ i.e. encodings that version can’t read are disallowed.
   - This is the default.
 * - `"0.14"`
   - unreleased
-  - Enables the {ref}`sequence <sequence>` and {ref}`accessor <accessor>` encodings,
-    i.e. writing heterogeneous, ragged and nested sequences in `uns` ({issue}`1979`)
-    as well as {mod}`anndata.acc` accessors.
-    Older versions can’t read either.
+  - Enables the {ref}`accessor <accessor>` encoding for {mod}`anndata.acc` accessors.
+    Older versions can’t read it.
 ```
 
 ## Checking before writing

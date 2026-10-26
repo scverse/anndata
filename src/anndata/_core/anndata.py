@@ -1575,11 +1575,7 @@ class AnnData:  # noqa: PLW1641
             if _non_2d_message(value, name="layer") is not None:
                 return True
 
-        from anndata._io.specs.registry import (
-            _REGISTRY,
-            is_sequence,
-            sequence_is_arrayable,
-        )
+        from anndata._io.specs.registry import _REGISTRY
         from anndata.acc import AdRef, GraphAcc, LayerAcc, MultiAcc
 
         acc_types = (AdRef, LayerAcc, MultiAcc, GraphAcc)
@@ -1638,14 +1634,6 @@ class AnnData:  # noqa: PLW1641
             if isinstance(elem, acc_types):
                 # writeable, but only from the 0.14 profile on
                 return accumulate or compat < WriteCompat.V0_14
-            if is_sequence(elem):
-                if sequence_is_arrayable(elem, compat=compat):
-                    return accumulate
-                if compat < WriteCompat.V0_14:
-                    return True
-                return accumulate or any(
-                    predicate(v, accumulate=accumulate) for v in elem
-                )
             return (
                 (accumulate or type(elem) not in writeable_elems)
                 if not isinstance(elem, SupportsArrayApiBase)

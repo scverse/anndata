@@ -88,13 +88,7 @@ class WriteCompat(WriteConfig, Enum):
     V0_14 = "0.14"
     """anndata 0.14 (unreleased).
 
-    Enables
-
-    - the `sequence` encoding, which stores a sequence’s elements individually instead
-      of converting it to an array. That allows writing heterogeneous, ragged and
-      nested sequences, i.e. arbitrary JSON-like structures in
-      :attr:`~anndata.AnnData.uns`.
-    - the `accessor` encoding for :mod:`anndata.acc` accessors.
+    Enables the `accessor` encoding for :mod:`anndata.acc` accessors.
     """
 
     DEFAULT = V0_13
