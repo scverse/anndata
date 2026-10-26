@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import inspect
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import partial, singledispatch, wraps
 from types import MappingProxyType
@@ -20,7 +20,7 @@ from ...utils import warn
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
-    from typing import Any, TypeIs
+    from typing import Any
 
     from anndata._types import (
         ReadCallback,
@@ -233,13 +233,16 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         name = "read_partial"
         raise IORegistryError._from_read_parts(name, self.read_partial, src_type, spec)
 
-    def get_spec(
-        self, elem: StorageType, *, compat: WriteCompat = WriteCompat.DEFAULT
-    ) -> IOSpec:
-        for pattern in _iter_patterns(elem, compat=compat):
-            if pattern in self.write_specs:
-                return self.write_specs[pattern]
-        return self.write_specs[type(elem)]  # raises a KeyError naming the type
+    def get_spec(self, elem: StorageType) -> IOSpec:
+        if isinstance(elem, DaskArray):
+            if (typ_meta := (DaskArray, type(elem._meta))) in self.write_specs:
+                return self.write_specs[typ_meta]
+        elif (
+            hasattr(elem, "dtype")
+            and (typ_kind := (type(elem), elem.dtype.kind)) in self.write_specs
+        ):
+            return self.write_specs[typ_kind]
+        return self.write_specs[type(elem)]
 
 
 _REGISTRY: IORegistry[_ReadInternal, Read] = IORegistry()
@@ -268,33 +271,10 @@ def get_spec(elem: StorageType) -> IOSpec:
     })
 
 
-def is_sequence(elem: object) -> TypeIs[Sequence]:
-    """Whether `elem` is a sequence in the JSON sense, i.e. not a string of characters."""
-    return isinstance(elem, Sequence) and not isinstance(elem, str | bytes | bytearray)
-
-
-def sequence_is_arrayable(elem: Sequence, *, compat: WriteCompat) -> bool:
-    """Whether turning a sequence into an array via `np.asarray` keeps its contents intact."""
-    try:
-        arr = np.asarray(elem)
-    except ValueError:
-        return False  # ragged, or containing things like a DataFrame
-    if compat < WriteCompat.V0_14:
-        return True  # older anndata wrote whatever numpy made of the sequence
-    if arr.dtype.kind == "O":
-        return False
-    if arr.dtype.kind not in "SUT":
-        return True
-    # numpy stringifies whatever doesn’t fit, e.g. `np.asarray([1, "b"])` → `["1", "b"]`
-    # and `np.asarray(["a", b"b"])` → `["a", "b"]`, so the leaves must be of one kind
-    leaves = list(np.asarray(elem, dtype=object).flat)
-    return all(isinstance(x, str) for x in leaves) or all(
-        isinstance(x, bytes) for x in leaves
-    )
-
-
-def _iter_patterns(elem: RWAble, *, compat: WriteCompat) -> Generator[WriteSrcType]:
+def _iter_patterns(elem: RWAble) -> Generator[WriteSrcType]:
     """Iterates over possible patterns for an element in order of precedence."""
+    from anndata.compat import DaskArray
+
     t = type(elem)
 
     if isinstance(elem, DaskArray):
@@ -303,17 +283,7 @@ def _iter_patterns(elem: RWAble, *, compat: WriteCompat) -> Generator[WriteSrcTy
     # Array API dtypes don’t have guaranteed attributes
     if isinstance(elem, np.ndarray):
         yield (t, elem.dtype.kind)
-        yield t
-    elif is_sequence(elem):
-        # the concrete type first, then the ABC, so that any `Sequence` is writeable
-        # while a concrete one could still get a more specific writer
-        elemwise = not sequence_is_arrayable(elem, compat=compat)
-        for typ in (t, Sequence):
-            if elemwise:
-                yield (typ, "O")
-            yield typ
-    else:
-        yield t
+    yield t
 
 
 class Reader:
@@ -386,7 +356,7 @@ class Writer:
     def find_write_func(
         self, dest_type: type, elem: RWAble, modifiers: frozenset[str]
     ) -> Write:
-        for pattern in _iter_patterns(elem, compat=self.compat):
+        for pattern in _iter_patterns(elem):
             if self.registry.has_write(dest_type, pattern, modifiers):
                 return self.registry.get_write(
                     dest_type, pattern, modifiers, writer=self
@@ -454,9 +424,7 @@ class Writer:
 
         if self.callback is not None:
             write_func = partial(
-                self.callback,
-                write_func,
-                iospec=self.registry.get_spec(elem, compat=self.compat),
+                self.callback, write_func, iospec=self.registry.get_spec(elem)
             )
         write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
         _add_to_column_order(store, k)
