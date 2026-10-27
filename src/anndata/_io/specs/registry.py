@@ -13,6 +13,7 @@ import zarr
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata._settings import settings
 from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
+from anndata._write_compat import WriteCompat
 from anndata.compat import DaskArray, _read_attr, has_xp
 
 from ...utils import warn
@@ -29,7 +30,9 @@ if TYPE_CHECKING:
         _GroupStorageType,
         _WriteInternal,
     )
+    from anndata._write_compat import WriteConfig
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
+    from anndata.types import WriteCompatStr
     from anndata.typing import RWAble
 
     from ..._core.xarray import Dataset2D
@@ -339,9 +342,16 @@ class LazyReader(Reader):
 
 
 class Writer:
-    def __init__(self, registry: IORegistry, callback: WriteCallback | None = None):
+    def __init__(
+        self,
+        registry: IORegistry,
+        callback: WriteCallback | None = None,
+        *,
+        compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
+    ):
         self.registry = registry
         self.callback = callback
+        self.compat = WriteCompat.or_config(compat)
 
     def find_write_func(
         self, dest_type: type, elem: RWAble, modifiers: frozenset[str]
@@ -534,6 +544,7 @@ def write_elem(
     elem: RWAble,
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
 ) -> None:
     """
     Write an element to a storage group using anndata encoding.
@@ -552,8 +563,12 @@ def write_elem(
     dataset_kwargs
         Keyword arguments to pass to the stores dataset creation function.
         E.g. for zarr this would be `chunks`, `compressor`.
+    compat
+        Which anndata version’s write behavior to target, see :class:`~anndata.WriteCompat`.
     """
-    Writer(_REGISTRY).write_elem(store, k, elem, dataset_kwargs=dataset_kwargs)
+    Writer(_REGISTRY, compat=compat).write_elem(
+        store, k, elem, dataset_kwargs=dataset_kwargs
+    )
 
 
 # TODO: If all items would be read, just call normal read method

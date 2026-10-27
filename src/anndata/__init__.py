@@ -13,7 +13,9 @@ from ._warnings import (
     OldFormatWarning,
     WriteWarning,
 )
+from ._write_compat import WriteCompat, WriteConfig
 from .io import read_h5ad, read_zarr
+from .types import WriteCompatStr
 from .utils import module_get_attr_redirect, warn
 
 # Submodules need to be imported last
@@ -28,6 +30,9 @@ __all__ = [
     "ImplicitModificationWarning",
     "OldFormatWarning",
     "Raw",
+    "WriteCompat",
+    "WriteCompatStr",
+    "WriteConfig",
     "WriteWarning",
     "abc",
     "acc",
