@@ -65,7 +65,7 @@ def write_h5ad(  # noqa: PLR0912
     **kwargs,
 ) -> None:
     """See :meth:`~anndata.AnnData.write_h5ad`."""
-    compat = WriteCompat(compat) if isinstance(compat, str) else compat
+    compat = WriteCompat.or_config(compat)
     _check_x_and_layers_are_2d_on_write(adata)
     if isinstance(as_dense, str):
         as_dense = [as_dense]

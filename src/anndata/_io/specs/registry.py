@@ -351,7 +351,7 @@ class Writer:
     ):
         self.registry = registry
         self.callback = callback
-        self.compat = WriteCompat(compat) if isinstance(compat, str) else compat
+        self.compat = WriteCompat.or_config(compat)
 
     def find_write_func(
         self, dest_type: type, elem: RWAble, modifiers: frozenset[str]

@@ -106,6 +106,10 @@ class WriteCompat(WriteConfig, Enum):
             for f in fields(WriteConfig):
                 setattr(self, f.name, f.default_factory(version))
 
+    @classmethod
+    def or_config(cls, obj: WriteCompatStr | WriteConfig) -> WriteConfig:
+        return cls(obj) if isinstance(obj, str) else obj
+
     def __str__(self) -> str:
         return self._value_
 
