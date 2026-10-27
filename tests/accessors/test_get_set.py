@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from typing import Literal
 
     from anndata import AnnData
-    from anndata.acc import AdRef, InMemoryArray, RefAcc
+    from anndata.acc import AdRef, GraphAcc, InMemoryArray, LayerAcc, MultiAcc
     from anndata.typing import AlignedArray
 
 
@@ -256,22 +256,13 @@ def test_set_values(adata: AnnData, ad_ref: AdRef, *, view: bool) -> None:
 
 
 @pytest.mark.parametrize(
-    ("acc", "attr"),
-    [
-        (A.X, lambda ad: ad.X),
-        (A.layers["new"], lambda ad: ad.layers["new"]),
-        (A.obsm["new"], lambda ad: ad.obsm["new"]),
-        (A.obsp["new"], lambda ad: ad.obsp["new"]),
-    ],
-    ids=str,
+    "acc", [A.X, A.layers["new"], A.obsm["new"], A.obsp["new"]], ids=str
 )
-def test_set_full(
-    adata: AnnData, acc: RefAcc, attr: Callable[[AnnData], object]
-) -> None:
+def test_set_full(adata: AnnData, acc: LayerAcc | MultiAcc | GraphAcc) -> None:
     n_cols = adata.n_obs if acc == A.obsp["new"] else adata.n_vars
     value = np.ones((adata.n_obs, n_cols), dtype=np.float32)
     adata[acc] = value
-    assert attr(adata) is value
+    assert adata[acc] is value
 
 
 def test_set_full_df(adata: AnnData) -> None:
