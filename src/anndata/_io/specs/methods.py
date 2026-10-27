@@ -31,6 +31,9 @@ from anndata._core.storage import _check_x_and_layers_are_2d_on_write
 from anndata._io.utils import (
     _check_has_no_slash_key,
     check_key,
+    escape_key,
+    key_needs_escaping,
+    unescape_key,
     zero_dim_array_as_scalar,
 )
 from anndata._types import StorageType
@@ -54,7 +57,7 @@ from ...utils import iter_outer, warn
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterator
+    from collections.abc import Generator, Iterable, Iterator
     from os import PathLike
     from typing import Any, Literal
 
@@ -63,6 +66,7 @@ if TYPE_CHECKING:
 
     from anndata._core.sparse_dataset import BackedSparseMatrix
     from anndata._types import _ArrayStorageType, _GroupStorageType, _WriteInternal
+    from anndata._write_compat import WriteConfig
     from anndata.compat import CSArray, CSMatrix, CupyCSMatrix
     from anndata.typing import RWAble, Storable, _StorableArrayOrScalar
 
@@ -72,6 +76,15 @@ _STORE_TYPES: tuple[type[zarr.Group | h5py.Group], ...] = (
     h5py.Group,
     zarr.Group,
 )
+
+
+def escaping_keys(keys: Iterable[str], *, compat: WriteConfig) -> bool:
+    """Whether a group’s child keys must be percent-escaped to be file-system safe.
+
+    All of a group’s keys are escaped as soon as one of them needs it,
+    so that an escape sequence can never be mistaken for a literal key.
+    """
+    return compat.escape_keys and any(key_needs_escaping(k) for k in keys)
 
 
 ####################
@@ -382,7 +395,7 @@ def write_anndata(
     for sub_key, elem in iter_outer(adata):
         if sub_key == "X" and elem is None:
             continue
-        _check_has_no_slash_key(sub_key, elem)
+        _check_has_no_slash_key(sub_key, elem, compat=_writer.compat)
         if sub_key == "layers":
             assert isinstance(elem, MutableMapping)
             layers: Mapping[Any, Any] = elem
@@ -481,6 +494,14 @@ def read_mapping(elem: _GroupStorageType, *, _reader: Reader) -> dict[str, Stora
     return {k: _reader.read_elem(v) for k, v in dict(elem).items()}
 
 
+@_REGISTRY.register_read(h5py.Group, IOSpec("dict", "0.2.0"))
+@_REGISTRY.register_read(zarr.Group, IOSpec("dict", "0.2.0"))
+def read_mapping_escaped(
+    elem: _GroupStorageType, *, _reader: Reader
+) -> dict[str, Storable]:
+    return {unescape_key(k): _reader.read_elem(v) for k, v in dict(elem).items()}
+
+
 @_REGISTRY.register_write(h5py.Group, dict, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_write(zarr.Group, dict, IOSpec("dict", "0.1.0"))
 @suppress_autoshard_warning
@@ -493,8 +514,16 @@ def write_mapping(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
     g = f.require_group(k)
+    if escape := escaping_keys(v, compat=_writer.compat):
+        # `write_spec` only sets this if absent, so this wins
+        g.attrs["encoding-version"] = "0.2.0"
     for sub_k, sub_v in v.items():
-        _writer.write_elem(g, sub_k, sub_v, dataset_kwargs=dataset_kwargs)
+        _writer.write_elem(
+            g,
+            escape_key(sub_k) if escape else sub_k,
+            sub_v,
+            dataset_kwargs=dataset_kwargs,
+        )
 
 
 ##############
