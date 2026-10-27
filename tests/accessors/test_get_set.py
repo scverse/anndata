@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from typing import Literal
 
     from anndata import AnnData
-    from anndata.acc import AdRef, InMemoryArray
+    from anndata.acc import AdRef, InMemoryArray, RefAcc
     from anndata.typing import AlignedArray
 
 
@@ -221,3 +221,82 @@ def test_get_multi_out_of_range(
     msg = rf"Column index `{i}` is out of range for A\.{dim}m\[.+\] with 2 columns\."
     with pytest.raises(IndexError, match=msg):
         adata[ad_ref]
+
+
+@pytest.mark.parametrize(
+    "ad_ref",
+    [
+        A.X[:, "gene-3"],
+        A.X["cell-5", :],
+        A.layers["a"][:, "gene-18"],
+        A.obsm["umap"][1],
+        A.obsm["umap"][-1],
+        A.varp["cons"]["gene-46", :],
+        A.varp["cons"][:, "gene-46"],
+        A.obs["type"],
+        A.obs["new"],
+        A.var.index,
+    ],
+    ids=str,
+)
+@pytest.mark.parametrize("view", [False, True], ids=["actual", "view"])
+def test_set_values(adata: AnnData, ad_ref: AdRef, *, view: bool) -> None:
+    if view:
+        adata = adata[:, :]
+    (dim,) = ad_ref.dims
+    value = np.arange(adata.n_obs if dim == "obs" else adata.n_vars)
+    value = value.astype(str) if ad_ref.idx is None else value.astype(np.float32)
+
+    adata[ad_ref] = value
+
+    assert not adata.is_view
+    np.testing.assert_array_equal(asarray(adata[ad_ref]), value)
+
+
+@pytest.mark.parametrize(
+    ("acc", "attr"),
+    [
+        (A.X, lambda ad: ad.X),
+        (A.layers["new"], lambda ad: ad.layers["new"]),
+        (A.obsm["new"], lambda ad: ad.obsm["new"]),
+        (A.obsp["new"], lambda ad: ad.obsp["new"]),
+    ],
+    ids=str,
+)
+def test_set_full(
+    adata: AnnData, acc: RefAcc, attr: Callable[[AnnData], object]
+) -> None:
+    n_cols = adata.n_obs if acc == A.obsp["new"] else adata.n_vars
+    value = np.ones((adata.n_obs, n_cols), dtype=np.float32)
+    adata[acc] = value
+    assert attr(adata) is value
+
+
+def test_set_full_df(adata: AnnData) -> None:
+    df = pd.DataFrame(dict(x=np.arange(adata.n_obs)), index=adata.obs_names)
+    adata[A.obs] = df
+    obs = adata[A.obs]
+    assert isinstance(obs, pd.DataFrame)
+    pd.testing.assert_frame_equal(obs, df)
+
+
+@pytest.mark.parametrize(
+    ("index", "exc"), [(A.obsm, IndexError), (0, TypeError)], ids=str
+)
+def test_set_unsupported(adata: AnnData, index: object, exc: type[Exception]) -> None:
+    with pytest.raises(exc):
+        adata[index] = 0  # type: ignore[index]
+
+
+def test_subclass_without_set_warns() -> None:
+    from anndata.acc import RefAcc
+
+    with pytest.warns(FutureWarning, match=r"does not implement `set`"):
+
+        class _NoSet(RefAcc):  # pyright: ignore[reportUnusedClass]
+            pass
+
+
+def test_set_multi_out_of_range(adata: AnnData) -> None:
+    with pytest.raises(IndexError, match=r"out of range"):
+        adata[A.obsm["umap"][2]] = np.zeros(adata.n_obs)
