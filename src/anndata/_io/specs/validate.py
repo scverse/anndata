@@ -226,10 +226,25 @@ def _walk_dataframe(
         yield path, _structural_error(msg, path)
     index_path = _join(path, df.index.name if df.index.name is not None else "_index")
     yield from _walk_leaf(df.index.array, dests, index_path)
-    for colname, series in df.items():
+    numpy_kind_registered: dict[str, bool] = {}
+    for i, (colname, dtype) in enumerate(df.dtypes.items()):
         col_path = _join(path, colname)
+        if isinstance(dtype, np.dtype) and dtype.kind not in "OMm":
+            # A plain numpy column is written as is and its registry pattern depends
+            # only on the dtype kind, so avoid boxing the column into a Series
+            # (wide dataframes in `uns` can have tens of thousands of columns).
+            if dtype.kind not in numpy_kind_registered:
+                numpy_kind_registered[dtype.kind] = _registered(
+                    np.empty(0, dtype=dtype), dests
+                )
+            if not numpy_kind_registered[dtype.kind]:
+                stub = np.empty(0, dtype=dtype)
+                miss = _registry_miss(stub, dests, col_path)
+                add_column_note(miss, stub, col_path)
+                yield col_path, miss
+            continue
         try:
-            values = normalize_column(series._values, path=col_path)
+            values = normalize_column(df.iloc[:, i]._values, path=col_path)
         except TypeError as conversion_error:
             conversion_error.add_note(f"Element: {col_path}")
             yield col_path, conversion_error
