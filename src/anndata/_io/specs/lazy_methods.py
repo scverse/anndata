@@ -14,7 +14,6 @@ from scipy import sparse
 import anndata as ad
 from anndata._core.file_backing import filename, get_elem_name
 from anndata._core.xarray import Dataset2D, requires_xarray
-from anndata._io.utils import unescape_key
 from anndata.compat import DaskArray, XDataset, XVariable, pandas_as_str
 
 from .registry import _LAZY_REGISTRY, IOSpec, read_elem
@@ -303,8 +302,6 @@ def _read_index(elem: StorageType) -> pd.Index:
 
 @_LAZY_REGISTRY.register_read(zarr.Group, IOSpec("dataframe", "0.2.0"))
 @_LAZY_REGISTRY.register_read(h5py.Group, IOSpec("dataframe", "0.2.0"))
-@_LAZY_REGISTRY.register_read(zarr.Group, IOSpec("dataframe", "0.3.0"))
-@_LAZY_REGISTRY.register_read(h5py.Group, IOSpec("dataframe", "0.3.0"))
 @requires_xarray
 def read_dataframe(
     elem: h5py.Group | zarr.Group,
@@ -314,28 +311,24 @@ def read_dataframe(
     chunks: tuple[int | None, ...] | None = None,
 ) -> Dataset2D:
     attrs: Mapping[str, Any] = elem.attrs
-    # `column-order`/`_index` name the child keys, which are escaped from v0.3.0 on
-    unesc = (lambda k: k) if attrs["encoding-version"] == "0.2.0" else unescape_key
-    idx_key = attrs["_index"]
-    idx_name = unesc(idx_key)
     # going through dask for reading into memory the index doesn't make sense, hence the ternary.
     elem_dict = {
-        unesc(k): _reader.read_elem(elem[k], chunks=chunks)
-        if (use_range_index and k == idx_key) or k != idx_key
+        k: _reader.read_elem(elem[k], chunks=chunks)
+        if (use_range_index and k == attrs["_index"]) or k != attrs["_index"]
         else _read_index(elem[k])
-        for k in [*attrs["column-order"], idx_key]
+        for k in [*attrs["column-order"], attrs["_index"]]
     }
-    if pd.api.types.is_string_dtype(elem_dict[idx_name]) and not use_range_index:
-        elem_dict[idx_name] = pandas_as_str(elem_dict[idx_name])
+    if pd.api.types.is_string_dtype(elem_dict[attrs["_index"]]) and not use_range_index:
+        elem_dict[attrs["_index"]] = pandas_as_str(elem_dict[attrs["_index"]])
     # If we use a range index, the coord axis needs to have the special dim name
     # which is used below as well.
     if not use_range_index:
-        dim_name = idx_name
+        dim_name = attrs["_index"]
         # no sense in reading this in multiple times since xarray requires an in-memory index
         index = elem_dict[dim_name]
     else:
         dim_name = DUMMY_RANGE_INDEX_KEY
-        index = pd.RangeIndex(len(elem_dict[idx_name])).astype("str")
+        index = pd.RangeIndex(len(elem_dict[attrs["_index"]])).astype("str")
     elem_xarray_dict = dict(
         _gen_xarray_dict_iterator_from_elems(elem_dict, dim_name, index)
     )
@@ -348,7 +341,7 @@ def read_dataframe(
     ds.is_backed = True
     # We ensure the indexing_key attr always points to the true index
     # so that the roundtrip works even for the `use_range_index` `True` case
-    ds.true_index_dim = idx_name
+    ds.true_index_dim = attrs["_index"]
     return ds
 
 
