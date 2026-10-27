@@ -1155,6 +1155,7 @@ def write_dataframe(
         msg = f"Found repeated column names: {duplicates}. Column names must be unique."
         raise ValueError(msg)
     col_names = [check_key(c) for c in df.columns]
+    group.attrs["column-order"] = col_names
 
     if df.index.name is not None:
         if df.index.name in col_names and not pd.Series(
@@ -1169,17 +1170,7 @@ def write_dataframe(
         index_name = df.index.name
     else:
         index_name = "_index"
-    index_name = check_key(index_name)
-
-    # `column-order` and `_index` name the child keys, so they are escaped too –
-    # h5ad attributes are VLEN strings and could not hold e.g. an embedded NUL.
-    if escape := escaping_keys([*col_names, index_name], compat=_writer.compat):
-        # `write_spec` only sets this if absent, so this wins
-        group.attrs["encoding-version"] = "0.3.0"
-    esc = escape_key if escape else lambda k: k
-
-    group.attrs["column-order"] = [esc(c) for c in col_names]
-    group.attrs["_index"] = esc(index_name)
+    group.attrs["_index"] = check_key(index_name)
 
     if TYPE_CHECKING:  # `pd.DataFrame.index` is `Index[Any]`
         assert isinstance(df.index.array, pd.arrays.ExtensionArray)
@@ -1189,57 +1180,50 @@ def write_dataframe(
         if isinstance(df.index.array, pd.arrays.NumpyExtensionArray)
         else df.index.array
     )
-    _writer.write_elem(
-        group, esc(index_name), index_values, dataset_kwargs=dataset_kwargs
-    )
-    # `col_names` are `df.columns` checked to be `str`, in the same order
-    for colname, (_, series) in zip(col_names, df.items(), strict=True):
+    _writer.write_elem(group, index_name, index_values, dataset_kwargs=dataset_kwargs)
+    for colname, series in df.items():
         # TODO: this should write the "true" representation of the series (i.e. the underlying array or ndarray depending)
         _writer.write_elem(
-            group, esc(colname), series._values, dataset_kwargs=dataset_kwargs
+            group, colname, series._values, dataset_kwargs=dataset_kwargs
         )
 
 
 @_REGISTRY.register_read(h5py.Group, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_read(zarr.Group, IOSpec("dataframe", "0.2.0"))
-@_REGISTRY.register_read(h5py.Group, IOSpec("dataframe", "0.3.0"))
-@_REGISTRY.register_read(zarr.Group, IOSpec("dataframe", "0.3.0"))
 def read_dataframe(elem: _GroupStorageType, *, _reader: Reader) -> pd.DataFrame:
     attrs: Mapping[str, Any] = elem.attrs
-    # the attributes name the child keys, which are escaped from v0.3.0 on
     columns = list(_read_attr(attrs, "column-order"))
     idx_key = _read_attr(attrs, "_index")
-    unesc = (lambda k: k) if attrs["encoding-version"] == "0.2.0" else unescape_key
     df = pd.DataFrame(
-        {unesc(k): _reader.read_elem(elem[k]) for k in columns},
+        {k: _reader.read_elem(elem[k]) for k in columns},
         index=_reader.read_elem(elem[idx_key]),
-        columns=[unesc(k) for k in columns] if columns else None,
+        columns=columns if columns else None,
     )
     if idx_key != "_index":
-        df.index.name = unesc(idx_key)
+        df.index.name = idx_key
     return df
 
 
 # TODO: Figure out what indices is allowed to be at each element
 @_REGISTRY.register_read_partial(h5py.Group, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_read_partial(zarr.Group, IOSpec("dataframe", "0.2.0"))
-@_REGISTRY.register_read_partial(h5py.Group, IOSpec("dataframe", "0.3.0"))
-@_REGISTRY.register_read_partial(zarr.Group, IOSpec("dataframe", "0.3.0"))
 def read_dataframe_partial(
     elem, *, items=None, indices=(slice(None, None), slice(None, None))
 ):
-    unesc = (lambda k: k) if elem.attrs["encoding-version"] == "0.2.0" else unescape_key
-    columns = list(_read_attr(elem.attrs, "column-order"))
     if items is not None:
-        columns = [col for col in columns if unesc(col) in items]
+        columns = [
+            col for col in _read_attr(elem.attrs, "column-order") if col in items
+        ]
+    else:
+        columns = list(_read_attr(elem.attrs, "column-order"))
     idx_key = _read_attr(elem.attrs, "_index")
     df = pd.DataFrame(
-        {unesc(k): read_elem_partial(elem[k], indices=indices[0]) for k in columns},
+        {k: read_elem_partial(elem[k], indices=indices[0]) for k in columns},
         index=read_elem_partial(elem[idx_key], indices=indices[0]),
-        columns=[unesc(k) for k in columns] if columns else None,
+        columns=columns if columns else None,
     )
     if idx_key != "_index":
-        df.index.name = unesc(idx_key)
+        df.index.name = idx_key
     return df
 
 

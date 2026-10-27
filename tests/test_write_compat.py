@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, get_args
 
 import h5py
 import numpy as np
-import pandas as pd
 import pytest
 
 import anndata as ad
@@ -83,10 +82,8 @@ def test_key_escaping_roundtrip(
     One key per branch of `escape_key` is enough here – which keys need what is
     covered by `test_escape_key` and `test_escape_key_is_usable_and_reversible`.
     """
-    index = pd.Index(["c1", "c2"], name=f"idx{key}")
     adata = ad.AnnData(
         np.zeros((2, 3)),
-        obs=pd.DataFrame({key: [1, 2]}, index=index),
         uns={key: 1},
         obsm={key: np.zeros((2, 2))},
         layers={key: np.zeros((2, 3))},
@@ -94,8 +91,6 @@ def test_key_escaping_roundtrip(
     getattr(adata, f"write_{diskfmt}")(diskfmt_store, compat="0.14")
     back = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
 
-    assert list(back.obs.columns) == [key]
-    assert back.obs.index.name == f"idx{key}"
     assert list(back.uns) == [key]
     assert list(back.obsm) == [key]
     assert set(back.layers) == {None, key}
@@ -117,17 +112,10 @@ def test_escaped_keys_are_safe_on_disk(tmp_path: Path) -> None:
     """Child names carry no characters any mainstream file system forbids."""
     from anndata._io.utils import UNSAFE_KEY_CHARS
 
-    adata = ad.AnnData(
-        np.zeros((2, 3)),
-        obs=pd.DataFrame({"a/b": [1, 2]}, index=["c1", "c2"]),
-        uns={"c:d": 1, "100%": 2},
-    )
+    adata = ad.AnnData(np.zeros((2, 3)), uns={"c:d": 1, "100%": 2, "a/b": 3})
     adata.write_h5ad(tmp_path / "t.h5ad", compat="0.14")
     with h5py.File(tmp_path / "t.h5ad") as f:
-        assert sorted(f["uns"]) == ["100%25", "c%3Ad"]
-        # `column-order`/`_index` name the child keys, so they are escaped too
-        assert list(f["obs"].attrs["column-order"]) == ["a%2Fb"]
-        assert "a%2Fb" in f["obs"]
+        assert sorted(f["uns"]) == ["100%25", "a%2Fb", "c%3Ad"]
 
         names: list[str] = []
         f.visit(names.append)
@@ -138,15 +126,10 @@ def test_escaped_keys_are_safe_on_disk(tmp_path: Path) -> None:
 
 def test_version_bumped_only_where_needed(tmp_path: Path) -> None:
     """A group without special keys stays byte-compatible with older readers."""
-    adata = ad.AnnData(
-        np.zeros((2, 3)),
-        obs=pd.DataFrame({"plain": [1, 2]}, index=["c1", "c2"]),
-        uns={"plain": 1},
-    )
+    adata = ad.AnnData(np.zeros((2, 3)), uns={"plain": 1})
     adata.write_h5ad(tmp_path / "t.h5ad", compat="0.14")
     with h5py.File(tmp_path / "t.h5ad") as f:
         assert f["uns"].attrs["encoding-version"] == "0.1.0"
-        assert f["obs"].attrs["encoding-version"] == "0.2.0"
 
 
 def test_no_escaping_before_0_14(tmp_path: Path) -> None:

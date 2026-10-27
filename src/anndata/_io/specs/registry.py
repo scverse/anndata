@@ -411,8 +411,7 @@ class Writer:
                 ):
                     msg = (
                         f"Forward slashes are not allowed in keys in {type(store)}. "
-                        'Pass `compat="0.14"` to the write function to escape them in `uns` keys, '
-                        "`obs`/`var` column names and other mapping keys"
+                        'Pass `compat="0.14"` to the write function to escape them in `uns` and other mapping keys'
                     )
                     raise ValueError(msg)
                 msg = "Forward slashes will be written differently in a future anndata version"

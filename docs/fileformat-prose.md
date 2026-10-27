@@ -120,8 +120,7 @@ since doing so would mangle e.g. non-ASCII gene names for no concrete gain.
 
 Which elements escape their keys, and how they signal it,
 is part of each encoding’s own specification –
-see {ref}`mappings <mapping-escaped>` and {ref}`dataframes <dataframe-escaped>`.
-The escaping itself is the same everywhere.
+see {ref}`mappings <mapping-escaped>`.
 
 A key is *reserved* if it
 
@@ -363,22 +362,6 @@ feature_is_filtered <zarr.core.Array '/var/feature_is_filtered' (40145,) bool re
 * The group MUST contain an array for the index
 * Each entry in the group MUST correspond to an array with equivalent first dimensions
 * Each entry SHOULD share chunk sizes (in the HDF5 or zarr container)
-
-(dataframe-escaped)=
-### Dataframe Specification (v0.3.0)
-
-Identical to v0.2.0, except that the column and index names are {ref}`escaped <escaped-keys>`.
-Keeping the escaped form in the attributes also lets them hold
-a name an `HDF5` attribute could not, such as one containing a NUL.
-
-* In a dataframe with `"encoding-version": "0.3.0"`,
-  the column names and the index name are escaped,
-  and a reader MUST unescape them to recover the names
-* `"column-order"` and `"_index"` MUST hold those escaped names,
-  i.e. they name the child keys verbatim
-* A dataframe with a column or index name that needs escaping MUST be written as `"0.3.0"`
-* A dataframe that needs no escaping SHOULD be written as `"0.2.0"`,
-  so files that don’t use the feature stay readable by older implementations
 
 (mappings)=
 ## Mappings
