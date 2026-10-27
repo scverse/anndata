@@ -520,6 +520,19 @@ class AnnData:  # noqa: PLW1641
     def __sizeof__(
         self, *, show_stratified: bool = False, with_disk: bool = False
     ) -> int:
+        """Get the size of the object’s data in bytes.
+
+        :func:`sys.getsizeof` calls this with the default arguments.
+
+        Parameters
+        ----------
+        show_stratified
+            Print the size of each non-empty element (`X`, `obs`, `layers`, …).
+        with_disk
+            Count arrays backed on disk with their full size
+            instead of the size of their in-memory handles.
+        """
+
         def cs_to_bytes(X: CSArray | CSMatrix) -> int:
             return int(X.data.nbytes + X.indptr.nbytes + X.indices.nbytes)
 
@@ -579,8 +592,7 @@ class AnnData:  # noqa: PLW1641
         else:
             return self._gen_repr(self.n_obs, self.n_vars)
 
-    def __eq__(self, other):
-        """Equality testing"""
+    def __eq__(self, other: object) -> bool:
         msg = (
             "Equality comparisons are not supported for AnnData objects, "
             "instead compare the desired attributes."
@@ -1075,7 +1087,22 @@ class AnnData:  # noqa: PLW1641
     @overload
     def __getitem__(self, index: Index) -> AnnData: ...
     def __getitem__(self, index: Index | AdRef) -> AnnData | Array | FullArray:
-        """Slice AnnData object or retrieve an array using an :class:`~anndata.acc.AdRef`."""
+        """Slice AnnData object or retrieve an array using an accessor.
+
+        Parameters
+        ----------
+        index
+            One of
+
+            - an :type:`~anndata.typing.Index` along observations and variables,
+              returning a view of the sliced object, e.g. `adata[:, ["gene-1", "gene-2"]]`;
+            - an :class:`~anndata.acc.AdRef`, returning the referenced 1D or 2D array,
+              e.g. `adata[A.obs["cell-type"]]` or `adata[A.layers["counts"][:, "gene-1"]]`;
+            - a :term:`reference accessor`, returning the full element (see :meth:`~anndata.acc.RefAcc.get`),
+              e.g. `adata[A.obs]` or `adata[A.obsm["pca"]]`.
+
+            Mapping accessors like `A.obsm` raise an :class:`IndexError`, as they don’t refer to an array.
+        """
         from ..acc import AdRef, MapAcc, RefAcc
 
         if isinstance(index, AdRef):
@@ -1600,11 +1627,17 @@ class AnnData:  # noqa: PLW1641
             utils.warn_names_duplicates("var")
 
     def __contains__(self, key: AdRef | RefAcc | MapAcc) -> bool:
-        """Check if array is in AnnData.
+        """Check if array is in AnnData via its path as an accessor.
 
         When passed a :class:`~anndata.acc.MapAcc`,
         it will check if the referenced map has any entries,
         e.g. `A.obsm in adata` will return `True` if `adata.obsm` is not empty.
+
+        Parameters
+        ----------
+        key
+            An accessor pointing to an array that might or might not be in `self`.
+
         """
         from ..acc import AdRef, GraphMapAcc, LayerMapAcc, MapAcc, MultiMapAcc, RefAcc
 
