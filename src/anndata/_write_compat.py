@@ -64,7 +64,10 @@ class WriteConfig:
     """Write :mod:`anndata.acc` accessors using the `accessor` encoding (anndata ≥0.14)."""
 
     escape_keys: bool = field(default_factory=_min_version("0.14"))
-    """Escape keys that a file system may choke on, e.g. `a/b`, `a:b`, or `NUL` (anndata ≥0.14)."""
+    """Escape mapping keys that a file system may choke on (anndata ≥0.14).
+
+    E.g. `a/b`, `a:b`, or `NUL` in :attr:`~anndata.AnnData.uns`.
+    """
 
     @property
     def _features(self) -> frozenset[str]:
