@@ -1631,7 +1631,7 @@ class AnnData:  # noqa: PLW1641
                 return accumulate or any(
                     predicate(v, accumulate=accumulate) for v in elem.values()
                 )
-            if isinstance(elem, acc_types):
+            if type(elem) in acc_types:  # IO registry dispatches on exact type
                 # writeable, but only with the `accessor` flag
                 return accumulate or not compat.accessor
             return (
