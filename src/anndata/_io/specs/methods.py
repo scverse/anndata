@@ -51,10 +51,11 @@ from ..._settings import settings
 from ...compat import PANDAS_3, PANDAS_STRING_ARRAY_TYPES
 from ...utils import iter_outer, warn
 from ..utils import _get_display_path, add_key_note
+from .dataframe_columns import UnsupportedColumnTypeError, normalize_column
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Hashable, Iterator
+    from collections.abc import Generator, Iterator
     from os import PathLike
     from typing import Any, Literal
 
@@ -1148,107 +1149,13 @@ def write_dataframe(
     _writer.write_elem(group, index_name, index_values, dataset_kwargs=dataset_kwargs)
     for colname, series in df.items():
         # TODO: this should write the "true" representation of the series (i.e. the underlying array or ndarray depending)
-        values = series._values
-        if isinstance(values, np.ndarray) and values.dtype == object:
-            try:
-                values = _object_column_to_writable(values, colname)
-            except TypeError as e:
-                # match the note `write_elem` would have added for this column
-                add_key_note(e, group, _get_display_path(group), str(colname), "writ")
-                raise
+        try:
+            values = normalize_column(series._values, path=str(colname))
+        except UnsupportedColumnTypeError as e:
+            # match the note `write_elem` would have added for this column
+            add_key_note(e, group, _get_display_path(group), str(colname), "writ")
+            raise
         _writer.write_elem(group, colname, values, dataset_kwargs=dataset_kwargs)
-
-
-# Object-dtype columns that pandas infers as integer, boolean, or floating
-# (e.g. `np.array([1, 2, None, 3])`) have an unambiguous on-disk representation.
-_OBJECT_COLUMN_CONVERSIONS: Mapping[
-    str, tuple[pd.Int64Dtype | pd.BooleanDtype | pd.Float64Dtype, np.dtype | None]
-] = MappingProxyType({
-    "integer": (pd.Int64Dtype(), np.dtype(np.int64)),
-    "boolean": (pd.BooleanDtype(), np.dtype(np.bool_)),
-    # Nullable floating point is not a supported on-disk type,
-    # so always fall back to numpy float64 with NaN, like pandas would for non-object input.
-    "floating": (pd.Float64Dtype(), None),
-    "mixed-integer-float": (pd.Float64Dtype(), None),
-})
-# On x86 `np.longdouble` is 80-bit, so even small values may not fit float64 exactly
-_LONGDOUBLE_IS_WIDER = np.finfo(np.longdouble).nmant > np.finfo(np.float64).nmant
-
-
-def _object_column_to_writable(
-    values: np.ndarray, colname: Hashable
-) -> np.ndarray | pd.api.extensions.ExtensionArray:
-    """\
-    Convert an object-dtype column into something we can write.
-
-    Columns inferred as integer or boolean become the matching nullable pandas array
-    if they contain missing values, and the plain numpy dtype otherwise.
-    Columns inferred as floating become numpy float64 (missing values become NaN)
-    if that loses no precision.
-    String/bytes columns without missing values and empty columns are returned unchanged.
-    Everything else raises a :exc:`TypeError` naming the column.
-    """
-    kind = pd.api.types.infer_dtype(values, skipna=True)
-    hint = (
-        "Convert it to a supported dtype first, "
-        "e.g. with `pd.array(...)` or `.astype(...)`."
-    )
-    if (conversion := _OBJECT_COLUMN_CONVERSIONS.get(kind)) is None:
-        # The string writers handle (mixtures of) str and bytes without missing values
-        if (
-            len(values) == 0
-            or pd.api.types.infer_dtype(values, skipna=False) in {"string", "bytes"}
-            or (kind == "mixed" and all(isinstance(v, str | bytes) for v in values))
-        ):
-            return values
-        msg = (
-            f"Cannot write column {colname!r} (dtype object, inferred as {kind!r}). "
-            f"{hint}"
-        )
-        raise TypeError(msg)
-    nullable_dtype, numpy_dtype = conversion
-    try:
-        if (
-            kind == "integer"
-            and pd.api.types.infer_dtype(values, skipna=False) == "integer"
-        ):
-            # No missing values at all, so a direct cast is cheapest and lossless.
-            # (Only done for ints: a bool cast would turn None into False, and
-            # numpy casts some missing markers, e.g. complex NaN, to an int.)
-            assert numpy_dtype is not None
-            return values.astype(numpy_dtype)
-        converted = pd.array(values, dtype=nullable_dtype)
-    except (TypeError, ValueError, OverflowError) as e:
-        msg = (
-            f"Cannot write column {colname!r} (dtype object, inferred as {kind!r}): "
-            f"converting it to {nullable_dtype.name!r} failed. {hint}"
-        )
-        raise TypeError(msg) from e
-    if numpy_dtype is not None:
-        return converted if converted.isna().any() else converted.to_numpy(numpy_dtype)
-    floats = converted.to_numpy(dtype=np.float64, na_value=np.nan)
-    # float64 holds integers below 2**53 and all float64/float32 values exactly, so only
-    # larger magnitudes need checking (missing values are NaN here and fail the cutoff,
-    # ±inf pass the comparison below). Extended-precision scalars can be rounded at any
-    # magnitude, so if any are present every value is checked.
-    suspect = np.abs(floats) >= 2.0**53
-    if _LONGDOUBLE_IS_WIDER and any(
-        issubclass(t, np.longdouble) for t in {type(v) for v in values}
-    ):
-        suspect = ~np.isnan(floats)
-    if suspect.any():
-        # Python compares int and float exactly, numpy scalars do not (they promote to
-        # float64), so compare Python scalars
-        original = (
-            x.item() if isinstance(x, np.generic) else x for x in values[suspect]
-        )
-        if any(x != f for x, f in zip(original, floats[suspect].tolist(), strict=True)):
-            msg = (
-                f"Cannot write column {colname!r} (dtype object, inferred as {kind!r}): "
-                f"its values cannot be represented exactly as float64. {hint}"
-            )
-            raise TypeError(msg)
-    return floats
 
 
 @_REGISTRY.register_read(h5py.Group, IOSpec("dataframe", "0.2.0"))

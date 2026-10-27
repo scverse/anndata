@@ -910,7 +910,7 @@ def test_write_object_column_longdouble_lossy(
     *, with_missing: bool, sign: int, subclass: bool
 ) -> None:
     """Extended-precision scalars below 2**53 are still checked for exactness."""
-    from anndata._io.specs.methods import _object_column_to_writable
+    from anndata._io.specs.dataframe_columns import _object_column_to_writable
 
     class LongDouble(np.longdouble):
         pass
@@ -940,7 +940,7 @@ def test_write_object_column_longdouble_lossy(
 )
 def test_write_object_column_int_keeps_exotic_missing(missing: object) -> None:
     """Missing markers numpy would happily cast to an int stay missing."""
-    from anndata._io.specs.methods import _object_column_to_writable
+    from anndata._io.specs.dataframe_columns import _object_column_to_writable
 
     values = np.array([1, missing, 3], dtype=object)
     assert pd.api.types.infer_dtype(values, skipna=True) == "integer"
@@ -954,7 +954,7 @@ def test_write_object_column_int_keeps_exotic_missing(missing: object) -> None:
 
 def test_write_object_column_nan_distinct_from_na() -> None:
     """With pandas distinguishing NaN from NA, an object float NaN is written as NaN."""
-    from anndata._io.specs.methods import _object_column_to_writable
+    from anndata._io.specs.dataframe_columns import _object_column_to_writable
 
     if not hasattr(pd.options.future, "distinguish_nan_and_na"):
         pytest.skip("pandas has no `future.distinguish_nan_and_na` option")
