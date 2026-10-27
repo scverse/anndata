@@ -3,9 +3,9 @@ Map in-memory dataframe columns onto the on-disk type system.
 
 anndata's on-disk format supports a small, closed set of column types
 (see :doc:`/fileformat-prose`), while pandas columns are open-ended.
-:func:`normalize_column` is the single place where the two meet:
-a column is converted only when that is lossless and unambiguous,
-and otherwise rejected with an error naming the column and a way out.
+:func:`normalize_column` canonicalises object-dtype columns (the only family
+without a single backing-array type) and passes everything else to the IO registry;
+:func:`add_column_note` explains a registry miss with the column, its dtype, and a way out.
 """
 
 from __future__ import annotations
@@ -24,11 +24,11 @@ if TYPE_CHECKING:
     from pandas.api.extensions import ExtensionArray
 
 
-__all__ = ["UnsupportedColumnTypeError", "normalize_column"]
+__all__ = ["UnsupportedColumnTypeError", "add_column_note", "normalize_column"]
 
 
 class UnsupportedColumnTypeError(TypeError):
-    """A dataframe column has no lossless representation in the on-disk format.
+    """An object-dtype dataframe column cannot be converted for writing.
 
     Attributes
     ----------
@@ -67,25 +67,6 @@ _CONVERT_HINT = (
     "Convert it to a supported dtype before writing, e.g. with `.astype(...)`. "
     "For missing values, use a nullable dtype such as 'Int64', 'boolean', or 'string'."
 )
-_ARROW_HINT = (
-    "Convert it before writing, e.g. with "
-    "`.convert_dtypes(dtype_backend='numpy_nullable')` or `.astype(...)`."
-)
-_EXTENSION_HINT = (
-    "Convert it to a numpy, nullable ('Int64', 'boolean', 'string'), "
-    "or categorical dtype before writing."
-)
-
-# Column families written as they are. The registry decides whether a writer exists
-# (e.g. datetime arrays currently have none, see scverse/anndata#2238).
-_PASSTHROUGH_ARRAY_TYPES: tuple[type[ExtensionArray], ...] = (
-    pd.Categorical,
-    pd.arrays.IntegerArray,
-    pd.arrays.BooleanArray,
-    *PANDAS_STRING_ARRAY_TYPES,
-    pd.arrays.DatetimeArray,
-    pd.arrays.TimedeltaArray,
-)
 
 
 def normalize_column(
@@ -94,16 +75,12 @@ def normalize_column(
     """\
     Return a writable version of a dataframe column's backing array.
 
-    The conversion is lossless or does not happen:
-
-    * numpy arrays, categoricals, nullable integer/boolean/string arrays,
-      and datetime/timedelta arrays are returned unchanged;
-    * nullable floating arrays (``Float64``/``Float32``) become numpy floats
-      of the same width with ``NaN`` for missing values;
-    * object arrays of integers, booleans, or floats (with or without missing values)
-      become the matching nullable or numpy array, see :func:`_object_column_to_writable`;
-    * pyarrow-backed arrays and every other extension array raise
-      :exc:`UnsupportedColumnTypeError`.
+    Only object-dtype columns are converted, see :func:`_object_column_to_writable`;
+    a :class:`~pandas.arrays.NumpyExtensionArray` is unwrapped into its numpy array.
+    Everything else (numpy arrays, categoricals, nullable arrays, pyarrow-backed
+    arrays, datetime arrays, …) is returned unchanged for the IO registry to decide
+    whether a writer exists. Calling this twice is the same as calling it once,
+    and the input is never modified.
 
     Parameters
     ----------
@@ -118,27 +95,51 @@ def normalize_column(
         return values
     if isinstance(values, pd.arrays.NumpyExtensionArray):
         return normalize_column(values.to_numpy(), path=path)
-    if isinstance(values, _PASSTHROUGH_ARRAY_TYPES):
-        return values
-    if isinstance(values, pd.arrays.FloatingArray):
-        # Nullable floating point has no on-disk encoding, but numpy floats of the
-        # same width with NaN hold every value (pandas does the same for non-object input).
-        return values.to_numpy(dtype=np.dtype(values.dtype.type), na_value=np.nan)
-    if isinstance(values, pd.arrays.ArrowExtensionArray):
-        raise UnsupportedColumnTypeError(
-            path,
-            values.dtype,
-            "pyarrow-backed columns are not supported",
-            hint=_ARROW_HINT,
-        )
-    if isinstance(values, pd.api.extensions.ExtensionArray):
-        raise UnsupportedColumnTypeError(
-            path,
-            values.dtype,
-            f"{type(values).__name__} columns are not supported",
-            hint=_EXTENSION_HINT,
-        )
     return values
+
+
+_DATETIME_HINT = (
+    "datetime/timedelta columns are not supported yet, see scverse/anndata#2238. "
+    "Convert the column before writing, e.g. with `.astype(str)` or `.astype('int64')`."
+)
+_NULLABLE_FLOAT_HINT = (
+    "There is no on-disk encoding for nullable floats yet. "
+    "Call `.to_numpy(np.float64, na_value=np.nan)` on the column "
+    "if collapsing NA into NaN is acceptable."
+)
+_ARROW_HINT = (
+    "pyarrow-backed columns are not supported. Convert the column before writing, "
+    "e.g. with `.convert_dtypes(dtype_backend='numpy_nullable')` or `.astype(...)`."
+)
+_GENERIC_HINT = (
+    "Convert the column to a numpy, nullable integer/boolean, string, "
+    "or categorical column before writing."
+)
+
+
+def _column_hint(values: np.ndarray | ExtensionArray) -> str:
+    if isinstance(values, pd.arrays.DatetimeArray | pd.arrays.TimedeltaArray) or (
+        isinstance(values, np.ndarray) and values.dtype.kind in "Mm"
+    ):
+        return _DATETIME_HINT
+    if isinstance(values, pd.arrays.FloatingArray):
+        return _NULLABLE_FLOAT_HINT
+    # `ArrowStringArray` is an `ArrowExtensionArray`, but has a writer
+    if isinstance(values, pd.arrays.ArrowExtensionArray) and not isinstance(
+        values, tuple(PANDAS_STRING_ARRAY_TYPES)
+    ):
+        return _ARROW_HINT
+    return _GENERIC_HINT
+
+
+def add_column_note(
+    e: BaseException, values: np.ndarray | ExtensionArray, path: str
+) -> None:
+    """Explain a registry miss for a dataframe column: which column, which dtype, what to do."""
+    e.add_note(
+        f"Column {path!r} (dtype {values.dtype}) has no on-disk encoding. "
+        f"{_column_hint(values)}"
+    )
 
 
 # Object-dtype columns that pandas infers as integer, boolean, or floating
@@ -169,6 +170,11 @@ def _object_column_to_writable(
     if that loses no precision.
     String/bytes columns without missing values and empty columns are returned unchanged.
     Everything else raises an :exc:`UnsupportedColumnTypeError` naming the column.
+
+    This is a canonicalisation, not a lossless conversion: the different missing
+    markers (`None`, `pd.NA`, `NaN`) collapse into one, floats become float64
+    (`NaN` for missing values), mixed int/float columns lose the per-value type,
+    and bytes are written as strings.
     """
     kind = pd.api.types.infer_dtype(values, skipna=True)
     if (conversion := _OBJECT_COLUMN_CONVERSIONS.get(kind)) is None:
