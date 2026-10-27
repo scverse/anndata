@@ -9,6 +9,7 @@ import pytest
 from pandas.api.extensions import ExtensionArray
 from scipy import sparse as sp
 
+from anndata import read_h5ad
 from anndata.acc import A
 from anndata.compat import (
     CSArray,
@@ -33,6 +34,7 @@ from anndata.utils import asarray
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
     from typing import Literal
 
     from anndata import AnnData
@@ -286,6 +288,14 @@ def test_set_full_df(adata: AnnData) -> None:
 def test_set_unsupported(adata: AnnData, index: object, exc: type[Exception]) -> None:
     with pytest.raises(exc):
         adata[index] = 0  # type: ignore[index]
+
+
+def test_set_unsettable(adata: AnnData, tmp_path: Path) -> None:
+    adata.X = adata.layers["a"]
+    adata.write_h5ad(tmp_path / "test.h5ad")
+    adata = read_h5ad(tmp_path / "test.h5ad", backed="r")
+    with pytest.raises(TypeError, match=r"Cannot assign into _?CSRDataset"):
+        adata[A.X[:, "gene-3"]] = np.zeros(adata.n_obs)
 
 
 def test_subclass_without_set_warns() -> None:

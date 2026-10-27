@@ -7,7 +7,7 @@ import sys
 from collections.abc import Hashable
 from dataclasses import KW_ONLY, dataclass, field
 from functools import cached_property
-from typing import TYPE_CHECKING, ClassVar, overload
+from typing import TYPE_CHECKING, ClassVar, Protocol, overload, runtime_checkable
 
 if sys.version_info < (3, 15):
     from typing_extensions import sentinel
@@ -358,7 +358,7 @@ class LayerAcc[R: AdRef[Idx2D, AnnData]](RefAcc[R, Idx2D, AnnData]):
             else:
                 adata.layers[self.k] = value
             return
-        full: Any = self.get(adata)  # not all `AlignedArray`s support assignment
+        full = _check_settable(self.get(adata))
         full[_positional_idx(adata, idx, ("obs", "var"))] = value
 
 
@@ -570,7 +570,7 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](RefAcc[R, int, MuData | AnnData]
         if i is NO_IDX:
             getattr(data, f"{self.dim}m")[self.k] = value
             return
-        full: Any = self.get(data)  # not all `AlignedArray`s support assignment
+        full = _check_settable(self.get(data))
         if not -full.shape[1] <= i < full.shape[1]:
             msg = f"Column index `{i}` is out of range for {self} with {full.shape[1]} columns."
             raise IndexError(msg)
@@ -697,7 +697,7 @@ class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](RefAcc[R, Idx2D, MuData | AnnD
         if idx is NO_IDX:
             getattr(data, f"{self.dim}p")[self.k] = value
             return
-        full: Any = self.get(data)  # not all `AlignedArray`s support assignment
+        full = _check_settable(self.get(data))
         full[_positional_idx(data, idx, (self.dim, self.dim))] = value
 
 
@@ -1035,6 +1035,20 @@ def _expand_idx2d_list(idx: Idx2DList) -> list[Idx2D]:
         case _:  # pragma: no cover
             msg = "Should have checked _is_idx2d_list before."
             raise AssertionError(msg)
+
+
+@runtime_checkable
+class _Settable(Protocol):
+    @property
+    def shape(self) -> tuple[int, ...]: ...
+    def __setitem__(self, idx: tuple[int | slice, ...], value: object, /) -> None: ...
+
+
+def _check_settable(a: AlignedArray, /) -> _Settable:
+    if not isinstance(a, _Settable):
+        msg = f"Cannot assign into {type(a).__name__}."
+        raise TypeError(msg)
+    return a
 
 
 def _positional_idx(
