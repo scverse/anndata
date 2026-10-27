@@ -93,7 +93,8 @@ def normalize_column(
         if values.dtype == object:
             return _object_column_to_writable(values, path)
         return values
-    if isinstance(values, pd.arrays.NumpyExtensionArray):
+    # exact check: `StringArray` subclasses `NumpyExtensionArray` and has its own writer
+    if type(values) is pd.arrays.NumpyExtensionArray:
         return normalize_column(values.to_numpy(), path=path)
     return values
 

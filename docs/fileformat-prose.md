@@ -594,6 +594,42 @@ and when reading a `"nullable-string-array"`, it MAY choose to read it into a `c
 ignoring the `"na-value"` attribute (since `character` arrays can not be made to behave with `"NaN"` semantics).
 
 (awkward-array)=
+(type-mapping)=
+## In-memory to on-disk type mapping
+
+The on-disk format supports a small, closed set of column types, while in-memory
+{class}`~pandas.DataFrame` columns are open-ended.
+When a dataframe is written, each column is mapped as follows.
+A column is only ever converted when the conversion is unambiguous;
+everything else is written as is if a writer exists, and otherwise rejected
+with an error naming the column, its dtype, and what to convert it to.
+
+| In-memory column | On disk |
+|---|---|
+| numpy numeric, boolean, complex, or fixed-length string array | `array` |
+| {class}`~pandas.Categorical` | `categorical` |
+| nullable integer (`Int8` … `UInt64`) | `nullable-integer` |
+| nullable boolean (`boolean`) | `nullable-boolean` |
+| nullable string (`string`, `string[pyarrow]`, `str`) | `nullable-string-array`; see {attr}`anndata.settings.allow_write_nullable_strings` |
+| object-dtype column of integers, with missing values / without | `nullable-integer` / `array` of `int64` |
+| object-dtype column of booleans, with missing values / without | `nullable-boolean` / `array` of `bool` |
+| object-dtype column of floats, or of integers and floats (missing values become `NaN`) | `array` of `float64`, only if every value is exactly representable |
+| object-dtype column of `str`/`bytes` without missing values | `string-array` |
+| object-dtype column of anything else (e.g. mixed types, lists, dicts, `Decimal`, `date`, strings with missing values, only missing values) | not supported: convert the column first, e.g. with `.astype(...)` or a nullable dtype |
+| nullable float (`Float32`, `Float64`) | not supported yet: `.to_numpy(np.float64, na_value=np.nan)` if collapsing `NA` into `NaN` is acceptable |
+| datetime / timedelta (naive or tz-aware) | not supported yet, see {issue}`2238`: convert e.g. with `.astype(str)` or `.astype("int64")` |
+| pyarrow-backed numeric, boolean, timestamp, list, … (`int64[pyarrow]`, …) | not supported: `.convert_dtypes(dtype_backend="numpy_nullable")` or `.astype(...)` |
+| `Period`, `Interval`, `Sparse`, any other extension array | not supported, unless a writer has been registered for it |
+
+The object-dtype conversions are a canonicalisation, not a lossless round trip:
+the different missing markers (`None`, `pd.NA`, `NaN`) collapse into one,
+floats are written as `float64`, a mix of integers and floats loses the per-value type,
+and `bytes` are written as strings.
+
+Set {attr}`anndata.settings.validate_before_write` to check every element of an
+{class}`~anndata.AnnData` object against this table before anything is written;
+{meth}`~anndata.AnnData.unwriteable` runs the same check and returns a boolean.
+
 ## AwkwardArrays
 
 ```{warning}
