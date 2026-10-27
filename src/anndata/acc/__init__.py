@@ -36,7 +36,14 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Sequence
     from typing import Any, Literal, Self, TypeGuard
 
-    from .._core.aligned_mapping import AxisArrays
+    from .._core.aligned_mapping import (
+        AxisArrays,
+        AxisArraysView,
+        Layers,
+        LayersView,
+        PairwiseArrays,
+        PairwiseArraysView,
+    )
     from ..compat import XVariable
     from ..typing import AlignedArray, InMemoryArray
 
@@ -223,12 +230,12 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
     def get(self, data: D, idx: I, /) -> Array: ...
     @abc.abstractmethod
     def get(self, data: D, idx: I | NO_IDX = NO_IDX, /) -> AlignedArray | Array:
-        """Get the indexed array from the AnnData object at `idx`.
+        """Get the indexed array or element from the AnnData object at `idx`.
 
         When `idx` is omitted (i.e., `idx` is :class:`~anndata.acc.NO_IDX`), return the full array one level up instead.
         This has the same semantics as the `AdRef` path but one level up:
-        `adata[A.obs]` returns the full :class:`~pandas.DataFrame` and `adata[A.obsm["pca"]]` the full :class:`numpy.ndarray`.
-        These both have defined `shape`-like properties (or :class:`awkward.Array`), unlike, for example, :attr:`~anndata.AnnData.obsm` or similar.
+        `adata[A.obs]` returns the full :class:`~pandas.DataFrame`, `adata[A.obsm["pca"]]` the full :class:`numpy.ndarray`, and `adata[A.layers]` the full :class:`Mapping`.
+        The first two both have defined `shape`-like properties (or :class:`awkward.Array`), but :attr:`~anndata.AnnData.layers` or similar do not.
         """
 
     def _maybe_flatten(
@@ -347,6 +354,9 @@ class LayerMapAcc[R: AdRef](MapAcc[LayerAcc]):
 
     def __repr__(self) -> str:
         return "A.layers"
+
+    def get(self, adata: AnnData) -> Layers | LayersView:
+        return adata.layers
 
 
 @dataclass(frozen=True)
@@ -543,6 +553,9 @@ class MultiMapAcc[R: AdRef](MapAcc[MultiAcc]):
     def __repr__(self) -> str:
         return f"A.{self.dim}m"
 
+    def get(self, adata: AnnData) -> AxisArrays | AxisArraysView:
+        return getattr(adata, f"{self.dim}m")
+
 
 @dataclass(frozen=True)
 class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](RefAcc[R, Idx2D, MuData | AnnData]):
@@ -654,6 +667,9 @@ class GraphMapAcc[R: AdRef](MapAcc[GraphAcc]):
 
     def __repr__(self) -> str:
         return f"A.{self.dim}p"
+
+    def get(self, adata: AnnData) -> PairwiseArrays | PairwiseArraysView:
+        return getattr(adata, f"{self.dim}p")
 
 
 # `R`’s bound can’t double as its default before PEP 696 (Python 3.13)
