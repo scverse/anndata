@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, get_args
 import pytest
 
 import anndata as ad
-from anndata.acc import A
+from anndata.acc import A, AdAcc, AdRef
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -61,3 +61,12 @@ def test_accessor_needs_0_14(
     assert not adata.unwriteable(compat=ad.WriteConfig(accessor=True))
     with pytest.raises(ValueError, match=r'Pass `compat="0.14"`'):
         getattr(adata, f"write_{diskfmt}")(diskfmt_store)
+
+
+def test_accessor_subclass_unwriteable() -> None:
+    """Writers are registered for exact types, so subclasses can’t be written."""
+
+    class MyRef(AdRef): ...
+
+    adata = ad.AnnData(shape=(3, 4), uns={"r": AdAcc(ref_class=MyRef).obsm["pca"][0]})
+    assert adata.unwriteable(compat="0.14")
