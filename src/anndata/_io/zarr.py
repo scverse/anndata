@@ -36,8 +36,8 @@ if TYPE_CHECKING:
 
     from .._types import _GroupStorageType
     from .._write_compat import WriteConfig
-    from ..types import WriteCompatStr
     from ..acc import AdRef, MapAcc, RefAcc
+    from ..types import WriteCompatStr
     from ..typing import RWAble
 
 from importlib.metadata import version
@@ -134,8 +134,13 @@ def write_zarr(
             f.attrs.setdefault("encoding-type", "anndata")
             f.attrs.setdefault("encoding-version", "0.1.0")
             write_dispatched(
-            f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs, compat=compat
-        )
+                f,
+                "/",
+                adata,
+                callback=callback,
+                dataset_kwargs=ds_kwargs,
+                compat=compat,
+            )
         if consolidate_metadata:
             with warnings.catch_warnings():
                 # Consolidated metadata will soon be a zarr convention/spec and should be safe to write.
