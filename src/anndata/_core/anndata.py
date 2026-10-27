@@ -21,18 +21,15 @@ from pandas.api.types import infer_dtype
 from scverse_misc import Deprecation, deprecated
 
 from anndata._core.access import ElementRef
-from anndata.types import SupportsArrayApiBase
 
 from .. import utils
 from .._settings import settings
 from .._warnings import ImplicitModificationWarning
 from ..compat import (
-    AwkArray,
     CSArray,
     CSMatrix,
     Empty,
     IndexManager,
-    XDataset,
     _move_adj_mtx,
     has_xp,
     old_positionals,
@@ -96,6 +93,7 @@ if TYPE_CHECKING:
         MultiAcc,
         RefAcc,
     )
+    from ..compat import XDataset
     from ..typing import AlignedArray, Index, Index1D, Storable, _Index, _Index1DNorm
     from .aligned_df import IntoAlignedDf
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
@@ -1529,72 +1527,16 @@ class AnnData:  # noqa: PLW1641
             While the return type may change to include richer output about which elements cannot be written,
             this new type's evaluation as a boolean will not change from the current behavior i.e.,
             `bool(adata.unwriteable())` will always evaluate the same.
+
+        See Also
+        --------
+        anndata.settings.validate_before_write
+            Run this check before every write and raise naming the elements that cannot be written.
         """
 
-        if _non_2d_message(self.X, name="X") is not None:
-            return True
-        for value in self.layers.values():
-            if _non_2d_message(value, name="layer") is not None:
-                return True
+        from anndata._io.specs.validate import iter_unwriteable
 
-        from anndata._io.specs.registry import _REGISTRY
-
-        writeable_elems = {
-            src_type
-            for (dest_type, src_type, __) in _REGISTRY.write
-            if store_type is None or store_type in dest_type.__module__
-        }
-
-        def predicate(  # noqa: PLR0911
-            elem: RWAble | Raw,
-            *,
-            accumulate: bool,
-            attr_name: AnnDataElem | None = None,
-        ):
-            if elem is None:
-                return accumulate
-            if isinstance(elem, AnnData):
-                return accumulate or elem.unwriteable(store_type=store_type)
-            if isinstance(elem, pd.Categorical):
-                return accumulate or predicate(elem.categories, accumulate=accumulate)
-            if isinstance(elem, pd.Series | pd.Index):
-                # matches behavior in methods.py
-                return accumulate or predicate(elem.values, accumulate=accumulate)
-            if isinstance(elem, AwkArray):
-                import awkward as ak
-
-                container = ak.to_buffers(ak.to_packed(elem))
-                return accumulate or any(
-                    predicate(v, accumulate=accumulate) for v in container[2].values()
-                )
-            if isinstance(elem, Raw):
-                return (
-                    accumulate
-                    or any(
-                        predicate(elem.var[col], accumulate=accumulate)
-                        for col in elem.var.columns
-                    )
-                    or any(
-                        predicate(v, accumulate=accumulate) for v in elem.varm.values()
-                    )
-                    or predicate(elem.X, accumulate=accumulate)
-                )
-            if isinstance(elem, pd.DataFrame):
-                accumulate = accumulate or any(
-                    predicate(elem[col], accumulate=accumulate) for col in elem.columns
-                )
-                return accumulate or predicate(elem.index, accumulate=accumulate)
-            if isinstance(elem, XDataset | Mapping):
-                return accumulate or any(
-                    predicate(v, accumulate=accumulate) for v in elem.values()
-                )
-            return (
-                (accumulate or type(elem) not in writeable_elems)
-                if not isinstance(elem, SupportsArrayApiBase)
-                else accumulate
-            )
-
-        return self._reduce(predicate, init=False)
+        return any(True for _ in iter_unwriteable(self, store_type=store_type))
 
     def var_names_make_unique(self, join: str = "-") -> None:
         # Important to go through the setter so obsm dataframes are updated too

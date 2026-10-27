@@ -18,6 +18,7 @@ from .._core.anndata import AnnData
 from .._core.file_backing import filename
 from .._core.sparse_dataset import BaseCompressedSparseDataset
 from .._core.storage import _check_x_and_layers_are_2d_on_write
+from .._settings import settings
 from ..compat import (
     CSMatrix,
     _clean_uns,
@@ -28,6 +29,7 @@ from ..experimental import read_dispatched
 from ..utils import iter_outer, warn
 from .specs import read_elem, write_elem
 from .specs.registry import IOSpec, write_spec
+from .specs.validate import raise_if_unwriteable
 from .utils import (
     _check_has_no_slash_key,
     _read_legacy_raw,
@@ -48,7 +50,7 @@ if TYPE_CHECKING:
 
 
 @no_write_dataset_2d
-def write_h5ad(
+def write_h5ad(  # noqa: PLR0912
     filepath: PathLike[str] | str,
     adata: AnnData,
     *,
@@ -77,6 +79,8 @@ def write_h5ad(
             adata.strings_to_categoricals(adata.raw.var)
     dataset_kwargs = {**dataset_kwargs, **kwargs}
     filepath = Path(filepath)
+    if settings.validate_before_write:
+        raise_if_unwriteable(adata, store_type="h5")
     mode = "a" if adata.isbacked else "w"
     if adata.isbacked:  # close so that we can reopen below
         adata.file.close()

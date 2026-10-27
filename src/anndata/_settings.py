@@ -31,6 +31,16 @@ class Settings(scverse_misc.Settings):
     auto_shard_zarr_v3: bool | None = True
     """Whether or not to use zarr's auto computation of sharding for v3.  For v2 this setting will be ignored. The setting will apply to all calls to anndata's writing mechanism (write_zarr / write_elem) and will **not** override any user-defined kwargs for shards."""
 
+    validate_before_write: bool = False
+    """\
+    Whether :func:`~anndata.io.write_h5ad` and :func:`~anndata.io.write_zarr` check every element
+    for a writer (see :meth:`~anndata.AnnData.unwriteable`) before creating the file or store.
+    When `True`, every unwritable element is reported in one error (an :exc:`ExceptionGroup` if
+    there are several) and nothing is written. When `False`, writing stops at the first unwritable
+    element, reports only that one, and may leave a partially written file;
+    the check itself costs a pass over the metadata (no data is loaded or copied).
+    """
+
     restrict_index_types: bool = True
     """
     Whether to force coercion to a string index upon declaration of the `AnnData` object or setting `obs`/`var`.
