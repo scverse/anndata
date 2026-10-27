@@ -1568,7 +1568,7 @@ class AnnData:  # noqa: PLW1641
             this new type's evaluation as a boolean will not change from the current behavior i.e.,
             `bool(adata.unwriteable())` will always evaluate the same.
         """
-        WriteCompat.or_config(compat)  # validate: no profile changes this check yet
+        compat = WriteCompat.or_config(compat)
         if _non_2d_message(self.X, name="X") is not None:
             return True
         for value in self.layers.values():
@@ -1576,6 +1576,9 @@ class AnnData:  # noqa: PLW1641
                 return True
 
         from anndata._io.specs.registry import _REGISTRY
+        from anndata.acc import AdRef, GraphAcc, LayerAcc, MultiAcc
+
+        acc_types = (AdRef, LayerAcc, MultiAcc, GraphAcc)
 
         writeable_elems = {
             src_type
@@ -1592,7 +1595,9 @@ class AnnData:  # noqa: PLW1641
             if elem is None:
                 return accumulate
             if isinstance(elem, AnnData):
-                return accumulate or elem.unwriteable(store_type=store_type)
+                return accumulate or elem.unwriteable(
+                    store_type=store_type, compat=compat
+                )
             if isinstance(elem, pd.Categorical):
                 return accumulate or predicate(elem.categories, accumulate=accumulate)
             if isinstance(elem, pd.Series | pd.Index):
@@ -1626,6 +1631,9 @@ class AnnData:  # noqa: PLW1641
                 return accumulate or any(
                     predicate(v, accumulate=accumulate) for v in elem.values()
                 )
+            if isinstance(elem, acc_types):
+                # writeable, but only with the `accessor` flag
+                return accumulate or not compat.accessor
             return (
                 (accumulate or type(elem) not in writeable_elems)
                 if not isinstance(elem, SupportsArrayApiBase)

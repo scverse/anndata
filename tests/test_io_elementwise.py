@@ -22,6 +22,7 @@ from zarr.storage import MemoryStore
 import anndata as ad
 from anndata._io.specs import _REGISTRY, IOSpec, get_spec
 from anndata._io.specs.registry import IORegistryError
+from anndata.acc import A
 from anndata.compat import CSArray, CSMatrix, DaskArray, _read_attr
 from anndata.experimental import read_elem_lazy
 from anndata.io import read_elem, write_elem
@@ -259,6 +260,18 @@ def test_io_spec_compressed_scalars(
 
     from_disk = read_elem(store[key])
     assert_equal(value, from_disk)
+
+
+@pytest.mark.parametrize(
+    "ref",
+    [A.obsm["pca"][0], A.obsm["pca"], A.X[:, "gene-5"], A.obs["ct"], A.obs.index],
+    ids=str,
+)
+def test_accessor_roundtrip(store: _GroupStorageType, ref: object) -> None:
+    """`anndata.acc` accessors round-trip via their `to_json` form."""
+    write_elem(store, "ref", ref, compat="0.14")
+    assert _read_attr(store["ref"].attrs, "encoding-type") == "accessor"
+    assert read_elem(store["ref"]) == ref
 
 
 # Can't instantiate cupy types at the top level, so converting them within the test

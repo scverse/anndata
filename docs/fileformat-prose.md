@@ -332,6 +332,36 @@ pca/variance_ratio <zarr.core.Array '/uns/pca/variance_ratio' (50,) float64 read
 * Each mapping MUST be its own group
 * The group's metadata MUST contain the encoding metadata `"encoding-type": "dict"`, `"encoding-version": "0.1.0"`
 
+(acc-encoding)=
+## Accessors
+
+{mod}`anndata.acc` accessors –
+references to a vector or container within an `AnnData`, such as `A.obsm["pca"][0]` –
+are stored as their {meth}`~anndata.acc.AdAcc.to_json` form –
+a list of strings, integers and nulls
+described by [`acc-schema-v1.json`](acc-schema-v1.json){.external} –
+serialized to a JSON string.
+
+```python
+>>> store["uns/ref"]  # uns["ref"] == A.obsm["pca"][0]
+<HDF5 dataset "ref": shape (), type "|O">
+>>> store["uns/ref"].asstr()[()]
+'["obsm","pca",0]'
+```
+
+(accessor)=
+### Accessor specifications (v0.1.0)
+
+* Each accessor MUST be stored as a scalar {ref}`string <scalars>`,
+  i.e. a 0-dimensional array of variable-length UTF-8 strings
+* The array's metadata MUST contain the encoding metadata `"encoding-type": "accessor"`, `"encoding-version": "0.1.0"`
+* The string MUST be a JSON document that validates against `#/$defs/ref` or `#/$defs/acc`
+  of [`acc-schema-v1.json`](acc-schema-v1.json){.external}
+
+In zarr v3, this is byte-for-byte the layout of the `json` data type ({pr}`zarr-developers/zarr-extensions#9`)
+(which also uses the `vlen-utf8` codec),
+so only the `data_type` metadata will need to change once zarr implementations support it.
+
 (scalars)=
 ## Scalars
 
