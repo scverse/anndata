@@ -1568,8 +1568,7 @@ class AnnData:  # noqa: PLW1641
             this new type's evaluation as a boolean will not change from the current behavior i.e.,
             `bool(adata.unwriteable())` will always evaluate the same.
         """
-        if isinstance(compat, str):
-            WriteCompat(compat)  # validate: no profile changes this check yet
+        WriteCompat.or_config(compat)  # validate: no profile changes this check yet
         if _non_2d_message(self.X, name="X") is not None:
             return True
         for value in self.layers.values():
