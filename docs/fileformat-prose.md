@@ -628,13 +628,16 @@ and `bytes` are written as strings.
 Set {attr}`anndata.settings.validate_before_write` to check every element of an
 {class}`~anndata.AnnData` object against this table before anything is written;
 {meth}`~anndata.AnnData.unwriteable` runs the same check and returns a boolean.
-A partial write with `use=` checks only the elements it writes.
 The check looks at types, dtypes and shapes: it finds elements and dataframe columns
 without a writer, object columns that cannot be converted, non-2D `X`/layers,
 invalid keys, reference cycles, and dataframe structure problems (reserved, invalid
 or duplicate names, `MultiIndex`). It reads no backed data, computes no lazy arrays
 and materialises no indexes; only object-dtype columns are scanned (and converted,
 which allocates), because only their values tell.
+A partial write with `use=` checks only the elements it writes, and does not check
+shapes: as without the check, a non-2D `X` or layer passed to `use=` is written
+on `zarr`, while `h5ad` refuses any partial write of an object with a non-2D `X`
+or layer, even an unrelated one.
 It cannot see what the writers only find out while writing: backend, codec and IO
 failures, a column that shares its name with the index but holds different values,
 and data a backend refuses although a writer is registered for its type
