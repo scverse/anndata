@@ -1552,6 +1552,21 @@ class AnnData:  # noqa: PLW1641
         --------
         anndata.settings.validate_before_write
             Run this check before every write and raise naming the elements that cannot be written.
+
+        Notes
+        -----
+        The check judges types, dtypes, shapes and settings as the writers see them,
+        after :meth:`strings_to_categoricals`: elements and dataframe columns without a writer
+        (see :ref:`type-mapping`), object columns that cannot be converted, non-2-D `X`/layers,
+        invalid keys, reference cycles, and dataframe structure problems
+        (reserved, invalid or duplicate names, :class:`~pandas.MultiIndex`).
+        It reads no backed data, computes no lazy arrays and materialises no indexes;
+        only object-dtype columns are scanned (and converted, which allocates).
+        It cannot see what the writers only find out while writing:
+        backend, codec and IO failures, a column that shares its name with the index
+        but holds different values, and data a backend refuses although a writer is
+        registered for its type (h5py refuses `datetime64`/`timedelta64` data,
+        e.g. datetime categories on `h5ad`).
         """
 
         from anndata._io.specs.validate import iter_unwriteable

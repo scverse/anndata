@@ -606,7 +606,7 @@ with an error naming the column, its dtype, and what to convert it to.
 | In-memory column | On disk |
 |---|---|
 | numpy numeric, boolean, or complex array | `array` |
-| {class}`~pandas.Categorical` | `categorical`, with the categories stored as `categories.to_numpy()`: string, numeric and boolean categories work on both formats, datetime and timedelta categories only on `zarr`. Interval, period and tz-aware datetime categories become arbitrary objects, which `h5ad` cannot store and `zarr` stores as strings; the preflight check below refuses them on both formats. Object-dtype categories are assumed to hold strings and are not checked value by value |
+| {class}`~pandas.Categorical` | `categorical`, with the categories stored as `categories.to_numpy()`: string, numeric and boolean categories work on both formats, datetime and timedelta categories only on `zarr`. Interval, period and tz-aware datetime categories become arbitrary objects, which `h5ad` cannot store and `zarr` stores as strings ({meth}`~anndata.AnnData.unwriteable` refuses interval categories on `zarr` too). Object-dtype categories are assumed to hold strings and are not checked value by value |
 | nullable integer (`Int8` … `UInt64`) | `nullable-integer` |
 | nullable boolean (`boolean`) | `nullable-boolean` |
 | nullable string (`string`, `string[pyarrow]`, `str`) | `nullable-string-array`; see {attr}`anndata.settings.allow_write_nullable_strings` |
@@ -619,47 +619,12 @@ with an error naming the column, its dtype, and what to convert it to.
 | datetime / timedelta (naive or tz-aware) | not supported yet, see {issue}`2238`: convert e.g. with `.astype(str)` or `.astype("int64")` |
 | pyarrow-backed numeric, boolean, timestamp, list, … (`int64[pyarrow]`, …) | not supported: `.convert_dtypes(dtype_backend="numpy_nullable")` or `.astype(...)` |
 | `Period`, `Interval`, `Sparse`, any other extension array | not supported, unless a writer has been registered for it |
+| object-dtype index | neither converted nor checked: strings are written as `string-array`, other objects fail on `h5ad` and are stored as strings on `zarr` |
 
 The object-dtype conversions are a canonicalisation, not a lossless round trip:
 the different missing markers (`None`, `pd.NA`, `NaN`) collapse into one,
 floats are written as `float64`, a mix of integers and floats loses the per-value type,
 and `bytes` are written as strings.
-
-Set {attr}`anndata.settings.validate_before_write` to check every element of an
-{class}`~anndata.AnnData` object against this table before anything is written;
-{meth}`~anndata.AnnData.unwriteable` runs the same check and returns a boolean.
-The check looks at types, dtypes and shapes: it finds elements and dataframe columns
-without a writer, object columns that cannot be converted, non-2D `X`/layers,
-invalid keys, reference cycles, and dataframe structure problems (reserved, invalid
-or duplicate names, `MultiIndex`). It reads no backed data, computes no lazy arrays
-and materialises no indexes; only object-dtype columns are scanned (and converted,
-which allocates), because only their values tell.
-A partial write with `use=` checks only the elements it writes, and does not check
-shapes: as without the check, a non-2D `X` or layer passed to `use=` is written
-on `zarr`, while `h5ad` refuses any partial write of an object with a non-2D `X`
-or layer, even an unrelated one.
-It cannot see what the writers only find out while writing: backend, codec and IO
-failures, a column that shares its name with the index but holds different values,
-and data a backend refuses although a writer is registered for its type
-(h5py refuses `datetime64`/`timedelta64` data, for example datetime categories or
-datetime arrays in `uns` on `h5ad`). These can still fail mid-write.
-
-If the check finds a single problem, it raises that problem's exception:
-{exc}`TypeError` for an unconvertible column or an invalid key, {exc}`ValueError`
-for a structural problem, and anndata's registry error for a missing writer.
-These are the types the writers raise, except that writing a non-string key raises
-{exc}`AttributeError` and a reference cycle {exc}`RecursionError`.
-Several problems are raised together as an {exc}`ExceptionGroup` whose message lists
-their paths and whose members keep their types, so they can be handled with `except*`:
-
-```python
-try:
-    adata.write_h5ad("out.h5ad")
-except* TypeError as unconvertible:
-    ...  # columns to convert, keys to rename
-except* ValueError as structural:
-    ...
-```
 
 (awkward-array)=
 ## AwkwardArrays

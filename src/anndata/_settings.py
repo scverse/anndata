@@ -32,7 +32,11 @@ class Settings(scverse_misc.Settings):
     """Whether or not to use zarr's auto computation of sharding for v3.  For v2 this setting will be ignored. The setting will apply to all calls to anndata's writing mechanism (write_zarr / write_elem) and will **not** override any user-defined kwargs for shards."""
 
     validate_before_write: bool = False
-    """Whether :func:`~anndata.io.write_h5ad` and :func:`~anndata.io.write_zarr` check every element for a writer (like :meth:`~anndata.AnnData.unwriteable`) before creating the file, and raise all problems at once (several as an :exc:`ExceptionGroup`). The check is best effort, see :ref:`type-mapping`."""
+    """
+    Whether :func:`~anndata.io.write_h5ad` and :func:`~anndata.io.write_zarr` check every element like :meth:`~anndata.AnnData.unwriteable` before writing anything (with `use=`, only the elements written), and raise all problems at once.
+    One problem raises its own exception, of the type the writer would raise: :exc:`TypeError` for an unconvertible column or an invalid key (the writer raises :exc:`AttributeError` for a non-`str` key), :exc:`ValueError` for a structural problem or a reference cycle (the writer recurses until :exc:`RecursionError`), :exc:`RuntimeError` for nullable strings that need :attr:`anndata.settings.allow_write_nullable_strings`, and anndata's registry error for a missing writer.
+    Several raise an :exc:`ExceptionGroup` whose members keep their types, so `except* TypeError` and `except* ValueError` can handle some of them; the rest, such as missing writers, propagate.
+    """
 
     restrict_index_types: bool = True
     """
