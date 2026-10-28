@@ -54,6 +54,7 @@ from ..utils import _get_display_path, add_key_note
 from .dataframe_columns import (
     UnsupportedColumnTypeError,
     add_column_note,
+    check_categories_writable,
     normalize_column,
 )
 from .registry import _REGISTRY, IORegistryError, IOSpec, read_elem, read_elem_partial
@@ -1156,7 +1157,7 @@ def write_dataframe(
         try:
             values = normalize_column(series._values, path=str(colname))
         except UnsupportedColumnTypeError as e:
-            # match the note `write_elem` would have added for this column
+            # the note `write_elem` would have added
             add_key_note(e, group, _get_display_path(group), str(colname), "writ")
             raise
         try:
@@ -1268,6 +1269,7 @@ def write_categorical(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
+    check_categories_writable(v.categories[:0], path=k)
     g = f.require_group(k)
     g.attrs["ordered"] = bool(v.ordered)
 

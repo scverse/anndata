@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_string_dtype
 
 from ...compat import PANDAS_STRING_ARRAY_TYPES
 
@@ -24,7 +25,12 @@ if TYPE_CHECKING:
     from pandas.api.extensions import ExtensionArray
 
 
-__all__ = ["UnsupportedColumnTypeError", "add_column_note", "normalize_column"]
+__all__ = [
+    "UnsupportedColumnTypeError",
+    "add_column_note",
+    "check_categories_writable",
+    "normalize_column",
+]
 
 
 class UnsupportedColumnTypeError(TypeError):
@@ -93,7 +99,7 @@ def normalize_column(
         if values.dtype == object:
             return _object_column_to_writable(values, path)
         return values
-    # exact check: `StringArray` subclasses `NumpyExtensionArray` and has its own writer
+    # `StringArray` subclasses `NumpyExtensionArray` but has its own writer
     if type(values) is pd.arrays.NumpyExtensionArray:
         return normalize_column(values.to_numpy(), path=path)
     return values
@@ -125,7 +131,7 @@ def _column_hint(values: np.ndarray | ExtensionArray) -> str:
         return _DATETIME_HINT
     if isinstance(values, pd.arrays.FloatingArray):
         return _NULLABLE_FLOAT_HINT
-    # `ArrowStringArray` is an `ArrowExtensionArray`, but has a writer
+    # `ArrowStringArray` has a writer, other arrow arrays do not
     if isinstance(values, pd.arrays.ArrowExtensionArray) and not isinstance(
         values, tuple(PANDAS_STRING_ARRAY_TYPES)
     ):
@@ -143,19 +149,37 @@ def add_column_note(
     )
 
 
-# Object-dtype columns that pandas infers as integer, boolean, or floating
-# (e.g. `np.array([1, 2, None, 3])`) have an unambiguous on-disk representation.
+def check_categories_writable(categories: pd.Index, *, path: str) -> None:
+    """\
+    Raise if a categorical's categories have no faithful on-disk representation.
+
+    The categorical writer stores ``categories.to_numpy()``. For intervals,
+    periods and tz-aware datetimes that is an object array of Python objects,
+    which zarr would store as strings and h5py refuses.
+    Only the dtype is inspected, so an empty slice of the categories will do.
+    """
+    if categories[:0].to_numpy().dtype == object and not is_string_dtype(
+        categories.dtype
+    ):
+        msg = (
+            f"Cannot write categories of column {path!r} (dtype {categories.dtype}): "
+            "they have no on-disk representation. Convert the categories first, "
+            "e.g. with `.cat.rename_categories(str)`."
+        )
+        raise TypeError(msg)
+
+
+# object columns with one unambiguous on-disk type, by `infer_dtype` kind
 _OBJECT_COLUMN_CONVERSIONS: Mapping[
     str, tuple[pd.Int64Dtype | pd.BooleanDtype | pd.Float64Dtype, np.dtype | None]
 ] = MappingProxyType({
     "integer": (pd.Int64Dtype(), np.dtype(np.int64)),
     "boolean": (pd.BooleanDtype(), np.dtype(np.bool_)),
-    # Nullable floating point is not a supported on-disk type,
-    # so always fall back to numpy float64 with NaN, like pandas would for non-object input.
+    # no nullable float on disk: numpy float64 with NaN, as pandas does
     "floating": (pd.Float64Dtype(), None),
     "mixed-integer-float": (pd.Float64Dtype(), None),
 })
-# On x86 `np.longdouble` is 80-bit, so even small values may not fit float64 exactly
+# 80-bit on x86: even small values may not fit float64
 _LONGDOUBLE_IS_WIDER = np.finfo(np.longdouble).nmant > np.finfo(np.float64).nmant
 
 
@@ -179,7 +203,7 @@ def _object_column_to_writable(
     """
     kind = pd.api.types.infer_dtype(values, skipna=True)
     if (conversion := _OBJECT_COLUMN_CONVERSIONS.get(kind)) is None:
-        # The string writers handle (mixtures of) str and bytes without missing values
+        # the string writers take str/bytes mixtures without missing values
         if (
             len(values) == 0
             or pd.api.types.infer_dtype(values, skipna=False) in {"string", "bytes"}
@@ -199,9 +223,7 @@ def _object_column_to_writable(
             kind == "integer"
             and pd.api.types.infer_dtype(values, skipna=False) == "integer"
         ):
-            # No missing values at all, so a direct cast is cheapest and lossless.
-            # (Only done for ints: a bool cast would turn None into False, and
-            # numpy casts some missing markers, e.g. complex NaN, to an int.)
+            # ints only: a bool cast turns None into False
             assert numpy_dtype is not None
             return values.astype(numpy_dtype)
         converted = pd.array(values, dtype=nullable_dtype)
@@ -216,18 +238,15 @@ def _object_column_to_writable(
     if numpy_dtype is not None:
         return converted if converted.isna().any() else converted.to_numpy(numpy_dtype)
     floats = converted.to_numpy(dtype=np.float64, na_value=np.nan)
-    # float64 holds integers below 2**53 and all float64/float32 values exactly, so only
-    # larger magnitudes need checking (missing values are NaN here and fail the cutoff,
-    # ±inf pass the comparison below). Extended-precision scalars can be rounded at any
-    # magnitude, so if any are present every value is checked.
+    # only magnitudes >= 2**53 can lose precision in float64
     suspect = np.abs(floats) >= 2.0**53
     if _LONGDOUBLE_IS_WIDER and any(
         issubclass(t, np.longdouble) for t in {type(v) for v in values}
     ):
+        # extended precision can be rounded at any magnitude
         suspect = ~np.isnan(floats)
     if suspect.any():
-        # Python compares int and float exactly, numpy scalars do not (they promote to
-        # float64), so compare Python scalars
+        # numpy scalars promote to float64 on comparison, Python ints do not
         original = (
             x.item() if isinstance(x, np.generic) else x for x in values[suspect]
         )

@@ -1,32 +1,23 @@
 """\
-Best-effort preflight check of an :class:`~anndata.AnnData` object before writing.
+Preflight check of an :class:`~anndata.AnnData` object before writing.
 
-The walker in this module visits every element the writers would visit,
-inspects its *type* (plus cheap metadata such as dtypes and shapes) and asks
-the IO registry whether a writer exists, without writing anything.
-It backs :meth:`anndata.AnnData.unwriteable` and, when
-:attr:`anndata.settings.validate_before_write` is set, runs at the start of
+The walk visits every element the writers would visit, inspects its type and
+cheap metadata (dtypes, shapes), and asks the IO registry for a writer.
+It backs :meth:`anndata.AnnData.unwriteable` and, with
+:attr:`anndata.settings.validate_before_write`, runs at the start of
 :func:`~anndata.io.write_h5ad` and :func:`~anndata.io.write_zarr`.
 
-What it catches: elements and dataframe columns with no registered writer,
-object columns that cannot be converted, non-2D ``X``/layers, and dataframe
-structure problems (reserved or invalid names, duplicate columns, index-name
-collisions, unsupported index types).
-What it does not catch: backend, codec and IO failures, and writers that
-reject particular *values* rather than types (e.g. a categorical with
-datetime categories on h5ad). Those can still fail mid-write.
+Caught: missing writers, unconvertible object columns, refused categories,
+non-2D ``X``/layers, invalid or duplicate names, unsupported index types.
+Not caught: backend, codec and IO failures, and writers that reject values
+rather than types.
 
-Design rule (the "never materialise" contract): the walk inspects types and
-metadata only. It never loads data from a backed file, computes a dask array,
-densifies, subsets a view's payload, copies a dataframe, materialises an index
-(e.g. a `RangeIndex`), packs an awkward array, or exports an array-API array;
-it must not allocate in proportion to the size of the data. The one exception
-is an object-dtype dataframe column, whose values have to be scanned (and, for
-a view, selected along the view's axis) to find out whether they are
-writable; that allocation is bounded by the column, not by the dataset.
-Consequently, one check of `write_dataframe` is *not* made here: whether a
-column that shares its name with the index holds the same values as the index.
-That is a value comparison and stays a writer-time error.
+The walk never materialises data: no reads from backed files, no dask
+computation, no densifying, no subsetting of a view's payload, no dataframe
+copies, no index materialisation, no awkward packing, no DLPack export.
+Only object-dtype columns are scanned (for a view, along its selection),
+an allocation bounded by the column. Whether a column named like the index
+holds the index's values is therefore left to the writer.
 """
 
 from __future__ import annotations
@@ -40,7 +31,6 @@ import h5py
 import numpy as np
 import pandas as pd
 import zarr
-from pandas.api.types import is_string_dtype
 
 from anndata._core.aligned_mapping import _on_disk_x
 from anndata._core.anndata import AnnData
@@ -51,31 +41,33 @@ from anndata.compat import XDataset, has_xp
 from anndata.utils import iter_outer
 
 from ..utils import check_key
-from .dataframe_columns import add_column_note, normalize_column
+from .dataframe_columns import (
+    add_column_note,
+    check_categories_writable,
+    normalize_column,
+)
 from .registry import _REGISTRY, IORegistryError, _iter_patterns
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Hashable
     from typing import Literal
 
     from pandas.api.extensions import ExtensionArray
 
     from ..._types import _GroupStorageType
 
+    type Problems = Generator[tuple[str, Exception]]
+    type GroupTypes = tuple[type[_GroupStorageType], ...]
+
 
 __all__ = ["iter_unwriteable", "raise_if_unwriteable"]
 
 
-_STORE_TYPES: Mapping[str, tuple[type[_GroupStorageType], ...]] = MappingProxyType({
+_GROUP_TYPES: Mapping[str, GroupTypes] = MappingProxyType({
     "h5": (h5py.Group,),
     "zarr": (zarr.Group,),
 })
-
-
-def _dest_types(store_type: Literal["h5", "zarr"] | None) -> tuple[type, ...]:
-    if store_type is None:
-        return tuple(t for ts in _STORE_TYPES.values() for t in ts)
-    return _STORE_TYPES[store_type]
+_ALIGNED_MAPPINGS = frozenset({"layers", "obsm", "varm", "obsp", "varp"})
 
 
 def iter_unwriteable(
@@ -83,25 +75,23 @@ def iter_unwriteable(
     *,
     store_type: Literal["h5", "zarr"] | None = None,
     path: str = "/",
-) -> Generator[tuple[str, Exception]]:
+) -> Problems:
     """\
     Yield ``(path, exception)`` for every part of `elem` that cannot be written.
 
-    `elem` is an :class:`~anndata.AnnData`, a :class:`~anndata.Raw`,
-    a dataframe, a dict, or a single element.
-    Paths are slash-separated like the keys in a file (``/obs/cluster``),
-    and are also attached to each exception as a note.
-    Each exception is what writing that part would (roughly) have raised.
-    See the module docstring for what is and is not caught.
-
     Parameters
     ----------
+    elem
+        An :class:`~anndata.AnnData`, :class:`~anndata.Raw`, dataframe, dict,
+        or single element.
     store_type
-        Which backing store to check against; `None` means the element only
-        needs a writer for one of them.
+        Which backing store to check against;
+        `None` means a writer for either store suffices.
+    path
+        Slash-separated location of `elem`, used in the yielded paths
+        and attached to each exception as a note.
     """
-    dests = _dest_types(store_type)
-    yield from _walk(elem, dests, path)
+    yield from _walk(elem, _group_types(store_type), path)
 
 
 def raise_if_unwriteable(
@@ -110,12 +100,12 @@ def raise_if_unwriteable(
     """\
     Raise if any part of `adata` cannot be written, before anything is written.
 
-    A single problem raises the exception for that part
-    (an :exc:`~anndata._io.specs.registry.IORegistryError` for a missing writer,
-    a :exc:`TypeError` for an unconvertible column or an invalid key, a
-    :exc:`ValueError` for a structural problem). Several problems are raised
-    together as an :exc:`ExceptionGroup` whose message lists their paths and
-    whose members keep their types; catch those with ``except*``.
+    One problem raises its own exception
+    (:exc:`~anndata._io.specs.registry.IORegistryError` for a missing writer,
+    :exc:`TypeError` for an unconvertible column or invalid key,
+    :exc:`ValueError` for a structural problem).
+    Several problems raise an :exc:`ExceptionGroup` listing their paths;
+    catch those with ``except*``.
     """
     errors = list(iter_unwriteable(adata, store_type=store_type))
     if not errors:
@@ -127,198 +117,193 @@ def raise_if_unwriteable(
     raise ExceptionGroup(msg, [e for _, e in errors])
 
 
-def _join(path: str, key: object) -> str:
+def _group_types(store_type: Literal["h5", "zarr"] | None) -> GroupTypes:
+    if store_type is None:
+        return tuple(t for ts in _GROUP_TYPES.values() for t in ts)
+    return _GROUP_TYPES[store_type]
+
+
+def _child_path(path: str, key: object) -> str:
     return f"{path.rstrip('/')}/{key}"
 
 
-def _with_path[E: Exception](e: E, path: str) -> E:
+def _note_path[E: Exception](e: E, path: str) -> E:
     e.add_note(f"Element: {path}")
     return e
 
 
-def _registered(elem: object, dests: tuple[type, ...]) -> bool:
+def _has_writer(elem: object, group_types: GroupTypes) -> bool:
     return any(
-        _REGISTRY.has_write(dest, pattern, frozenset())
-        for dest in dests
+        _REGISTRY.has_write(group_type, pattern, frozenset())
+        for group_type in group_types
         for pattern in _iter_patterns(elem)
     )
 
 
-def _registry_miss(elem: object, dests: tuple[type, ...], path: str) -> Exception:
-    e = IORegistryError._from_write_parts(dests[0], type(elem), frozenset())
-    return _with_path(e, path)
+def _missing_writer_error(
+    elem: object, group_types: GroupTypes, path: str
+) -> IORegistryError:
+    e = IORegistryError._from_write_parts(group_types[0], type(elem), frozenset())
+    return _note_path(e, path)
 
 
-def _slash_forbidden(dests: tuple[type, ...]) -> bool:
-    """Whether `write_elem` would refuse a key containing a slash for every destination."""
+def _slash_forbidden(group_types: GroupTypes) -> bool:
     return all(
-        dest is zarr.Group or settings.disallow_forward_slash_in_h5ad for dest in dests
+        group_type is zarr.Group or settings.disallow_forward_slash_in_h5ad
+        for group_type in group_types
     )
 
 
-def _walk(
-    elem: object,
-    dests: tuple[type, ...],
-    path: str,
-    ancestors: frozenset[int] = frozenset(),
-) -> Generator[tuple[str, Exception]]:
-    # The branches mirror the writers' dispatch: whatever `write_elem` would do
-    # with `elem` decides what is inspected here. `ancestors` holds the ids of
-    # the containers on the current branch, so a cycle is reported once and the
-    # branch stopped (the writers would recurse until `RecursionError`).
-    if elem is None:
-        return
-    if isinstance(elem, AnnData | Raw | XDataset | Mapping | list | tuple):
-        if id(elem) in ancestors:
-            msg = f"{type(elem).__name__} at {path!r} contains itself (reference cycle)"
-            yield path, _with_path(ValueError(msg), path)
-            return
-        ancestors = ancestors | {id(elem)}
-    if isinstance(elem, list | tuple):
-        # `normalize_nested` recurses into sequences (registry.py:53-58) before the
-        # registry sees the sequence as one element (e.g. `np.array([(1, 2), (3, 4)])`),
-        # so a cycle through a list or tuple would recurse forever too. Only cycles
-        # are looked for in the members; they are not validated individually.
-        yield from _sequence_cycles(elem, path, ancestors)
-    if isinstance(elem, AnnData):
-        yield from _walk_anndata(elem, dests, path, ancestors)
-    elif isinstance(elem, Raw):
-        yield from _walk_raw(elem, dests, path, ancestors)
-    elif isinstance(elem, pd.DataFrame):
-        yield from _walk_dataframe(elem, dests, path)
-    elif isinstance(elem, pd.Categorical):
-        yield from _walk_categorical(elem, dests, path)
-    elif isinstance(elem, dict) or (
-        isinstance(elem, XDataset | Mapping) and _registered(elem, dests)
-    ):
-        # `normalize_nested` turns any dict subclass into a plain dict, which
-        # has a writer that writes each item; other mappings need their own
-        for key, value in elem.items():
-            normalized = _check_mapping_key(key, path, dests)
-            if isinstance(normalized, Exception):
-                key_path = _join(path, key)
-                yield key_path, _with_path(normalized, key_path)
-                continue
-            # descend with the key as the writer would store it (`/uns/foo` -> `foo`)
-            yield from _walk(value, dests, _join(path, normalized), ancestors)
-    else:
-        yield from _walk_leaf(elem, dests, path)
-
-
-def _sequence_cycles(
-    seq: list | tuple | Mapping, path: str, ancestors: frozenset[int]
-) -> Generator[tuple[str, Exception]]:
-    """Report containers inside a sequence that are already on the current branch."""
-    members = seq.items() if isinstance(seq, Mapping) else enumerate(seq)
-    for key, item in members:
-        if not isinstance(item, Mapping | list | tuple):
-            continue
-        item_path = _join(path, key)
-        if id(item) in ancestors:
-            msg = f"{type(item).__name__} at {item_path!r} contains itself (reference cycle)"
-            yield item_path, _with_path(ValueError(msg), item_path)
-            continue
-        yield from _sequence_cycles(item, item_path, ancestors | {id(item)})
-
-
-def _check_mapping_key(
-    key: object, path: str, dests: tuple[type, ...]
-) -> str | Exception:
-    """\
-    Mirror what `Writer.write_elem` does with a key written into the group at `path`.
-
-    Returns the key as it would be stored, or the exception the writer would raise.
-
-    See `registry.py`: a non-string key fails at `k.startswith("/")`; an absolute key
-    is made relative to the group (`PurePosixPath(k).relative_to(store.name)`, which
-    rejects keys outside it); a remaining slash is refused for zarr and, depending on
-    `settings.disallow_forward_slash_in_h5ad`, for h5ad.
-    """
+def _stored_key(key: object, path: str, group_types: GroupTypes) -> str:
+    """Return `key` as `Writer.write_elem` would store it under `path`, or raise."""
     if not isinstance(key, str):
         msg = f"{key!r} of type {type(key)} is an invalid key. Should be str."
-        return TypeError(msg)
+        raise TypeError(msg)
     if key.startswith("/"):
         try:
             key = str(PurePosixPath(key).relative_to(path, walk_up=False))
         except ValueError:
             msg = f"{key!r} is not in the subpath of {path!r}"
-            return ValueError(msg)
-    if "/" in key and _slash_forbidden(dests):
-        msg = f"Forward slashes are not allowed in keys in {dests[0]}"
-        return ValueError(msg)
+            raise ValueError(msg) from None
+    if "/" in key and _slash_forbidden(group_types):
+        msg = f"Forward slashes are not allowed in keys in {group_types[0]}"
+        raise ValueError(msg)
     return key
 
 
-def _walk_leaf(
-    elem: object, dests: tuple[type, ...], path: str
-) -> Generator[tuple[str, Exception]]:
-    # `to_writeable` turns DLPack-capable array-API arrays into numpy arrays at
-    # write time; never export them here, just accept them
+def _walk(
+    elem: object,
+    group_types: GroupTypes,
+    path: str,
+    ancestors: frozenset[int] = frozenset(),
+) -> Problems:
+    """Dispatch like `write_elem`; `ancestors` are the containers on this branch."""
+    if elem is None:
+        return
+    if isinstance(elem, AnnData | Raw | XDataset | Mapping | list | tuple):
+        if id(elem) in ancestors:
+            msg = f"{type(elem).__name__} at {path!r} contains itself (reference cycle)"
+            yield path, _note_path(ValueError(msg), path)
+            return
+        ancestors = ancestors | {id(elem)}
+    if isinstance(elem, list | tuple):
+        # the list writer stores the whole sequence; only cycles matter here
+        yield from _sequence_cycles(elem, path, ancestors)
+    if isinstance(elem, AnnData):
+        yield from _walk_anndata(elem, group_types, path, ancestors)
+    elif isinstance(elem, Raw):
+        yield from _walk_raw(elem, group_types, path, ancestors)
+    elif isinstance(elem, pd.DataFrame):
+        yield from _walk_dataframe(elem, group_types, path)
+    elif isinstance(elem, pd.Categorical):
+        yield from _walk_categorical(elem, group_types, path)
+    elif isinstance(elem, dict) or (
+        isinstance(elem, XDataset | Mapping) and _has_writer(elem, group_types)
+    ):
+        # `normalize_nested` turns dict subclasses into dicts
+        for key, value in elem.items():
+            try:
+                stored = _stored_key(key, path, group_types)
+            except (TypeError, ValueError) as e:
+                yield _child_path(path, key), _note_path(e, _child_path(path, key))
+                continue
+            yield from _walk(value, group_types, _child_path(path, stored), ancestors)
+    else:
+        yield from _walk_leaf(elem, group_types, path)
+
+
+def _sequence_cycles(
+    seq: list | tuple | Mapping, path: str, ancestors: frozenset[int]
+) -> Problems:
+    """Report containers inside `seq` that are already on the current branch."""
+    members = seq.items() if isinstance(seq, Mapping) else enumerate(seq)
+    for key, item in members:
+        if not isinstance(item, Mapping | list | tuple):
+            continue
+        item_path = _child_path(path, key)
+        if id(item) in ancestors:
+            msg = f"{type(item).__name__} at {item_path!r} contains itself (reference cycle)"
+            yield item_path, _note_path(ValueError(msg), item_path)
+            continue
+        yield from _sequence_cycles(item, item_path, ancestors | {id(item)})
+
+
+def _walk_leaf(elem: object, group_types: GroupTypes, path: str) -> Problems:
+    # `to_writeable` converts these via DLPack at write time
     if has_xp(elem) and not isinstance(elem, np.ndarray):
         return
-    if not _registered(elem, dests):
-        yield path, _registry_miss(elem, dests, path)
-
-
-_ALIGNED_MAPPINGS = frozenset({"layers", "obsm", "varm", "obsp", "varp"})
+    if not _has_writer(elem, group_types):
+        yield path, _missing_writer_error(elem, group_types, path)
 
 
 def _walk_anndata(
-    adata: AnnData, dests: tuple[type, ...], path: str, ancestors: frozenset[int]
-) -> Generator[tuple[str, Exception]]:
-    # For a view, indexing `X`, `layers`, `obsm`, … or `raw.X` subsets the parent's
-    # payload, so those are inspected on the parent (same keys, same types; a
-    # dataframe's columns are judged on the parent's values). The view's own
-    # `obs`/`var` (materialised when the view was made) and `uns` are inspected
-    # directly.
+    adata: AnnData, group_types: GroupTypes, path: str, ancestors: frozenset[int]
+) -> Problems:
+    # indexing a view's X/layers/obsm/… subsets the parent's payload
     payload_source = adata._adata_ref if adata.is_view else adata
     assert payload_source is not None
     for attr_name, attr in iter_outer(adata):
-        attr_path = _join(path, attr_name)
+        attr_path = _child_path(path, attr_name)
         if attr_name == "uns":
             assert isinstance(attr, Mapping)
-            # the writer copies `uns` into a plain dict; remember the original too
-            yield from _walk(dict(attr), dests, attr_path, ancestors | {id(attr)})
+            yield from _walk(dict(attr), group_types, attr_path, ancestors | {id(attr)})
         elif attr_name in _ALIGNED_MAPPINGS:
-            stored: Mapping[str | None, object] = getattr(payload_source, attr_name)
-            # the writers refuse slashes in these keys up front (`_check_has_no_slash_key`)
-            if any(isinstance(k, str) and "/" in k for k in stored):
-                slash_msg = f"Forward slashes are not allowed in keys in {attr_name}"
-                yield attr_path, _with_path(ValueError(slash_msg), attr_path)
-            for key, value in stored.items():
-                if key is None and attr_name == "layers":
-                    # `.X` is stored under `layers[None]`; only the AnnData writers
-                    # give that slot a name (methods.py:390-391, h5ad.py:108-111)
-                    name, elem_path = "X", _join(path, "X")
-                else:
-                    name, elem_path = f"Layer {key!r}", _join(attr_path, key)
-                    if not isinstance(key, str):  # slashes were reported above
-                        key_error = _check_mapping_key(key, attr_path, dests)
-                        assert isinstance(key_error, Exception)
-                        yield elem_path, _with_path(key_error, elem_path)
-                        continue
-                if attr_name == "layers" and (
-                    (msg := _non_2d_message(value, name=name)) is not None
-                ):
-                    yield elem_path, _with_path(ValueError(msg), elem_path)
-                    continue
-                if isinstance(value, pd.DataFrame) and adata.is_view:
-                    # the view writes a row (obsm/obsp) or column (varm/varp)
-                    # selection of this dataframe: judge object columns on that
-                    rows = adata._oidx if attr_name.startswith("obs") else adata._vidx
-                    yield from _walk_dataframe(value, dests, elem_path, rows=rows)
-                    continue
-                yield from _walk(value, dests, elem_path, ancestors)
+            stored = getattr(payload_source, attr_name)
+            yield from _walk_aligned_mapping(
+                adata,
+                attr_name,
+                stored=stored,
+                group_types=group_types,
+                adata_path=path,
+                ancestors=ancestors,
+            )
         elif isinstance(attr, Raw):
-            yield from _walk_raw(attr, dests, attr_path, ancestors)
-        else:  # obs, var: a dataframe, or an unsupported container such as Dataset2D
-            yield from _walk(attr, dests, attr_path, ancestors)
+            yield from _walk_raw(attr, group_types, attr_path, ancestors)
+        else:
+            yield from _walk(attr, group_types, attr_path, ancestors)
+
+
+def _walk_aligned_mapping(
+    adata: AnnData,
+    attr_name: str,
+    *,
+    stored: Mapping[str | None, object],
+    group_types: GroupTypes,
+    adata_path: str,
+    ancestors: frozenset[int],
+) -> Problems:
+    path = _child_path(adata_path, attr_name)
+    if any(isinstance(k, str) and "/" in k for k in stored):
+        msg = f"Forward slashes are not allowed in keys in {attr_name}"
+        yield path, _note_path(ValueError(msg), path)
+    for key, value in stored.items():
+        if key is None and attr_name == "layers":
+            # the AnnData writers store `layers[None]` as `X`
+            name, elem_path = "X", _child_path(adata_path, "X")
+        else:
+            name, elem_path = f"Layer {key!r}", _child_path(path, key)
+            if not isinstance(key, str):
+                try:
+                    _stored_key(key, path, group_types)
+                except TypeError as e:
+                    yield elem_path, _note_path(e, elem_path)
+                    continue
+        if attr_name == "layers" and (
+            (shape_msg := _non_2d_message(value, name=name)) is not None
+        ):
+            yield elem_path, _note_path(ValueError(shape_msg), elem_path)
+        elif isinstance(value, pd.DataFrame) and adata.is_view:
+            # the view writes a row (obsm/obsp) or column (varm/varp) selection
+            rows = adata._oidx if attr_name.startswith("obs") else adata._vidx
+            yield from _walk_dataframe(value, group_types, elem_path, rows=rows)
+        else:
+            yield from _walk(value, group_types, elem_path, ancestors)
 
 
 def _walk_raw(
-    raw: Raw, dests: tuple[type, ...], path: str, ancestors: frozenset[int]
-) -> Generator[tuple[str, Exception]]:
-    # `raw.X` subsets a backed view's dataset; inspect the stored object instead
+    raw: Raw, group_types: GroupTypes, path: str, ancestors: frozenset[int]
+) -> Problems:
+    # `raw.X` subsets a backed view's dataset
     X: object
     if raw._adata.isbacked:
         file = raw._adata.file
@@ -328,121 +313,125 @@ def _walk_raw(
         X = None if key is None else _on_disk_x(file[key])
     else:
         X = raw._X
-    yield from _walk(X, dests, _join(path, "X"), ancestors)
-    yield from _walk(raw.var, dests, _join(path, "var"), ancestors)
-    yield from _walk(dict(raw.varm), dests, _join(path, "varm"), ancestors)
+    yield from _walk(X, group_types, _child_path(path, "X"), ancestors)
+    yield from _walk(raw.var, group_types, _child_path(path, "var"), ancestors)
+    yield from _walk(dict(raw.varm), group_types, _child_path(path, "varm"), ancestors)
 
 
 def _walk_categorical(
-    cat: pd.Categorical, dests: tuple[type, ...], path: str
-) -> Generator[tuple[str, Exception]]:
-    # The writer stores `categories.to_numpy()`; an empty slice has the same dtype
-    # as the whole index, so neither the categories nor (for a `RangeIndex`) their
-    # materialisation is ever touched.
-    categories_path = _join(path, "categories")
+    cat: pd.Categorical, group_types: GroupTypes, path: str
+) -> Problems:
+    categories_path = _child_path(path, "categories")
+    # an empty slice has the dtype of the whole index
     categories = cat.categories[:0]
-    representative = categories.to_numpy()
-    if representative.dtype == object and not is_string_dtype(categories.dtype):
-        # e.g. intervals, periods, tz-aware datetimes: `to_numpy()` makes them
-        # arbitrary Python objects, which the string writer would stringify (zarr)
-        # or refuse (h5py); say so instead of letting either happen
-        msg = (
-            f"Categories of dtype {categories.dtype} are not written: "
-            "zarr would store them as strings and h5py refuses them. "
-            "Convert the categories first, e.g. with `.cat.rename_categories(str)`."
-        )
-        yield categories_path, _with_path(TypeError(msg), categories_path)
-    else:
-        yield from _walk_leaf(representative, dests, categories_path)
+    try:
+        check_categories_writable(categories, path=categories_path)
+    except TypeError as e:
+        yield categories_path, _note_path(e, categories_path)
+        return
+    yield from _walk_leaf(categories.to_numpy(), group_types, categories_path)
 
 
-def _walk_dataframe(  # noqa: PLR0912, PLR0915
+def _walk_dataframe(
     df: pd.DataFrame,
-    dests: tuple[type, ...],
+    group_types: GroupTypes,
     path: str,
     *,
     rows: object = None,
-) -> Generator[tuple[str, Exception]]:
-    # The structural checks mirror `write_dataframe`, except the comparison of a
-    # column that shares the index's name with the index: that is a value scan
-    # and stays a writer-time error (see the module docstring). Columns are
-    # reached by position so that neither the column index nor the row index
-    # (possibly a `RangeIndex`) is materialised, and no column is boxed into a
-    # Series. `rows` is a view's selection along the dataframe's axis; it is
-    # applied to object columns only, the one per-column allocation allowed.
+) -> Problems:
+    """Check a dataframe like `write_dataframe` would, without touching its data.
+
+    `rows` is a view's selection along the dataframe's axis; it is applied to
+    object columns only.
+    """
+    yield from _check_dataframe_names(df, group_types, path)
+    yield from _walk_index(df, group_types, path)
+    yield from _walk_columns(df, group_types, path, rows=rows)
+
+
+def _check_dataframe_names(
+    df: pd.DataFrame, group_types: GroupTypes, path: str
+) -> Problems:
     columns = df.columns
     if "_index" in columns:
         msg = "'_index' is a reserved name for dataframe columns."
-        yield path, _with_path(ValueError(msg), path)
+        yield path, _note_path(ValueError(msg), path)
     if not columns.is_unique:
         duplicates = list(columns[columns.duplicated()])
         msg = f"Found repeated column names: {duplicates}. Column names must be unique."
-        yield path, _with_path(ValueError(msg), path)
-    index_name = df.index.name if df.index.name is not None else "_index"
-    n_columns = df.shape[1]
-    for key in (*(columns[i] for i in range(n_columns)), index_name):
+        yield path, _note_path(ValueError(msg), path)
+    # positional access keeps a `RangeIndex` of columns unmaterialised
+    names: list[Hashable] = [columns[i] for i in range(df.shape[1])]
+    names.append(_index_name(df))
+    for name in names:
         try:
-            key = check_key(key)
+            name = check_key(name)
         except TypeError as e:
-            yield path, _with_path(e, path)
-        else:
-            if "/" in key and _slash_forbidden(dests):
-                msg = f"Forward slashes are not allowed in keys in {dests[0]}"
-                yield _join(path, key), _with_path(ValueError(msg), _join(path, key))
-    index_path = _join(path, index_name)
+            yield path, _note_path(e, path)
+            continue
+        if "/" in name and _slash_forbidden(group_types):
+            msg = f"Forward slashes are not allowed in keys in {group_types[0]}"
+            yield (
+                _child_path(path, name),
+                _note_path(ValueError(msg), _child_path(path, name)),
+            )
+
+
+def _index_name(df: pd.DataFrame) -> Hashable:
+    return df.index.name if df.index.name is not None else "_index"
+
+
+def _walk_index(df: pd.DataFrame, group_types: GroupTypes, path: str) -> Problems:
+    index_path = _child_path(path, _index_name(df))
     if isinstance(df.index, pd.MultiIndex):
         msg = "Cannot write a DataFrame with a MultiIndex. Use a single-level index."
-        yield index_path, _with_path(ValueError(msg), index_path)
-    else:
-        # The writer stores `index.to_numpy()` for numpy-backed indexes and
-        # `index.array` otherwise (e.g. a `Categorical`); an empty slice has the
-        # same dtype and array type without materialising the index.
-        empty_index = df.index[:0]
-        index_values = (
-            empty_index.to_numpy()
-            if isinstance(empty_index.array, pd.arrays.NumpyExtensionArray)
-            else empty_index.array
-        )
-        yield from _walk(index_values, dests, index_path)
+        yield index_path, _note_path(ValueError(msg), index_path)
+        return
+    # an empty slice has the dtype and array type of the whole index
+    index = df.index[:0]
+    index_values = (
+        index.to_numpy()
+        if isinstance(index.array, pd.arrays.NumpyExtensionArray)
+        else index.array
+    )
+    yield from _walk(index_values, group_types, index_path)
+
+
+def _walk_columns(
+    df: pd.DataFrame, group_types: GroupTypes, path: str, *, rows: object
+) -> Problems:
+    columns = df.columns
     dtypes = list(df.dtypes)
-    numpy_kind_registered: dict[str, bool] = {}
-    for i in range(n_columns):
-        colname, dtype = columns[i], dtypes[i]
-        col_path = _join(path, colname)
+    numpy_kind_has_writer: dict[str, bool] = {}
+    for i in range(df.shape[1]):
+        col_path = _child_path(path, columns[i])
+        dtype = dtypes[i]
         if isinstance(dtype, np.dtype) and dtype.kind not in "OMm":
-            # A plain numpy column is written as is and its registry pattern depends
-            # only on the dtype kind, so avoid boxing the column into a Series
-            # (wide dataframes in `uns` can have tens of thousands of columns).
-            if dtype.kind not in numpy_kind_registered:
-                numpy_kind_registered[dtype.kind] = _registered(
-                    np.empty(0, dtype=dtype), dests
-                )
-            if not numpy_kind_registered[dtype.kind]:
-                stub = np.empty(0, dtype=dtype)
-                miss = _registry_miss(stub, dests, col_path)
-                add_column_note(miss, stub, col_path)
-                yield col_path, miss
+            # the writer pattern of a numpy column depends on the dtype kind only
+            stub = np.empty(0, dtype=dtype)
+            if dtype.kind not in numpy_kind_has_writer:
+                numpy_kind_has_writer[dtype.kind] = _has_writer(stub, group_types)
+            if not numpy_kind_has_writer[dtype.kind]:
+                missing = _missing_writer_error(stub, group_types, col_path)
+                add_column_note(missing, stub, col_path)
+                yield col_path, missing
             continue
-        values = _column_array(df, i)
-        if (
-            rows is not None
-            and isinstance(values, np.ndarray)
-            and values.dtype.kind == "O"
-        ):
+        values = _column_values(df, i)
+        if rows is not None and isinstance(values, np.ndarray) and dtype.kind == "O":
             values = values[rows if isinstance(rows, slice) else np.asarray(rows)]
         try:
             values = normalize_column(values, path=col_path)
-        except TypeError as conversion_error:
-            yield col_path, _with_path(conversion_error, col_path)
+        except TypeError as e:
+            yield col_path, _note_path(e, col_path)
             continue
         if isinstance(values, pd.Categorical):
-            yield from _walk_categorical(values, dests, col_path)
-        elif not _registered(values, dests):
-            miss = _registry_miss(values, dests, col_path)
-            add_column_note(miss, values, col_path)
-            yield col_path, miss
+            yield from _walk_categorical(values, group_types, col_path)
+        elif not _has_writer(values, group_types):
+            missing = _missing_writer_error(values, group_types, col_path)
+            add_column_note(missing, values, col_path)
+            yield col_path, missing
 
 
-def _column_array(df: pd.DataFrame, i: int) -> np.ndarray | ExtensionArray:
-    """The backing array of column `i`, like `series._values`, without boxing a Series."""
+def _column_values(df: pd.DataFrame, i: int) -> np.ndarray | ExtensionArray:
+    """Backing array of column `i`, like `series._values`, without a Series."""
     return df._get_column_array(i)  # type: ignore[operator]

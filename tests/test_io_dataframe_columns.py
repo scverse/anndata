@@ -6,6 +6,7 @@ See https://github.com/scverse/anndata/issues/1068
 from __future__ import annotations
 
 import contextlib
+import functools
 import re
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
@@ -57,8 +58,7 @@ def _notes(e: BaseException) -> str:
     return "\n".join(getattr(e, "__notes__", []))
 
 
-# Column families with a writer: how they come back from disk.
-# Every entry is a factory so each test gets fresh, unmodified input.
+# families with a writer and their on-disk dtype; factories give fresh input
 SUPPORTED: dict[str, tuple[Callable[[], pd.Series], str]] = {
     "int64": (lambda: _series([1, 2, 3]), "int64"),
     "float64-nan": (lambda: _series([1.5, np.nan, 2.0]), "float64"),
@@ -88,7 +88,7 @@ SUPPORTED: dict[str, tuple[Callable[[], pd.Series], str]] = {
     ),
 }
 
-# Column families without a writer: the error type and the hint in its notes.
+# families without a writer: error type and the hint in its notes
 UNSUPPORTED: dict[str, tuple[Callable[[], pd.Series], type[Exception], str]] = {
     "Float64": (
         lambda: _series([1.5, None, 2.0], "Float64"),
@@ -188,7 +188,7 @@ def test_unsupported_column_errors(
     assert re.search(hint, _notes(errors[0][1]) + str(errors[0][1]), re.DOTALL)
     assert adata.unwriteable(store_type=store_type)
 
-    # writing without preflight raises the same type from inside `write_dataframe`
+    # the writer raises the same type
     adata = _adata(col=make())
     with (
         ad.settings.override(validate_before_write=False),
@@ -198,7 +198,7 @@ def test_unsupported_column_errors(
     assert re.search(hint, _notes(exc_info.value) + str(exc_info.value), re.DOTALL)
     assert re.search(r"'col'", str(exc_info.value) + _notes(exc_info.value))
 
-    # a single problem found by the preflight is raised as is, not as a group
+    # one problem is raised as is, not as a group
     adata = _adata(col=make())
     with (
         ad.settings.override(validate_before_write=True),
@@ -311,7 +311,7 @@ def test_nullable_string_columns(
                 )
             return
         if allow is None and not categorize and not pd.options.future.infer_string:
-            # pandas < 3 without `future.infer_string`: the writer asks for an explicit choice
+            # pandas < 3 without `infer_string`: the writer wants a choice
             with pytest.raises(RuntimeError, match=r"allow_write_nullable_strings"):
                 getattr(adata, f"write_{diskfmt}")(
                     diskfmt_store, convert_strings_to_categoricals=categorize
@@ -393,7 +393,7 @@ def test_preflight_reports_all_problems(
     )
     assert not path.exists()
 
-    # the leaves keep their types, so `except*` works
+    # leaves keep their types for `except*`
     registry_misses = group.subgroup(IORegistryError)
     conversion_failures = group.subgroup(TypeError)
     assert registry_misses is not None
@@ -453,7 +453,7 @@ def test_write_elem_bypasses_preflight(
     with ad.settings.override(validate_before_write=True):
         ad.io.write_elem(store, "df", df)
         assert ad.io.read_elem(store["df"])["obj"].dtype == "Int64"
-        # two problems, but no aggregation: the first one is raised
+        # no aggregation: the first problem is raised
         with pytest.raises(IORegistryError) as exc_info:
             ad.io.write_elem(store, "uns", {"a": object(), "b": object()})
     assert not isinstance(exc_info.value, ExceptionGroup)
@@ -484,8 +484,7 @@ def test_preflight_dataframe_structure() -> None:
     assert [p for p, _ in errors] == ["/obs"]
     assert "repeated column names" in str(errors[0][1])
 
-    # a column sharing the index's name with different values is a writer-time
-    # error (a value comparison), not a preflight one
+    # a value comparison: writer-time only
     adata = _adata(col=_series([1, 2, 3]))
     adata.obs.index.name = "col"
     assert list(iter_unwriteable(adata)) == []
@@ -509,6 +508,10 @@ def test_preflight_dataframe_structure() -> None:
     assert adata.unwriteable()
 
 
+def _write_period(f, k, v, *, _writer, dataset_kwargs):
+    _writer.write_elem(f, k, np.asarray(v.asi8), dataset_kwargs=dataset_kwargs)
+
+
 @pytest.fixture
 def period_writer() -> Generator[None]:
     """Temporarily register a writer for `PeriodArray`."""
@@ -518,12 +521,9 @@ def period_writer() -> Generator[None]:
     ]
     assert not any(key in _REGISTRY.write for key in keys)
 
-    def write_period(f, k, v, *, _writer, dataset_kwargs):
-        _writer.write_elem(f, k, np.asarray(v.asi8), dataset_kwargs=dataset_kwargs)
-
     for store_type, src_type, _ in keys:
         _REGISTRY.register_write(store_type, src_type, IOSpec("period-test", "0.1.0"))(
-            write_period
+            _write_period
         )
     try:
         yield
@@ -546,6 +546,14 @@ def test_custom_registered_writer_is_honoured(
         )
 
 
+def _fail_on_compute(dsk, keys, **kwargs):
+    pytest.fail("the preflight check computed a dask array")
+
+
+def _fail_on_packing(*args, **kwargs):
+    pytest.fail("the preflight check packed an awkward array")
+
+
 def test_preflight_does_not_compute_dask() -> None:
     adata = ad.AnnData(
         da.zeros((4, 3), chunks=(2, 3)), obs=pd.DataFrame(index=list("abcd"))
@@ -553,10 +561,7 @@ def test_preflight_does_not_compute_dask() -> None:
     adata.layers["L"] = da.ones((4, 3), chunks=(1, 1))
     adata.obsm["m"] = da.zeros((4, 2), chunks=(2, 2))
 
-    def no_scheduler(dsk, keys, **kwargs):
-        pytest.fail("the preflight check computed a dask array")
-
-    with dask.config.set(scheduler=no_scheduler):
+    with dask.config.set(scheduler=_fail_on_compute):
         assert list(iter_unwriteable(adata)) == []
         raise_if_unwriteable(adata)
 
@@ -601,11 +606,8 @@ def test_preflight_does_not_pack_awkward(*, monkeypatch: pytest.MonkeyPatch) -> 
     adata.obsm["ragged"] = ak.Array([[1, 2], [], [3]])
     adata.uns["ragged"] = ak.Array([[1.0], [2.0, 3.0]])
 
-    def no_packing(*args, **kwargs):
-        pytest.fail("the preflight check packed an awkward array")
-
-    monkeypatch.setattr(ak, "to_packed", no_packing)
-    monkeypatch.setattr(ak, "to_buffers", no_packing)
+    monkeypatch.setattr(ak, "to_packed", _fail_on_packing)
+    monkeypatch.setattr(ak, "to_buffers", _fail_on_packing)
     assert list(iter_unwriteable(adata)) == []
     assert not adata.unwriteable()
 
@@ -649,7 +651,7 @@ def test_preflight_multiindex_aggregates() -> None:
 
 
 CATEGORY_FAMILIES: dict[str, tuple[Callable[[], pd.Categorical], bool]] = {
-    # name: (factory, writable on both formats per the registry)
+    # name: (factory, has a faithful on-disk representation)
     "str": (lambda: pd.Categorical(["a", "b", "a"]), True),
     "Int64": (lambda: pd.Categorical(pd.array([1, None, 2], dtype="Int64")), True),
     "Float64": (
@@ -712,20 +714,14 @@ def test_categorical_categories_agreement(
     assert [p for p, _ in errors] == ([] if registered else ["/obs/cat/categories"])
     assert adata.unwriteable(store_type=store_type) is not registered
     if not registered:
-        # The writer hands these categories to the string writer as arbitrary objects:
-        # h5py refuses them, zarr silently stores `str(value)`. The preflight (like
-        # `unwriteable()` before it) rejects both rather than mirror the corruption.
+        # the writer refuses them too, on both formats
         assert isinstance(errors[0][1], TypeError)
-        assert re.search(r"Categories of dtype .* are not written", str(errors[0][1]))
-        if diskfmt == "h5ad":
-            with pytest.raises(TypeError):
-                _write(adata, diskfmt, diskfmt_store)
-        else:
-            read = _write(adata, diskfmt, diskfmt_store).obs["cat"]
-            assert read.cat.categories.dtype != adata.obs["cat"].cat.categories.dtype
+        assert "Cannot write categories" in str(errors[0][1])
+        with pytest.raises(TypeError, match=r"Cannot write categories"):
+            _write(adata, diskfmt, diskfmt_store)
         return
     if family == "datetime" and diskfmt == "h5ad":
-        # a value-level failure in h5py's writer, outside the preflight's scope
+        # h5py rejects the values; not a type problem
         with pytest.raises(TypeError, match=r"No conversion path"):
             _write(adata, diskfmt, diskfmt_store)
         return
@@ -734,27 +730,30 @@ def test_categorical_categories_agreement(
     assert read.isna().tolist() == adata.obs["cat"].isna().tolist()
 
 
+class _ArrayApiNoDlpack:
+    """An array-API object without DLPack: `to_writeable` cannot convert it."""
+
+    shape, ndim, size, dtype, device = (2,), 1, 2, np.dtype("f8"), "cpu"
+
+    def __array_namespace__(self, *, api_version=None):
+        return np
+
+    def to_device(self, device, /, *, stream=None):
+        return self
+
+    def __getitem__(self, k, /):
+        return self
+
+
 def test_preflight_matches_writer_dispatch_for_leaves() -> None:
     """Standalone Series/Index, non-dict mappings and non-DLPack array-API objects miss."""
     from collections import UserDict
-
-    class ArrayApiNoDlpack:
-        shape, ndim, size, dtype, device = (2,), 1, 2, np.dtype("f8"), "cpu"
-
-        def __array_namespace__(self, *, api_version=None):
-            return np
-
-        def to_device(self, device, /, *, stream=None):
-            return self
-
-        def __getitem__(self, k, /):
-            return self
 
     adata = ad.AnnData(np.zeros((2, 1)), obs=pd.DataFrame(index=list("ab")))
     adata.uns["series"] = pd.Series([1, 2])
     adata.uns["index"] = pd.Index(["a", "b"])
     adata.uns["userdict"] = UserDict({"a": 1})
-    adata.uns["no_dlpack"] = ArrayApiNoDlpack()
+    adata.uns["no_dlpack"] = _ArrayApiNoDlpack()
     adata.uns["ok"] = {"nested": np.zeros(2), "none": None, "list": [1, 2]}
     errors = list(iter_unwriteable(adata))
     assert [p for p, _ in errors] == [
@@ -804,7 +803,7 @@ def test_preflight_aggregates_non_2d_with_column(
         pytest.raises(ExceptionGroup) as exc_info,
     ):
         getattr(adata, f"write_{diskfmt}")(tmp_path / f"adata.{diskfmt}")
-    # traversal order is that of the writers: obs before X
+    # writer order: obs before X
     assert [type(e) for e in exc_info.value.exceptions] == [IORegistryError, ValueError]
     assert exc_info.value.message.endswith("/obs/period, /X")
     with (
@@ -919,7 +918,7 @@ def test_preflight_slash_keys_follow_h5ad_setting(*, tmp_path: Path) -> None:
             pytest.warns(FutureWarning, match=r"Forward slashes"),
         ):
             adata.write_h5ad(tmp_path / "adata.h5ad")
-    # layers keys are refused by the writers regardless of the setting
+    # layers keys: refused regardless of the setting
     adata.layers["bad/key"] = np.zeros((3, 0))
     with ad.settings.override(disallow_forward_slash_in_h5ad=False):
         assert [p for p, _ in iter_unwriteable(adata, store_type="h5")] == ["/layers"]
@@ -948,6 +947,33 @@ def test_preflight_accepts_dict_subclasses(
 # Instrumented "never materialise" harness
 
 
+class _ForbiddenAccess:
+    """Stand-in for a method the preflight check must never call."""
+
+    def __init__(self, what: str) -> None:
+        self.what = what
+
+    def __call__(self, *args, **kwargs):
+        pytest.fail(f"the preflight check touched payload data: {self.what}")
+
+
+class _ForbiddenOnNonEmpty:
+    """Stand-in for an index method that is only allowed on empty indexes."""
+
+    def __init__(self, what: str, original) -> None:
+        self.what = what
+        self.original = original
+
+    def __get__(self, index, owner=None):
+        # bind like a method when patched onto the class
+        return self if index is None else functools.partial(self, index)
+
+    def __call__(self, index, *args, **kwargs):
+        if len(index) > 0:
+            pytest.fail(f"the preflight check materialised an index: {self.what}")
+        return self.original(index, *args, **kwargs)
+
+
 @contextmanager
 def forbid_payload_access() -> Generator[None]:
     """Fail on anything that would subset, copy, materialise or read payload data.
@@ -967,79 +993,81 @@ def forbid_payload_access() -> Generator[None]:
     import anndata._core.anndata as core_anndata
     from anndata._core import aligned_mapping, views
 
-    def forbid(what: str):
-        def fail(*args, **kwargs):
-            pytest.fail(f"the preflight check touched payload data: {what}")
-
-        return fail
-
-    def forbid_non_empty(what: str, original):
-        def guarded(self, *args, **kwargs):
-            if len(self) > 0:
-                pytest.fail(f"the preflight check materialised an index: {what}")
-            return original(self, *args, **kwargs)
-
-        return guarded
-
-    index_array = pd.Index.array.fget if isinstance(pd.Index.array, property) else None
     patches = [
-        mock.patch.object(pd.DataFrame, "__getitem__", forbid("DataFrame.__getitem__")),
-        mock.patch.object(pd.DataFrame, "_slice", forbid("DataFrame._slice")),
-        mock.patch.object(pd.DataFrame, "take", forbid("DataFrame.take")),
-        mock.patch.object(pd.DataFrame, "copy", forbid("DataFrame.copy")),
-        mock.patch.object(_iLocIndexer, "__getitem__", forbid("DataFrame.iloc")),
-        mock.patch.object(_LocIndexer, "__getitem__", forbid("DataFrame.loc")),
+        mock.patch.object(
+            pd.DataFrame, "__getitem__", _ForbiddenAccess("DataFrame.__getitem__")
+        ),
+        mock.patch.object(pd.DataFrame, "_slice", _ForbiddenAccess("DataFrame._slice")),
+        mock.patch.object(pd.DataFrame, "take", _ForbiddenAccess("DataFrame.take")),
+        mock.patch.object(pd.DataFrame, "copy", _ForbiddenAccess("DataFrame.copy")),
+        mock.patch.object(
+            _iLocIndexer, "__getitem__", _ForbiddenAccess("DataFrame.iloc")
+        ),
+        mock.patch.object(
+            _LocIndexer, "__getitem__", _ForbiddenAccess("DataFrame.loc")
+        ),
         mock.patch.object(
             pd.Index,
             "array",
             property(
-                forbid_non_empty(
+                _ForbiddenOnNonEmpty(
                     "Index.array",
-                    index_array if index_array is not None else pd.Index.array.__get__,
+                    pd.Index.array.__get__,
                 )
             ),
         ),
         mock.patch.object(
-            pd.Index, "to_numpy", forbid_non_empty("Index.to_numpy", pd.Index.to_numpy)
+            pd.Index,
+            "to_numpy",
+            _ForbiddenOnNonEmpty("Index.to_numpy", pd.Index.to_numpy),
         ),
         mock.patch.object(
             pd.Index,
             "__array__",
-            forbid_non_empty("Index.__array__", pd.Index.__array__),
+            _ForbiddenOnNonEmpty("Index.__array__", pd.Index.__array__),
         ),
         mock.patch.object(
             pd.RangeIndex,
             "_data",
-            property(forbid_non_empty("RangeIndex._data", pd.RangeIndex._data.__get__)),
+            property(
+                _ForbiddenOnNonEmpty("RangeIndex._data", pd.RangeIndex._data.__get__)
+            ),
         ),
         mock.patch.object(
-            aligned_mapping, "_subset", forbid("_subset (aligned mapping)")
-        ),
-        mock.patch.object(core_anndata, "_subset", forbid("_subset (AnnData)")),
-        mock.patch.object(views, "as_view", forbid("as_view")),
-        mock.patch.object(
-            aligned_mapping, "as_view", forbid("as_view (aligned mapping)")
-        ),
-        mock.patch.object(pd.DataFrame, "to_numpy", forbid("DataFrame.to_numpy")),
-        mock.patch.object(
-            h5py.Dataset, "__getitem__", forbid("h5py.Dataset.__getitem__")
+            aligned_mapping, "_subset", _ForbiddenAccess("_subset (aligned mapping)")
         ),
         mock.patch.object(
-            h5py.Dataset, "read_direct", forbid("h5py.Dataset.read_direct")
+            core_anndata, "_subset", _ForbiddenAccess("_subset (AnnData)")
+        ),
+        mock.patch.object(views, "as_view", _ForbiddenAccess("as_view")),
+        mock.patch.object(
+            aligned_mapping, "as_view", _ForbiddenAccess("as_view (aligned mapping)")
         ),
         mock.patch.object(
-            zarr_array.Array, "__getitem__", forbid("zarr.Array.__getitem__")
-        ),
-        mock.patch.object(dask.base, "compute", forbid("dask.compute")),
-        mock.patch.object(
-            dask.base.DaskMethodsMixin, "compute", forbid("dask Array.compute")
+            pd.DataFrame, "to_numpy", _ForbiddenAccess("DataFrame.to_numpy")
         ),
         mock.patch.object(
-            dask.base.DaskMethodsMixin, "persist", forbid("dask Array.persist")
+            h5py.Dataset, "__getitem__", _ForbiddenAccess("h5py.Dataset.__getitem__")
+        ),
+        mock.patch.object(
+            h5py.Dataset, "read_direct", _ForbiddenAccess("h5py.Dataset.read_direct")
+        ),
+        mock.patch.object(
+            zarr_array.Array, "__getitem__", _ForbiddenAccess("zarr.Array.__getitem__")
+        ),
+        mock.patch.object(dask.base, "compute", _ForbiddenAccess("dask.compute")),
+        mock.patch.object(
+            dask.base.DaskMethodsMixin,
+            "compute",
+            _ForbiddenAccess("dask Array.compute"),
+        ),
+        mock.patch.object(
+            dask.base.DaskMethodsMixin,
+            "persist",
+            _ForbiddenAccess("dask Array.persist"),
         ),
     ]
-    # `np.ndarray.copy`/`__array__` are attributes of a C type and cannot be patched;
-    # allocation-scaling checks that would catch such copies are out of scope here.
+    # `np.ndarray.copy`/`__array__` belong to a C type and cannot be patched
     with contextlib.ExitStack() as stack:
         for p in patches:
             stack.enter_context(p)
@@ -1092,8 +1120,7 @@ def _payload_adata(*, dlpack: bool = True) -> ad.AnnData:
         {"c": pd.Categorical.from_codes([0, 1, 0], categories=pd.RangeIndex(n))},
         index=list("abc"),
     )
-    # a named index that shares its name with a column (the writer compares the
-    # values; the preflight must not), and a named index that does not
+    # the writer compares a same-named column with the index; the preflight must not
     adata.uns["named_collision"] = pd.DataFrame(
         {"id": np.arange(n)}, index=pd.RangeIndex(n, name="id")
     )
@@ -1314,7 +1341,7 @@ def test_preflight_categorical_index_policy(categories: pd.Index) -> None:
     assert [(p, type(e)) for p, e in errors] == [
         ("/uns/table/_index/categories", TypeError)
     ]
-    assert "Categories of dtype" in str(errors[0][1])
+    assert "Cannot write categories" in str(errors[0][1])
     assert adata.unwriteable()
     good = pd.DataFrame(
         {"x": [1.0, 2.0]}, index=pd.CategoricalIndex(["a", "b"], categories=["a", "b"])
@@ -1462,7 +1489,7 @@ def test_preflight_accepts_sequences_of_writable_members(
     np.testing.assert_array_equal(read.uns["pairs"], [[1, 2], [3, 4]])
     np.testing.assert_array_equal(read.uns["nested"], [[1, 2], [3, 4]])
     assert list(read.uns["strings"]) == ["a", "b"]
-    # a standalone tuple still has no writer
+    # a standalone tuple has no writer
     adata.uns["tuple"] = (1, 2)
     assert [(p, type(e)) for p, e in iter_unwriteable(adata)] == [
         ("/uns/tuple", IORegistryError)

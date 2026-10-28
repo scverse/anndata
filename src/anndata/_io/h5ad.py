@@ -60,7 +60,7 @@ def write_h5ad(  # noqa: PLR0912
     **kwargs,
 ) -> None:
     """See :meth:`~anndata.AnnData.write_h5ad`."""
-    if not settings.validate_before_write:  # otherwise the preflight below reports it
+    if not settings.validate_before_write:  # else the preflight reports it
         _check_x_and_layers_are_2d_on_write(adata)
     if isinstance(as_dense, str):
         as_dense = [as_dense]
