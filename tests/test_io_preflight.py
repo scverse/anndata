@@ -94,6 +94,10 @@ def test_preflight_reports_all_problems(
     assert len(registry_misses.exceptions) == 3
     assert conversion_failures is not None
     assert len(conversion_failures.exceptions) == 1
+    # named like the writer names it; the path is in the note
+    assert str(conversion_failures.exceptions[0]).startswith(
+        "Cannot write column 'mixed' "
+    )
 
 
 def test_preflight_off_fails_at_first_problem(

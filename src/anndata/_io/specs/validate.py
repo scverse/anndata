@@ -473,7 +473,7 @@ def _walk_columns(
     # wide frames repeat a few numpy dtypes, whose writer depends on the dtype only
     numpy_dtype_has_writer: dict[np.dtype, bool] = {}
     for i, colname in enumerate(df.columns):
-        col_path = _child_path(path, colname)
+        name, col_path = str(colname), _child_path(path, colname)
         # `series._values` without boxing a Series like `df.items()`: with the cache,
         # 256k columns in 11 `uns` frames take 0.3 s instead of 1.4 s
         values = df._get_column_array(i)  # type: ignore[operator]  # stubs: a column
@@ -484,10 +484,12 @@ def _walk_columns(
             if not has_writer:
                 yield (
                     col_path,
-                    _missing_column_writer_error(values, group_types, col_path),
+                    _missing_column_writer_error(values, group_types, col_path, name),
                 )
             continue
-        problems = list(_walk_column(values, group_types, col_path, rows=rows))
+        problems = list(
+            _walk_column(values, group_types, col_path, name=name, rows=rows)
+        )
         # the writers turn these into categoricals, which can be written
         if (
             problems
@@ -503,17 +505,19 @@ def _walk_column(
     group_types: GroupTypes,
     path: str,
     *,
+    name: str,
     rows: _Index1DNorm[IndexManager] | None,
 ) -> Problems:
+    """Check a column like `write_dataframe`; error messages name it like the writer does."""
     if rows is not None and isinstance(values, np.ndarray):
         values = values[rows if isinstance(rows, slice) else np.asarray(rows)]
     try:
-        values = normalize_column(values, path=path)
+        values = normalize_column(values, path=name)
     except UnsupportedColumnTypeError as e:
         yield path, _note_path(e, path)
         return
     if not _has_writer(values, group_types):
-        yield path, _missing_column_writer_error(values, group_types, path)
+        yield path, _missing_column_writer_error(values, group_types, path, name)
     elif isinstance(values, pd.Categorical):
         yield from _walk_categorical(values, group_types, path)
     elif isinstance(values, pd.arrays.StringArray | pd.arrays.ArrowStringArray):
@@ -528,8 +532,8 @@ def _walk_nullable_strings(path: str) -> Problems:
 
 
 def _missing_column_writer_error(
-    values: np.ndarray | ExtensionArray, group_types: GroupTypes, path: str
+    values: np.ndarray | ExtensionArray, group_types: GroupTypes, path: str, name: str
 ) -> IORegistryError:
     e = _missing_writer_error(values, group_types, path)
-    add_column_note(e, values, path)
+    add_column_note(e, values, name)
     return e
