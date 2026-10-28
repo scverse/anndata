@@ -126,8 +126,28 @@ def raise_if_unwriteable_parts(
             path = _child_path(group_path, key)
             errors.append((path, _note_path(e, path)))
             continue
-        errors.extend(_walk(elem, group_types, _child_path(group_path, stored)))
+        path = _child_path(group_path, stored)
+        errors.extend(_walk_layer_parts(parent, key, elem, path))
+        errors.extend(_walk(elem, group_types, path))
     _raise_problems(errors)
+
+
+def _walk_layer_parts(
+    parent: str | None, key: str, elem: object, path: str
+) -> Problems:
+    """Check that `X` and layers among the parts are 2-D, like a full write."""
+    if parent is None and key == "layers":
+        assert isinstance(elem, Mapping)
+        layers = {_child_path(path, k): (f"Layer {k!r}", v) for k, v in elem.items()}
+    elif parent == "layers":
+        layers = {path: (f"Layer {key!r}", elem)}
+    elif parent is None and key == "X":
+        layers = {path: ("X", elem)}
+    else:
+        return
+    for layer_path, (name, value) in layers.items():
+        if (msg := _non_2d_message(value, name=name)) is not None:
+            yield layer_path, _note_path(ValueError(msg), layer_path)
 
 
 def _raise_problems(errors: list[tuple[str, Exception]]) -> None:

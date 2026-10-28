@@ -1397,6 +1397,33 @@ def test_use_array_parts(
     np.testing.assert_array_equal(read.X if part == "X" else read.layers["L"], new)
 
 
+@pytest.mark.parametrize("part", ["X", "layer"])
+def test_preflight_use_refuses_non_2d_parts(*, part: str) -> None:
+    """A partial write checks that the `X` or layer it writes is 2-D, like a full write."""
+    adata = ad.AnnData(
+        np.zeros((3, 2)),
+        obs=pd.DataFrame(index=obs_index()),
+        var=pd.DataFrame(index=["x", "y"]),
+    )
+    adata.layers["L"] = np.zeros((3, 2))
+    store = MemoryStore()
+    write_and_read(adata, "zarr", store)
+    if part == "X":
+        with pytest.warns(UserWarning, match=r"must be 2-dimensional"):
+            adata.X = np.ones((3, 2, 2))
+    else:
+        with pytest.warns(UserWarning, match=r"must be 2-dimensional"):
+            adata.layers["L"] = np.ones((3, 2, 2))
+    use = A.X if part == "X" else A.layers["L"]
+    with (
+        ad.settings.override(validate_before_write=True),
+        pytest.raises(ValueError, match=r"must be 2-dimensional"),
+    ):
+        adata.write_zarr(store, use=use)
+    read = ad.read_zarr(store)
+    assert (read.X if part == "X" else read.layers["L"]).ndim == 2
+
+
 @pytest.mark.parametrize("source", ["backed", "view"])
 def test_use_from_backed_or_view(*, tmp_path: Path, source: str) -> None:
     """Parts of a backed object or a view are checked without reading them."""
