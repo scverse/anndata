@@ -605,12 +605,12 @@ with an error naming the column, its dtype, and what to convert it to.
 
 | In-memory column | On disk |
 |---|---|
-| numpy numeric, boolean, complex, or fixed-length string array | `array` |
-| {class}`~pandas.Categorical` | `categorical`; the categories are stored as `categories.to_numpy()`, so string, numeric, boolean and datetime categories work (datetime only on zarr), while interval, period and tz-aware datetime categories are refused with a {exc}`TypeError` (by the writer and by the preflight check) because `to_numpy()` would hand arbitrary objects to the string writer. Object-dtype categories are assumed to hold strings and are not checked value by value |
+| numpy numeric, boolean, or complex array | `array` |
+| {class}`~pandas.Categorical` | `categorical`, with the categories stored as `categories.to_numpy()`: string, numeric and boolean categories work on both formats, datetime and timedelta categories only on `zarr`. Interval, period and tz-aware datetime categories become arbitrary objects, which `h5ad` cannot store and `zarr` stores as strings; the preflight check below refuses them on both formats. Object-dtype categories are assumed to hold strings and are not checked value by value |
 | nullable integer (`Int8` … `UInt64`) | `nullable-integer` |
 | nullable boolean (`boolean`) | `nullable-boolean` |
 | nullable string (`string`, `string[pyarrow]`, `str`) | `nullable-string-array`; see {attr}`anndata.settings.allow_write_nullable_strings` |
-| object-dtype column of integers, with missing values / without | `nullable-integer` / `array` of `int64` |
+| object-dtype column of integers that fit `int64`, with missing values / without | `nullable-integer` / `array` of `int64` (larger integers are refused) |
 | object-dtype column of booleans, with missing values / without | `nullable-boolean` / `array` of `bool` |
 | object-dtype column of floats, or of integers and floats (missing values become `NaN`) | `array` of `float64`, only if every value is exactly representable |
 | object-dtype column of `str`/`bytes` without missing values | `string-array` |

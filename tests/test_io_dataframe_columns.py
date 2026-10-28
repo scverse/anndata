@@ -616,7 +616,7 @@ def test_preflight_multiindex_aggregates() -> None:
 
 
 CATEGORY_FAMILIES: dict[str, tuple[Callable[[], pd.Categorical[Any]], bool]] = {
-    # name: (factory, has a faithful on-disk representation)
+    # name: (factory, accepted by the preflight)
     "str": (lambda: pd.Categorical(["a", "b", "a"]), True),
     "Int64": (lambda: pd.Categorical(pd.array([1, None, 2], dtype="Int64")), True),
     "Float64": (
@@ -633,6 +633,7 @@ CATEGORY_FAMILIES: dict[str, tuple[Callable[[], pd.Categorical[Any]], bool]] = {
         ),
         True,
     ),
+    "timedelta": (lambda: pd.Categorical(pd.to_timedelta(["1h", "2h", "1h"])), True),
     "interval": (
         lambda: pd.Categorical.from_codes(
             [0, 1, 0],
@@ -671,28 +672,32 @@ def test_categorical_categories_agreement(
     diskfmt_store: Path | MemoryStore,
     family: str,
 ) -> None:
-    """The walker judges categories the way the writer stores them (`to_numpy()`)."""
-    make, registered = CATEGORY_FAMILIES[family]
+    """The walker judges categories on what the writer stores (`to_numpy()`).
+
+    Object arrays of non-strings (intervals, periods, tz-aware datetimes) are refused
+    on both formats; the writer itself is unchanged: h5py fails, zarr stores strings.
+    """
+    make, accepted = CATEGORY_FAMILIES[family]
     store_type = _store_type(diskfmt)
     adata = _adata(cat=pd.Series(make(), index=_idx()))
     errors = list(iter_unwriteable(adata, store_type=store_type))
-    assert [p for p, _ in errors] == ([] if registered else ["/obs/cat/categories"])
-    assert adata.unwriteable(store_type=store_type) is not registered
-    if not registered:
-        # the writer refuses them too, on both formats
+    assert [p for p, _ in errors] == ([] if accepted else ["/obs/cat/categories"])
+    assert adata.unwriteable(store_type=store_type) is not accepted
+    if not accepted:
         assert isinstance(errors[0][1], TypeError)
         assert "Cannot write categories" in str(errors[0][1])
-        with pytest.raises(TypeError, match=r"Cannot write categories"):
+        with ad.settings.override(validate_before_write=True), pytest.raises(TypeError):
             _write(adata, diskfmt, diskfmt_store)
-        return
-    if family == "datetime" and diskfmt == "h5ad":
-        # h5py rejects the values; not a type problem
-        with pytest.raises(TypeError, match=r"No conversion path"):
+    if diskfmt == "h5ad" and (not accepted or family in {"datetime", "timedelta"}):
+        # h5py refuses object and datetime64/timedelta64 data
+        with pytest.raises(TypeError, match=r"convert|conversion path"):
             _write(adata, diskfmt, diskfmt_store)
         return
     read = _df(_write(adata, diskfmt, diskfmt_store).obs)["cat"]
     assert read.dtype == "category"
     assert read.isna().tolist() == adata.obs["cat"].isna().tolist()
+    if not accepted:  # zarr stores what it cannot encode as strings
+        assert pd.api.types.is_string_dtype(read.cat.categories.dtype)
 
 
 class _ArrayApiNoDlpack:

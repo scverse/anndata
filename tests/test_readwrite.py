@@ -932,10 +932,10 @@ def test_write_object_column_longdouble_lossy(
     tail = [None] if with_missing else []
     values = np.array([x, 0.5, *tail], dtype=object)
     with pytest.raises(TypeError, match=r"exactly as float64"):
-        _object_column_to_writable(values, "col")
+        _object_column_to_writable(values, path="col")
     exact = np.array([cls(sign * 0.5), 2.0, *tail], dtype=object)
     np.testing.assert_array_equal(
-        _object_column_to_writable(exact, "col"),
+        _object_column_to_writable(exact, path="col"),
         np.array([sign * 0.5, 2.0, *([np.nan] if with_missing else [])]),
     )
 
@@ -958,7 +958,7 @@ def test_write_object_column_int_keeps_exotic_missing(missing: object) -> None:
     assert pd.api.types.infer_dtype(values, skipna=True) == "integer"
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        converted = _object_column_to_writable(values, "col")
+        converted = _object_column_to_writable(values, path="col")
     assert isinstance(converted, pd.arrays.IntegerArray)
     assert converted.isna().tolist() == [False, True, False]
     assert converted[[0, 2]].tolist() == [1, 3]
@@ -973,7 +973,8 @@ def test_write_object_column_nan_distinct_from_na() -> None:
     values = np.array([0.5, np.nan, None], dtype=object)
     with pd.option_context("future.distinguish_nan_and_na", True):  # noqa: FBT003
         np.testing.assert_array_equal(
-            _object_column_to_writable(values, "col"), np.array([0.5, np.nan, np.nan])
+            _object_column_to_writable(values, path="col"),
+            np.array([0.5, np.nan, np.nan]),
         )
 
 

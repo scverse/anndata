@@ -1536,7 +1536,11 @@ class AnnData:  # noqa: PLW1641
 
         from anndata._io.specs.validate import iter_unwriteable
 
-        return next(iter_unwriteable(self, store_type=store_type), None) is not None
+        problems = iter_unwriteable(self, store_type=store_type)
+        try:
+            return next(problems, None) is not None
+        finally:
+            problems.close()  # lets `iter_outer` close a backed file it reopened
 
     def var_names_make_unique(self, join: str = "-") -> None:
         # Important to go through the setter so obsm dataframes are updated too

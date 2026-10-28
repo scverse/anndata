@@ -1,12 +1,4 @@
-"""\
-Map in-memory dataframe columns onto the on-disk type system.
-
-anndata's on-disk format supports a small, closed set of column types
-(see :doc:`/fileformat-prose`), while pandas columns are open-ended.
-:func:`normalize_column` canonicalises object-dtype columns (the only family
-without a single backing-array type) and passes everything else to the IO registry;
-:func:`add_column_note` explains a registry miss with the column, its dtype, and a way out.
-"""
+"""Map in-memory dataframe columns onto the on-disk types, see :ref:`type-mapping`."""
 
 from __future__ import annotations
 
@@ -15,7 +7,6 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_string_dtype
 
 from ...compat import PANDAS_STRING_ARRAY_TYPES
 
@@ -28,7 +19,6 @@ if TYPE_CHECKING:
 __all__ = [
     "UnsupportedColumnTypeError",
     "add_column_note",
-    "check_categories_writable",
     "normalize_column",
 ]
 
@@ -63,29 +53,15 @@ def normalize_column(
     values: np.ndarray | ExtensionArray, *, path: str
 ) -> np.ndarray | ExtensionArray:
     """\
-    Return a writable version of a dataframe column's backing array.
+    Return a writable version of a dataframe column's backing array (``series._values``).
 
     Only object-dtype columns are converted, see :func:`_object_column_to_writable`;
-    a :class:`~pandas.arrays.NumpyExtensionArray` is unwrapped into its numpy array.
-    Everything else (numpy arrays, categoricals, nullable arrays, pyarrow-backed
-    arrays, datetime arrays, …) is returned unchanged for the IO registry to decide
-    whether a writer exists. Calling this twice is the same as calling it once,
-    and the input is never modified.
-
-    Parameters
-    ----------
-    values
-        The column's backing array, i.e. ``series._values``.
-    path
-        How to refer to the column in error messages.
+    everything else is returned unchanged for the IO registry to judge.
+    Idempotent, and the input is never modified.
+    `path` names the column in error messages.
     """
-    if isinstance(values, np.ndarray):
-        if values.dtype == object:
-            return _object_column_to_writable(values, path)
-        return values
-    # `StringArray` subclasses `NumpyExtensionArray` but has its own writer
-    if type(values) is pd.arrays.NumpyExtensionArray:
-        return normalize_column(values.to_numpy(), path=path)
+    if isinstance(values, np.ndarray) and values.dtype == object:
+        return _object_column_to_writable(values, path=path)
     return values
 
 
@@ -133,26 +109,6 @@ def add_column_note(
     )
 
 
-def check_categories_writable(categories: pd.Index, *, path: str) -> None:
-    """\
-    Raise if a categorical's categories have no faithful on-disk representation.
-
-    The categorical writer stores ``categories.to_numpy()``. For intervals,
-    periods and tz-aware datetimes that is an object array of Python objects,
-    which zarr would store as strings and h5py refuses.
-    Only the dtype is inspected, so an empty slice of the categories will do.
-    """
-    if categories[:0].to_numpy().dtype == object and not is_string_dtype(
-        categories.dtype
-    ):
-        msg = (
-            f"Cannot write categories of column {path!r} (dtype {categories.dtype}): "
-            "they have no on-disk representation. Convert the categories first, "
-            "e.g. with `.cat.rename_categories(str)`."
-        )
-        raise TypeError(msg)
-
-
 # object columns with one unambiguous on-disk type, by `infer_dtype` kind
 _OBJECT_COLUMN_CONVERSIONS: Mapping[
     str, tuple[pd.Int64Dtype | pd.BooleanDtype | pd.Float64Dtype, np.dtype | None]
@@ -168,7 +124,7 @@ _LONGDOUBLE_IS_WIDER = np.finfo(np.longdouble).nmant > np.finfo(np.float64).nman
 
 
 def _object_column_to_writable(
-    values: np.ndarray, path: str
+    values: np.ndarray, *, path: str
 ) -> np.ndarray | ExtensionArray:
     """\
     Convert an object-dtype column into something we can write.
@@ -179,11 +135,6 @@ def _object_column_to_writable(
     if that loses no precision.
     String/bytes columns without missing values and empty columns are returned unchanged.
     Everything else raises an :exc:`UnsupportedColumnTypeError` naming the column.
-
-    This is a canonicalisation, not a lossless conversion: the different missing
-    markers (`None`, `pd.NA`, `NaN`) collapse into one, floats become float64
-    (`NaN` for missing values), mixed int/float columns lose the per-value type,
-    and bytes are written as strings.
     """
     kind = pd.api.types.infer_dtype(values, skipna=True)
     if (conversion := _OBJECT_COLUMN_CONVERSIONS.get(kind)) is None:
