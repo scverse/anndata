@@ -16,10 +16,17 @@ What it does not catch: backend, codec and IO failures, and writers that
 reject particular *values* rather than types (e.g. a categorical with
 datetime categories on h5ad). Those can still fail mid-write.
 
-What it never does: load data from a backed file, compute a dask array,
-densify, subset a view's payload, or export an array-API array. The one
-allocation it makes is the conversion of object-dtype dataframe columns,
-which has to look at the values to find out whether they are writable.
+Design rule (the "never materialise" contract): the walk inspects types and
+metadata only. It never loads data from a backed file, computes a dask array,
+densifies, subsets a view's payload, copies a dataframe, materialises an index
+(e.g. a `RangeIndex`), packs an awkward array, or exports an array-API array;
+it must not allocate in proportion to the size of the data. The one exception
+is an object-dtype dataframe column, whose values have to be scanned (and, for
+a view, selected along the view's axis) to find out whether they are
+writable; that allocation is bounded by the column, not by the dataset.
+Consequently, one check of `write_dataframe` is *not* made here: whether a
+column that shares its name with the index holds the same values as the index.
+That is a value comparison and stays a writer-time error.
 """
 
 from __future__ import annotations
@@ -149,7 +156,7 @@ def _slash_forbidden(dests: tuple[type, ...]) -> bool:
     )
 
 
-def _walk(
+def _walk(  # noqa: PLR0912
     elem: object,
     dests: tuple[type, ...],
     path: str,
@@ -161,12 +168,19 @@ def _walk(
     # branch stopped (the writers would recurse until `RecursionError`).
     if elem is None:
         return
-    if isinstance(elem, AnnData | Raw | XDataset | Mapping):
+    if isinstance(elem, AnnData | Raw | XDataset | Mapping | list | tuple):
         if id(elem) in ancestors:
             msg = f"{type(elem).__name__} at {path!r} contains itself (reference cycle)"
             yield path, _with_path(ValueError(msg), path)
             return
         ancestors = ancestors | {id(elem)}
+    if isinstance(elem, list | tuple):
+        # `normalize_nested` recurses into sequences (registry.py:53-58) before the
+        # registry sees the sequence as one element, so a cycle through a list or
+        # tuple would recurse forever too; only cycles are looked for here
+        for i, item in enumerate(elem):
+            if isinstance(item, AnnData | Raw | XDataset | Mapping | list | tuple):
+                yield from _walk(item, dests, _join(path, i), ancestors)
     if isinstance(elem, AnnData):
         yield from _walk_anndata(elem, dests, path, ancestors)
     elif isinstance(elem, Raw):
@@ -181,20 +195,24 @@ def _walk(
         # `normalize_nested` turns any dict subclass into a plain dict, which
         # has a writer that writes each item; other mappings need their own
         for key, value in elem.items():
-            key_path = _join(path, key)
-            if (key_error := _check_mapping_key(key, path, dests)) is not None:
-                yield key_path, _with_path(key_error, key_path)
+            normalized = _check_mapping_key(key, path, dests)
+            if isinstance(normalized, Exception):
+                key_path = _join(path, key)
+                yield key_path, _with_path(normalized, key_path)
                 continue
-            yield from _walk(value, dests, key_path, ancestors)
+            # descend with the key as the writer would store it (`/uns/foo` -> `foo`)
+            yield from _walk(value, dests, _join(path, normalized), ancestors)
     else:
         yield from _walk_leaf(elem, dests, path)
 
 
 def _check_mapping_key(
     key: object, path: str, dests: tuple[type, ...]
-) -> Exception | None:
+) -> str | Exception:
     """\
     Mirror what `Writer.write_elem` does with a key written into the group at `path`.
+
+    Returns the key as it would be stored, or the exception the writer would raise.
 
     See `registry.py`: a non-string key fails at `k.startswith("/")`; an absolute key
     is made relative to the group (`PurePosixPath(k).relative_to(store.name)`, which
@@ -213,7 +231,7 @@ def _check_mapping_key(
     if "/" in key and _slash_forbidden(dests):
         msg = f"Forward slashes are not allowed in keys in {dests[0]}"
         return ValueError(msg)
-    return None
+    return key
 
 
 def _walk_leaf(
@@ -253,19 +271,27 @@ def _walk_anndata(
                 slash_msg = f"Forward slashes are not allowed in keys in {attr_name}"
                 yield attr_path, _with_path(ValueError(slash_msg), attr_path)
             for key, value in stored.items():
-                if key is None:  # `.X`, stored under `layers[None]`
+                if key is None and attr_name == "layers":
+                    # `.X` is stored under `layers[None]`; only the AnnData writers
+                    # give that slot a name (methods.py:390-391, h5ad.py:108-111)
                     name, elem_path = "X", _join(path, "X")
                 else:
                     name, elem_path = f"Layer {key!r}", _join(attr_path, key)
                     if not isinstance(key, str):  # slashes were reported above
                         key_error = _check_mapping_key(key, attr_path, dests)
-                        assert key_error is not None
+                        assert isinstance(key_error, Exception)
                         yield elem_path, _with_path(key_error, elem_path)
                         continue
                 if attr_name == "layers" and (
                     (msg := _non_2d_message(value, name=name)) is not None
                 ):
                     yield elem_path, _with_path(ValueError(msg), elem_path)
+                    continue
+                if isinstance(value, pd.DataFrame) and adata.is_view:
+                    # the view writes a row (obsm/obsp) or column (varm/varp)
+                    # selection of this dataframe: judge object columns on that
+                    rows = adata._oidx if attr_name.startswith("obs") else adata._vidx
+                    yield from _walk_dataframe(value, dests, elem_path, rows=rows)
                     continue
                 yield from _walk(value, dests, elem_path, ancestors)
         elif isinstance(attr, Raw):
@@ -316,11 +342,19 @@ def _walk_categorical(
 
 
 def _walk_dataframe(  # noqa: PLR0912, PLR0915
-    df: pd.DataFrame, dests: tuple[type, ...], path: str
+    df: pd.DataFrame,
+    dests: tuple[type, ...],
+    path: str,
+    *,
+    rows: object = None,
 ) -> Generator[tuple[str, Exception]]:
-    # The structural checks mirror `write_dataframe`. Columns are reached by
-    # position so that neither the column index nor the row index (possibly a
-    # `RangeIndex`) is materialised, and no column is boxed into a Series.
+    # The structural checks mirror `write_dataframe`, except the comparison of a
+    # column that shares the index's name with the index: that is a value scan
+    # and stays a writer-time error (see the module docstring). Columns are
+    # reached by position so that neither the column index nor the row index
+    # (possibly a `RangeIndex`) is materialised, and no column is boxed into a
+    # Series. `rows` is a view's selection along the dataframe's axis; it is
+    # applied to object columns only, the one per-column allocation allowed.
     columns = df.columns
     if "_index" in columns:
         msg = "'_index' is a reserved name for dataframe columns."
@@ -340,21 +374,8 @@ def _walk_dataframe(  # noqa: PLR0912, PLR0915
             if "/" in key and _slash_forbidden(dests):
                 msg = f"Forward slashes are not allowed in keys in {dests[0]}"
                 yield _join(path, key), _with_path(ValueError(msg), _join(path, key))
-    is_multi = isinstance(df.index, pd.MultiIndex)
-    if (
-        not is_multi  # a MultiIndex cannot be compared this way; reported below
-        and df.index.name is not None
-        and df.index.name in columns
-        and not pd.Series(df.index, index=df.index).equals(df[df.index.name])
-    ):
-        msg = (
-            f"DataFrame.index.name ({df.index.name!r}) is also used by a column "
-            "whose values are different. This is not supported. Please make sure "
-            "the values are the same, or use a different name."
-        )
-        yield path, _with_path(ValueError(msg), path)
     index_path = _join(path, index_name)
-    if is_multi:
+    if isinstance(df.index, pd.MultiIndex):
         msg = "Cannot write a DataFrame with a MultiIndex. Use a single-level index."
         yield index_path, _with_path(ValueError(msg), index_path)
     else:
@@ -387,8 +408,15 @@ def _walk_dataframe(  # noqa: PLR0912, PLR0915
                 add_column_note(miss, stub, col_path)
                 yield col_path, miss
             continue
+        values = _column_array(df, i)
+        if (
+            rows is not None
+            and isinstance(values, np.ndarray)
+            and values.dtype.kind == "O"
+        ):
+            values = values[rows if isinstance(rows, slice) else np.asarray(rows)]
         try:
-            values = normalize_column(_column_array(df, i), path=col_path)
+            values = normalize_column(values, path=col_path)
         except TypeError as conversion_error:
             yield col_path, _with_path(conversion_error, col_path)
             continue

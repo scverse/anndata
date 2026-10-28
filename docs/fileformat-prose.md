@@ -631,9 +631,11 @@ Set {attr}`anndata.settings.validate_before_write` to check every element of an
 {meth}`~anndata.AnnData.unwriteable` runs the same check and returns a boolean.
 The check is best effort: it finds elements and dataframe columns without an on-disk
 encoding, object columns that cannot be converted, non-2D `X`/layers, and dataframe
-structure problems (reserved, invalid or duplicate names, index-name collisions,
-`MultiIndex`), without reading backed data or computing lazy arrays; object-dtype columns
-are scanned (and converted, which allocates) because only their values tell.
+structure problems (reserved, invalid or duplicate names, `MultiIndex`), without reading
+backed data, computing lazy arrays or materialising indexes; object-dtype columns are
+scanned (and converted, which allocates) because only their values tell. Whether a column
+that shares its name with the index holds the same values as the index is a value
+comparison and is only checked by the writer.
 Backend, codec and IO failures, and writers that reject particular *values* rather than
 types (for example a categorical with datetime categories on `h5ad`), can still fail
 mid-write. A single problem is raised as the exception writing it would have raised;

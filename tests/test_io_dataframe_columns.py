@@ -484,11 +484,13 @@ def test_preflight_dataframe_structure() -> None:
     assert [p for p, _ in errors] == ["/obs"]
     assert "repeated column names" in str(errors[0][1])
 
+    # a column sharing the index's name with different values is a writer-time
+    # error (a value comparison), not a preflight one
     adata = _adata(col=_series([1, 2, 3]))
     adata.obs.index.name = "col"
-    errors = list(iter_unwriteable(adata))
-    assert [p for p, _ in errors] == ["/obs"]
-    assert "index.name" in str(errors[0][1])
+    assert list(iter_unwriteable(adata)) == []
+    with pytest.raises(ValueError, match=r"index.name"):
+        adata.write_zarr(MemoryStore())
 
     with ad.settings.override(restrict_index_types=False):
         adata = ad.AnnData(
@@ -950,13 +952,15 @@ def test_preflight_accepts_dict_subclasses(
 def forbid_payload_access() -> Generator[None]:
     """Fail on anything that would subset, copy, materialise or read payload data.
 
-    Patched: dataframe item access, slicing, `take` and `copy`; `.array`,
+    Patched: dataframe item access, slicing, `take`, `copy` and `to_numpy`; `.array`,
     `.to_numpy()` and `__array__` on any non-empty index, and `RangeIndex._data`;
-    anndata's `_subset`/`as_view`; `h5py.Dataset` and `zarr.Array` item reads.
+    anndata's `_subset`/`as_view`; `h5py.Dataset` item reads and `read_direct`;
+    `zarr.Array` item reads; dask `compute`/`persist`.
     `np.ndarray.copy`/`__array__` are C-level and cannot be patched.
     """
     from unittest import mock
 
+    import dask.base
     import zarr.core.array as zarr_array
     from pandas.core.indexing import _iLocIndexer, _LocIndexer
 
@@ -1016,13 +1020,26 @@ def forbid_payload_access() -> Generator[None]:
         mock.patch.object(
             aligned_mapping, "as_view", forbid("as_view (aligned mapping)")
         ),
+        mock.patch.object(pd.DataFrame, "to_numpy", forbid("DataFrame.to_numpy")),
         mock.patch.object(
             h5py.Dataset, "__getitem__", forbid("h5py.Dataset.__getitem__")
         ),
         mock.patch.object(
+            h5py.Dataset, "read_direct", forbid("h5py.Dataset.read_direct")
+        ),
+        mock.patch.object(
             zarr_array.Array, "__getitem__", forbid("zarr.Array.__getitem__")
         ),
+        mock.patch.object(dask.base, "compute", forbid("dask.compute")),
+        mock.patch.object(
+            dask.base.DaskMethodsMixin, "compute", forbid("dask Array.compute")
+        ),
+        mock.patch.object(
+            dask.base.DaskMethodsMixin, "persist", forbid("dask Array.persist")
+        ),
     ]
+    # `np.ndarray.copy`/`__array__` are attributes of a C type and cannot be patched;
+    # allocation-scaling checks that would catch such copies are out of scope here.
     with contextlib.ExitStack() as stack:
         for p in patches:
             stack.enter_context(p)
@@ -1032,7 +1049,8 @@ def forbid_payload_access() -> Generator[None]:
 N_PAYLOAD = 5_000
 
 
-def _payload_adata() -> ad.AnnData:
+def _payload_adata(*, dlpack: bool = True) -> ad.AnnData:
+    """A richly populated AnnData; `dlpack=False` leaves out the non-exportable array-API subject."""
     rng = np.random.default_rng(0)
     n = N_PAYLOAD
     index = pd.Index([f"cell{i}" for i in range(n)])
@@ -1074,17 +1092,60 @@ def _payload_adata() -> ad.AnnData:
         {"c": pd.Categorical.from_codes([0, 1, 0], categories=pd.RangeIndex(n))},
         index=list("abc"),
     )
+    # a named index that shares its name with a column (the writer compares the
+    # values; the preflight must not), and a named index that does not
+    adata.uns["named_collision"] = pd.DataFrame(
+        {"id": np.arange(n)}, index=pd.RangeIndex(n, name="id")
+    )
+    adata.uns["named_index"] = pd.DataFrame(
+        {"v": np.zeros(n)}, index=pd.RangeIndex(n, name="row")
+    )
+    if dlpack:  # cannot be written, so left out of subjects that get written to disk
+        adata.uns["dlpack"] = _ArrayApiNoExport(np.zeros(n))
     adata.raw = adata
     return adata
 
 
-def _subject(kind: str, tmp_path: Path) -> object:
+class _ArrayApiNoExport:
+    """An array-API array with DLPack support that must not be exported by the walk."""
+
+    def __init__(self, data: np.ndarray) -> None:
+        self._data = data
+        self.shape, self.ndim, self.size = data.shape, data.ndim, data.size
+        self.dtype, self.device = data.dtype, "cpu"
+
+    def __array_namespace__(self, *, api_version=None):
+        return np
+
+    def to_device(self, device, /, *, stream=None):
+        return self
+
+    def __getitem__(self, k, /):
+        return self
+
+    def __dlpack_device__(self):
+        return self._data.__dlpack_device__()
+
+    def __dlpack__(self, **kwargs):
+        pytest.fail("the preflight check exported an array-API array via DLPack")
+
+
+def _subject(kind: str, tmp_path: Path) -> object:  # noqa: PLR0911
     adata = _payload_adata()
     if kind == "memory":
         return adata
     if kind == "view":
         return adata[np.arange(0, N_PAYLOAD, 2), [0, 2, 4]]
+    if kind == "clean-view-of-dirty-parent":
+        dirty = np.array(["bad", *([1] * (N_PAYLOAD - 1))], dtype=object)
+        adata.obsm["dirty"] = pd.DataFrame({"o": dirty}, index=adata.obs_names)
+        adata.varm["dirty"] = pd.DataFrame(
+            {"o": np.array(["bad", *([1] * 19)], dtype=object)}, index=adata.var_names
+        )
+        assert adata.unwriteable()
+        return adata[np.arange(1, N_PAYLOAD), np.arange(1, 20)]
     if kind.startswith("backed"):
+        adata = _payload_adata(dlpack=False)
         fmt = kind.split("-")[1]
         if fmt == "dense":
             adata.X = adata.X.toarray()
@@ -1115,6 +1176,7 @@ def _subject(kind: str, tmp_path: Path) -> object:
 SUBJECTS = [
     "memory",
     "view",
+    "clean-view-of-dirty-parent",
     "backed-dense",
     "backed-csr",
     "backed-csc",
@@ -1139,10 +1201,11 @@ def test_preflight_never_materialises(
 
 def test_harness_catches_payload_access(*, tmp_path: Path) -> None:
     """The harness itself: each forbidden operation is detected."""
-    adata = _payload_adata()
+    adata = _payload_adata(dlpack=False)
+    adata.uns["dlpack"] = _ArrayApiNoExport(np.zeros(3))
     view = adata[::2]
     backed_path = tmp_path / "h.h5ad"
-    adata.write_h5ad(backed_path)
+    _payload_adata(dlpack=False).write_h5ad(backed_path)
     backed = ad.read_h5ad(backed_path, backed="r")
     probes = {
         "getitem": lambda: adata.obs["num"],
@@ -1154,6 +1217,10 @@ def test_harness_catches_payload_access(*, tmp_path: Path) -> None:
         "rangeindex": lambda: adata.uns["table"].index._data,
         "view obsm": lambda: view.obsm["numeric_df"],
         "backed read": lambda: backed.file["obs/num"][()],
+        "to_numpy": lambda: adata.obs.to_numpy(),  # noqa: PLW0108
+        "read_direct": lambda: backed.file["obs/num"].read_direct(np.empty(N_PAYLOAD)),
+        "dask compute": lambda: da.zeros(3).compute(),
+        "dlpack": lambda: np.from_dlpack(adata.uns["dlpack"]),
     }
     for probe in probes.values():
         with forbid_payload_access(), pytest.raises(pytest.fail.Exception):
@@ -1299,4 +1366,79 @@ def test_preflight_rejects_dataset2d() -> None:
     adata.obs = empty
     errors = list(iter_unwriteable(adata))
     assert [(p, type(e)) for p, e in errors] == [("/obs", IORegistryError)]
+    assert adata.unwriteable()
+
+
+def test_preflight_view_object_columns_in_mappings(
+    *, diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore
+) -> None:
+    """Object columns of a view's obsm/varm dataframes are judged on the view's rows."""
+    adata = ad.AnnData(
+        np.zeros((3, 3)),
+        obs=pd.DataFrame(index=IDX),
+        var=pd.DataFrame(index=list("xyz")),
+    )
+    adata.obsm["t"] = pd.DataFrame(
+        {"o": np.array([1, "bad", None], dtype=object)}, index=adata.obs_names
+    )
+    adata.varm["t"] = pd.DataFrame(
+        {"o": np.array(["bad", 2, None], dtype=object)}, index=adata.var_names
+    )
+    assert [p for p, _ in iter_unwriteable(adata)] == ["/obsm/t/o", "/varm/t/o"]
+    view = adata[[0], [1, 2]]
+    assert list(iter_unwriteable(view)) == []
+    with ad.settings.override(validate_before_write=True):
+        read = _write(view, diskfmt, diskfmt_store)
+    assert read.obsm["t"]["o"].tolist() == [1]
+    assert read.varm["t"]["o"].isna().tolist() == [False, True]
+
+
+@pytest.mark.parametrize("mapping", ["obsm", "varm", "obsp", "varp"])
+def test_preflight_none_key_only_for_layers(
+    *, diskfmt: Literal["h5ad", "zarr"], tmp_path: Path, mapping: str
+) -> None:
+    path = tmp_path / f"adata.{diskfmt}"
+    getattr(_adata(col=_series([1, 2, 3])), f"write_{diskfmt}")(path)
+    adata = _adata(col=_series([1, 2, 3]))
+    n = 3 if mapping.startswith("obs") else 0
+    getattr(adata, mapping)[None] = np.zeros((n, n if mapping.endswith("p") else 2))
+    errors = list(iter_unwriteable(adata))
+    assert [(p, type(e)) for p, e in errors] == [(f"/{mapping}/None", TypeError)]
+    assert adata.unwriteable()
+    with (
+        ad.settings.override(validate_before_write=True),
+        pytest.raises(TypeError, match=r"invalid key"),
+    ):
+        getattr(adata, f"write_{diskfmt}")(path)
+    read = getattr(ad, f"read_{diskfmt}")(path)
+    assert list(read.obs.columns) == ["col"]
+
+
+def test_preflight_absolute_keys_normalised_for_children(
+    *, diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore
+) -> None:
+    adata = _adata(col=_series([1, 2, 3]))
+    adata.uns["/uns/foo"] = {"/uns/foo/bar": 1}
+    with ad.settings.override(disallow_forward_slash_in_h5ad=False):
+        assert list(iter_unwriteable(adata)) == []
+        with ad.settings.override(validate_before_write=True):
+            read = _write(adata, diskfmt, diskfmt_store)
+    assert read.uns["foo"]["bar"] == 1
+
+
+def test_preflight_reports_sequence_cycles() -> None:
+    adata = _adata(col=_series([1, 2, 3]))
+    cycle: list = []
+    cycle.append(cycle)
+    adata.uns["cycle"] = cycle
+    indirect: dict = {}
+    indirect["seq"] = [1, [2, indirect]]
+    adata.uns["indirect"] = indirect
+    shared = [1, 2]
+    adata.uns["shared"] = {"a": shared, "b": [shared, shared]}
+    errors = list(iter_unwriteable(adata))
+    assert [(p, type(e)) for p, e in errors] == [
+        ("/uns/cycle/0", ValueError),
+        ("/uns/indirect/seq/1/1", ValueError),
+    ]
     assert adata.unwriteable()
