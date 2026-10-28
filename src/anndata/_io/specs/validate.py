@@ -21,7 +21,7 @@ from pandas.api.types import is_string_dtype
 from anndata._core.anndata import AnnData, _categorical_from_strings
 from anndata._core.raw import Raw
 from anndata._core.storage import _non_2d_message
-from anndata.compat import XDataset, has_xp
+from anndata.compat import has_xp
 from anndata.utils import iter_outer
 
 from ..utils import _check_has_no_slash_key, check_key
@@ -145,6 +145,9 @@ def _raise_problems(errors: list[tuple[str, Exception]]) -> None:
 def _group_types(store_type: Literal["h5", "zarr"] | None) -> GroupTypes:
     if store_type is None:
         return tuple(t for ts in _GROUP_TYPES.values() for t in ts)
+    if store_type not in _GROUP_TYPES:
+        msg = f"`store_type` must be one of {[*_GROUP_TYPES]} or None, not {store_type!r}."
+        raise ValueError(msg)
     return _GROUP_TYPES[store_type]
 
 
@@ -168,7 +171,13 @@ def _has_writer(elem: object, group_types: GroupTypes) -> bool:
 def _missing_writer_error(
     elem: object, group_types: GroupTypes, path: str
 ) -> IORegistryError:
-    e = IORegistryError._from_write_parts(group_types[0], type(elem), frozenset())
+    if len(group_types) == 1:
+        e = IORegistryError._from_write_parts(group_types[0], type(elem), frozenset())
+    else:  # `store_type=None`: no store has a writer
+        stores = " or ".join(map(str, group_types))
+        e = IORegistryError(
+            f"No method registered for writing {type(elem)} into {stores}"
+        )
     return _note_path(e, path)
 
 
@@ -204,7 +213,7 @@ def _walk(
     if not isinstance(elem, dict) and not _has_writer(elem, group_types):
         yield from _walk_leaf(elem, group_types, path)
         return
-    if isinstance(elem, AnnData | Raw | XDataset | Mapping | list):
+    if isinstance(elem, AnnData | Raw | Mapping | list):
         if id(elem) in ancestors:
             msg = f"{type(elem).__name__} at {path!r} contains itself (reference cycle)"
             yield path, _note_path(ValueError(msg), path)
@@ -223,14 +232,14 @@ def _walk(
         )
     elif isinstance(elem, pd.Categorical):
         yield from _walk_categorical(elem, group_types, path)
-    elif isinstance(elem, XDataset | Mapping):
+    elif isinstance(elem, Mapping):
         yield from _walk_mapping(elem, group_types, path, ancestors)
     elif isinstance(elem, pd.arrays.StringArray | pd.arrays.ArrowStringArray):
         yield from _walk_nullable_strings(path)
 
 
 def _walk_mapping(
-    elem: XDataset | Mapping,
+    elem: Mapping,
     group_types: GroupTypes,
     path: str,
     ancestors: frozenset[int],
@@ -331,16 +340,21 @@ def _walk_aligned_mapping(
     for key, value in stored.items():
         if key is None and attr_name == "layers":
             # the AnnData writers store `layers[None]` as `X`
-            name, elem_path = "X", _child_path(adata_path, "X")
+            elem_path = _child_path(adata_path, "X")
         else:
-            name, elem_path = f"Layer {key!r}", _child_path(path, key)
+            elem_path = _child_path(path, key)
             try:
                 check_key(key)
             except TypeError as e:
                 yield elem_path, _note_path(e, elem_path)
                 continue
         if attr_name == "layers" and (
-            (shape_msg := _non_2d_message(value, name=name)) is not None
+            (
+                shape_msg := _non_2d_message(
+                    value, name="X" if key is None else f"Layer {key!r}"
+                )
+            )
+            is not None
         ):
             yield elem_path, _note_path(ValueError(shape_msg), elem_path)
         elif (

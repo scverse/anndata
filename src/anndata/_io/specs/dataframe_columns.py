@@ -90,9 +90,7 @@ _GENERIC_HINT = (
 
 
 def _column_hint(values: np.ndarray | ExtensionArray) -> str:
-    if isinstance(values, pd.arrays.DatetimeArray | pd.arrays.TimedeltaArray) or (
-        isinstance(values, np.ndarray) and values.dtype.kind in "Mm"
-    ):
+    if isinstance(values, pd.arrays.DatetimeArray | pd.arrays.TimedeltaArray):
         return _DATETIME_HINT
     if isinstance(values, pd.arrays.FloatingArray):
         return _NULLABLE_FLOAT_HINT

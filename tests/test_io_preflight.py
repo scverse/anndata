@@ -277,6 +277,15 @@ def test_preflight_nullable_strings_follow_setting(
         getattr(adata, f"write_{diskfmt}")(path)
 
 
+def test_preflight_store_types() -> None:
+    adata = adata_with_obs(period=obs_column(pd.period_range("2020-01", periods=3)))
+    [(_, error)] = iter_unwriteable(adata)
+    assert "h5py" in str(error)
+    assert "zarr" in str(error)
+    with pytest.raises(ValueError, match=r"`store_type` must be one of"):
+        adata.unwriteable(store_type="h5py")  # type: ignore[arg-type]
+
+
 def test_preflight_dataframe_structure() -> None:
     import pyarrow as pa
 
