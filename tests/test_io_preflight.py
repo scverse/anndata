@@ -30,7 +30,17 @@ from anndata._io.specs.validate import (
 )
 from anndata._io.utils import _resolve_use
 from anndata.acc import A
-from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, gen_adata
+from anndata.tests.helpers import (
+    GEN_ADATA_NO_XARRAY_ARGS,
+    adata_with_obs,
+    as_dataframe,
+    exception_notes,
+    gen_adata,
+    obs_column,
+    obs_index,
+    store_type_of,
+    write_and_read,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
@@ -40,48 +50,14 @@ if TYPE_CHECKING:
     from anndata.acc import AdRef, MapAcc, RefAcc
 
 
-def _idx() -> pd.Index:
-    """A fresh index for every frame: pandas < 3 shares the Index object between frames."""
-    return pd.Index([f"c{i}" for i in range(3)])
-
-
-def _series(values: object, dtype: str | None = None) -> pd.Series:
-    return pd.Series(values, index=_idx(), dtype=dtype)
-
-
-def _adata(**obs_columns: pd.Series) -> ad.AnnData:
-    return ad.AnnData(obs=pd.DataFrame(obs_columns, index=_idx()))
-
-
-def _write(adata: ad.AnnData, diskfmt: str, store: object, **kwargs) -> ad.AnnData:
-    getattr(adata, f"write_{diskfmt}")(
-        store, convert_strings_to_categoricals=False, **kwargs
-    )
-    return getattr(ad, f"read_{diskfmt}")(store)
-
-
-def _store_type(diskfmt: Literal["h5ad", "zarr"]) -> Literal["h5", "zarr"]:
-    return "h5" if diskfmt == "h5ad" else "zarr"
-
-
-def _df(elem: object) -> pd.DataFrame:
-    """Narrow an element (`adata.obs`, a read element, …) to a dataframe."""
-    assert isinstance(elem, pd.DataFrame)
-    return elem
-
-
-def _notes(e: BaseException) -> str:
-    return "\n".join(getattr(e, "__notes__", []))
-
-
 def _bad_everywhere() -> ad.AnnData:
-    adata = _adata(
-        good=_series([1, 2, 3]),
-        period=_series(pd.period_range("2020-01", periods=3, freq="M")),
+    adata = adata_with_obs(
+        good=obs_column([1, 2, 3]),
+        period=obs_column(pd.period_range("2020-01", periods=3, freq="M")),
     )
     adata.var["dt"] = pd.to_datetime([])
     adata.obsm["df"] = pd.DataFrame(
-        {"mixed": np.array([1, "a", None], dtype=object)}, index=_idx()
+        {"mixed": np.array([1, "a", None], dtype=object)}, index=obs_index()
     )
     adata.uns["nested"] = {"ok": 1, "bad": object()}
     return adata
@@ -105,7 +81,7 @@ def test_preflight_reports_all_problems(
     assert group.message == f"4 elements cannot be written: {', '.join(paths)}"
     assert len(group.exceptions) == 4
     assert all(
-        f"Element: {p}" in _notes(e)
+        f"Element: {p}" in exception_notes(e)
         for p, e in zip(paths, group.exceptions, strict=True)
     )
     assert not path.exists()
@@ -134,7 +110,7 @@ def test_preflight_leaves_existing_destination_untouched(
     *, diskfmt: Literal["h5ad", "zarr"], tmp_path: Path
 ) -> None:
     path = tmp_path / f"adata.{diskfmt}"
-    good = _adata(col=_series([1, 2, 3]))
+    good = adata_with_obs(col=obs_column([1, 2, 3]))
     getattr(good, f"write_{diskfmt}")(path)
     bad = _bad_everywhere()
     with (
@@ -167,10 +143,10 @@ def test_write_elem_bypasses_preflight(
         store = h5py.File(diskfmt_store, "w")
     else:
         store = zarr.open_group(diskfmt_store, mode="w")
-    df = pd.DataFrame({"obj": np.array([1, None, 3], dtype=object)}, index=_idx())
+    df = pd.DataFrame({"obj": np.array([1, None, 3], dtype=object)}, index=obs_index())
     with ad.settings.override(validate_before_write=True):
         ad.io.write_elem(store, "df", df)
-        assert _df(ad.io.read_elem(store["df"]))["obj"].dtype == "Int64"
+        assert as_dataframe(ad.io.read_elem(store["df"]))["obj"].dtype == "Int64"
         # no aggregation: the first problem is raised
         with pytest.raises(IORegistryError) as exc_info:
             ad.io.write_elem(store, "uns", {"a": object(), "b": object()})
@@ -178,7 +154,7 @@ def test_write_elem_bypasses_preflight(
 
 
 def test_preflight_raw(*, diskfmt: Literal["h5ad", "zarr"], tmp_path: Path) -> None:
-    adata = ad.AnnData(np.zeros((3, 2)), obs=pd.DataFrame(index=_idx()))
+    adata = ad.AnnData(np.zeros((3, 2)), obs=pd.DataFrame(index=obs_index()))
     adata.raw = adata
     assert adata.raw is not None
     adata.raw.var["period"] = pd.period_range("2020-01", periods=2, freq="M")
@@ -193,19 +169,19 @@ def test_preflight_raw(*, diskfmt: Literal["h5ad", "zarr"], tmp_path: Path) -> N
 def test_preflight_dataframe_structure() -> None:
     import pyarrow as pa
 
-    adata = _adata(col=_series([1, 2, 3]))
+    adata = adata_with_obs(col=obs_column([1, 2, 3]))
     adata.obs["_index"] = [1, 2, 3]
     assert [(p, type(e)) for p, e in iter_unwriteable(adata)] == [("/obs", ValueError)]
 
-    adata = _adata(col=_series([1, 2, 3]))
-    adata.obs = pd.DataFrame(np.ones((3, 2)), columns=["dup", "dup"], index=_idx())
+    adata = adata_with_obs(col=obs_column([1, 2, 3]))
+    adata.obs = pd.DataFrame(np.ones((3, 2)), columns=["dup", "dup"], index=obs_index())
     errors = list(iter_unwriteable(adata))
     assert [p for p, _ in errors] == ["/obs"]
     assert "repeated column names" in str(errors[0][1])
 
     # a value comparison: writer-time only
-    adata = _adata(col=_series([1, 2, 3]))
-    adata.obs = _df(adata.obs).rename_axis("col")
+    adata = adata_with_obs(col=obs_column([1, 2, 3]))
+    adata.obs = as_dataframe(adata.obs).rename_axis("col")
     assert list(iter_unwriteable(adata)) == []
     with pytest.raises(ValueError, match=r"index.name"):
         adata.write_zarr(MemoryStore())
@@ -231,7 +207,7 @@ def test_preflight_view_uses_own_metadata(
     *, diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore
 ) -> None:
     """A view is validated on what it would write, not on its parent's columns."""
-    parent = _adata(col=_series(np.array([1, "a", None], dtype=object)))
+    parent = adata_with_obs(col=obs_column(np.array([1, "a", None], dtype=object)))
     parent.layers["L"] = np.zeros((3, 0))
     assert parent.unwriteable()
     view = parent[:1]
@@ -239,7 +215,7 @@ def test_preflight_view_uses_own_metadata(
     assert view.obs["col"].tolist() == [1]
     assert list(iter_unwriteable(view)) == []
     with ad.settings.override(validate_before_write=True):
-        read = _write(view, diskfmt, diskfmt_store)
+        read = write_and_read(view, diskfmt, diskfmt_store)
     assert read.obs["col"].tolist() == [1]
 
 
@@ -258,7 +234,7 @@ def test_preflight_multiindex_aggregates() -> None:
         ("/obs/period", IORegistryError),
     ]
     assert "MultiIndex" in str(errors[0][1])
-    assert "Element: /obs/_index" in _notes(errors[0][1])
+    assert "Element: /obs/_index" in exception_notes(errors[0][1])
     assert adata.unwriteable()
     with pytest.raises(ExceptionGroup) as exc_info:
         raise_if_unwriteable(adata)
@@ -339,17 +315,17 @@ def test_preflight_dispatches_subclasses_like_writer(
     errors = list(iter_unwriteable(adata))
     assert [(p, type(e)) for p, e in errors] == [("/uns/x", IORegistryError)]
     with pytest.raises(IORegistryError):
-        _write(adata, diskfmt, diskfmt_store)
+        write_and_read(adata, diskfmt, diskfmt_store)
 
 
 def test_preflight_invalid_column_name_keeps_destination(
     *, diskfmt: Literal["h5ad", "zarr"], tmp_path: Path
 ) -> None:
     path = tmp_path / f"adata.{diskfmt}"
-    good = _adata(col=_series([1, 2, 3]))
+    good = adata_with_obs(col=obs_column([1, 2, 3]))
     getattr(good, f"write_{diskfmt}")(path)
 
-    bad = _adata(col=_series([1, 2, 3]))
+    bad = adata_with_obs(col=obs_column([1, 2, 3]))
     bad.obs[0] = [4, 5, 6]
     errors = list(iter_unwriteable(bad))
     assert [(p, type(e)) for p, e in errors] == [("/obs", TypeError)]
@@ -367,7 +343,9 @@ def test_preflight_invalid_column_name_keeps_destination(
 def test_preflight_aggregates_non_2d_with_column(
     *, diskfmt: Literal["h5ad", "zarr"], tmp_path: Path
 ) -> None:
-    adata = _adata(period=_series(pd.period_range("2020-01", periods=3, freq="M")))
+    adata = adata_with_obs(
+        period=obs_column(pd.period_range("2020-01", periods=3, freq="M"))
+    )
     with pytest.warns(UserWarning, match=r"must be 2-dimensional"):
         adata.X = np.zeros((3, 0, 2))
     with (
@@ -407,7 +385,7 @@ def test_preflight_does_not_read_aligned_mappings_of_views(*, tmp_path: Path) ->
 
 def test_preflight_does_not_materialize_range_categories() -> None:
     cat = pd.Categorical.from_codes([0, 1, 0], categories=pd.RangeIndex(100_000))
-    adata = _adata(cat=pd.Series(cat, index=_idx()))
+    adata = adata_with_obs(cat=pd.Series(cat, index=obs_index()))
     with forbid_payload_access():  # forbids `RangeIndex._data`
         assert list(iter_unwriteable(adata)) == []
         assert not adata.unwriteable()
@@ -440,17 +418,17 @@ def test_preflight_slash_keys_keep_destination(
     *, diskfmt: Literal["h5ad", "zarr"], tmp_path: Path, where: str
 ) -> None:
     path = tmp_path / f"adata.{diskfmt}"
-    good = _adata(col=_series([1, 2, 3]))
+    good = adata_with_obs(col=obs_column([1, 2, 3]))
     getattr(good, f"write_{diskfmt}")(path)
 
-    bad = _adata(col=_series([1, 2, 3]))
+    bad = adata_with_obs(col=obs_column([1, 2, 3]))
     if where == "layers":
         bad.layers["bad/key"] = np.zeros((3, 0))
     elif where == "uns":
         bad.uns["bad/key"] = 1
     else:
         bad.uns["outer"] = {"bad/key": 1}
-    store_type = _store_type(diskfmt)
+    store_type = store_type_of(diskfmt)
     errors = list(iter_unwriteable(bad, store_type=store_type))
     assert [type(e) for _, e in errors] == [ValueError]
     assert "Forward slashes" in str(errors[0][1])
@@ -466,7 +444,7 @@ def test_preflight_slash_keys_keep_destination(
 
 def test_preflight_slash_keys_follow_h5ad_setting(*, tmp_path: Path) -> None:
     """With the h5ad slash setting off, `uns` keys with slashes are allowed (with a warning)."""
-    adata = _adata(col=_series([1, 2, 3]))
+    adata = adata_with_obs(col=obs_column([1, 2, 3]))
     adata.uns["bad/key"] = 1
     with ad.settings.override(disallow_forward_slash_in_h5ad=False):
         assert list(iter_unwriteable(adata, store_type="h5")) == []
@@ -497,11 +475,11 @@ def test_preflight_accepts_dict_subclasses(
         value = collections.defaultdict(int, a=1)
     else:
         value = collections.Counter({"a": 2})
-    adata = _adata(col=_series([1, 2, 3]))
+    adata = adata_with_obs(col=obs_column([1, 2, 3]))
     adata.uns["sub"] = value
     assert list(iter_unwriteable(adata)) == []
     with ad.settings.override(validate_before_write=True):
-        read = _write(adata, diskfmt, diskfmt_store)
+        read = write_and_read(adata, diskfmt, diskfmt_store)
     assert read.uns["sub"]["a"] == value["a"]
 
 
@@ -879,8 +857,8 @@ def test_harness_catches_payload_access(*, tmp_path: Path) -> None:
     with ad.settings.override(allow_write_nullable_strings=True):
         _payload_adata(dlpack=False).write_h5ad(backed_path)
     backed = ad.read_h5ad(backed_path, backed="r")
-    obs, var = _df(adata.obs), _df(adata.var)
-    table = _df(adata.uns["table"])
+    obs, var = as_dataframe(adata.obs), as_dataframe(adata.var)
+    table = as_dataframe(adata.uns["table"])
     columns = {name: obs[name].array for name in ("cat", "Int64", "str")}
     X = adata.X
     assert isinstance(X, sp.csr_matrix)
@@ -923,7 +901,7 @@ def test_harness_catches_payload_access(*, tmp_path: Path) -> None:
 
 def test_preflight_reports_cycles() -> None:
     """A container that contains itself is reported, not recursed into forever."""
-    adata = _adata(col=_series([1, 2, 3]))
+    adata = adata_with_obs(col=obs_column([1, 2, 3]))
     adata.uns["self"] = adata.uns
     adata.uns["adata"] = adata
     adata.uns["shared"] = shared = {"x": 1}
@@ -959,10 +937,10 @@ def test_preflight_mapping_key_rules(
 ) -> None:
     """Mapping keys are judged the way `Writer.write_elem` treats them."""
     path = tmp_path / f"adata.{diskfmt}"
-    getattr(_adata(col=_series([1, 2, 3])), f"write_{diskfmt}")(path)
-    adata = _adata(col=_series([1, 2, 3]))
+    getattr(adata_with_obs(col=obs_column([1, 2, 3])), f"write_{diskfmt}")(path)
+    adata = adata_with_obs(col=obs_column([1, 2, 3]))
     adata.uns[key] = 1
-    store_type = _store_type(diskfmt)
+    store_type = store_type_of(diskfmt)
     with ad.settings.override(disallow_forward_slash_in_h5ad=False):
         errors = list(iter_unwriteable(adata, store_type=store_type))
         if expected is None:
@@ -995,7 +973,7 @@ def test_preflight_mapping_key_rules(
 )
 def test_preflight_categorical_index_policy(categories: pd.Index) -> None:
     """A categorical index goes through the same category policy as a column."""
-    adata = _adata(col=_series([1, 2, 3]))
+    adata = adata_with_obs(col=obs_column([1, 2, 3]))
     adata.uns["table"] = pd.DataFrame(
         {"x": [1.0, 2.0, 3.0]},
         index=pd.CategoricalIndex(
@@ -1021,9 +999,9 @@ def test_write_entry_points_do_not_read_view_payloads_before_preflight(
     """The `no_write_dataset_2d` guard inspects a view through its parent too."""
     with h5py.File(tmp_path / "arrays.h5", "w") as f:
         f["m"] = np.zeros((3, 2))
-        adata = _adata(
-            col=_series([1, 2, 3]),
-            period=_series(pd.period_range("2020-01", periods=3, freq="M")),
+        adata = adata_with_obs(
+            col=obs_column([1, 2, 3]),
+            period=obs_column(pd.period_range("2020-01", periods=3, freq="M")),
         )
         adata.obsm["m"] = f["m"]
         adata.varm["m"] = np.zeros((0, 1))
@@ -1058,7 +1036,7 @@ def test_preflight_view_object_columns_in_mappings(
     """Object columns of a view's obsm/varm dataframes are judged on the view's rows."""
     adata = ad.AnnData(
         np.zeros((3, 3)),
-        obs=pd.DataFrame(index=_idx()),
+        obs=pd.DataFrame(index=obs_index()),
         var=pd.DataFrame(index=list("xyz")),
     )
     adata.obsm["t"] = pd.DataFrame(
@@ -1071,9 +1049,9 @@ def test_preflight_view_object_columns_in_mappings(
     view = adata[[0], [1, 2]]
     assert list(iter_unwriteable(view)) == []
     with ad.settings.override(validate_before_write=True):
-        read = _write(view, diskfmt, diskfmt_store)
-    assert _df(read.obsm["t"])["o"].tolist() == [1]
-    assert _df(read.varm["t"])["o"].isna().tolist() == [False, True]
+        read = write_and_read(view, diskfmt, diskfmt_store)
+    assert as_dataframe(read.obsm["t"])["o"].tolist() == [1]
+    assert as_dataframe(read.varm["t"])["o"].isna().tolist() == [False, True]
 
 
 @pytest.mark.parametrize("mapping", ["obsm", "varm", "obsp", "varp"])
@@ -1081,8 +1059,8 @@ def test_preflight_none_key_only_for_layers(
     *, diskfmt: Literal["h5ad", "zarr"], tmp_path: Path, mapping: str
 ) -> None:
     path = tmp_path / f"adata.{diskfmt}"
-    getattr(_adata(col=_series([1, 2, 3])), f"write_{diskfmt}")(path)
-    adata = _adata(col=_series([1, 2, 3]))
+    getattr(adata_with_obs(col=obs_column([1, 2, 3])), f"write_{diskfmt}")(path)
+    adata = adata_with_obs(col=obs_column([1, 2, 3]))
     n = 3 if mapping.startswith("obs") else 0
     getattr(adata, mapping)[None] = np.zeros((n, n if mapping.endswith("p") else 2))
     errors = list(iter_unwriteable(adata))
@@ -1100,17 +1078,17 @@ def test_preflight_none_key_only_for_layers(
 def test_preflight_absolute_keys_normalised_for_children(
     *, diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore
 ) -> None:
-    adata = _adata(col=_series([1, 2, 3]))
+    adata = adata_with_obs(col=obs_column([1, 2, 3]))
     adata.uns["/uns/foo"] = {"/uns/foo/bar": 1}
     with ad.settings.override(disallow_forward_slash_in_h5ad=False):
         assert list(iter_unwriteable(adata)) == []
         with ad.settings.override(validate_before_write=True):
-            read = _write(adata, diskfmt, diskfmt_store)
+            read = write_and_read(adata, diskfmt, diskfmt_store)
     assert read.uns["foo"]["bar"] == 1
 
 
 def test_preflight_reports_sequence_cycles() -> None:
-    adata = _adata(col=_series([1, 2, 3]))
+    adata = adata_with_obs(col=obs_column([1, 2, 3]))
     cycle: list = []
     cycle.append(cycle)
     adata.uns["cycle"] = cycle
@@ -1135,13 +1113,13 @@ def test_preflight_accepts_sequences_of_writable_members(
     *, diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore
 ) -> None:
     """Sequence members are not validated individually: the list writer stores the whole list."""
-    adata = _adata(col=_series([1, 2, 3]))
+    adata = adata_with_obs(col=obs_column([1, 2, 3]))
     adata.uns["pairs"] = [(1, 2), (3, 4)]
     adata.uns["nested"] = [[1, 2], [3, 4]]
     adata.uns["strings"] = ["a", "b"]
     assert list(iter_unwriteable(adata)) == []
     with ad.settings.override(validate_before_write=True):
-        read = _write(adata, diskfmt, diskfmt_store)
+        read = write_and_read(adata, diskfmt, diskfmt_store)
     np.testing.assert_array_equal(read.uns["pairs"], [[1, 2], [3, 4]])
     np.testing.assert_array_equal(read.uns["nested"], [[1, 2], [3, 4]])
     assert list(read.uns["strings"]) == ["a", "b"]
@@ -1156,8 +1134,8 @@ def test_preflight_use_checks_only_used_elements(
     *, diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore
 ) -> None:
     """A partial write is judged on what it writes, not on the rest of the object."""
-    adata = _adata(col=_series([1, 2, 3]))
-    _write(adata, diskfmt, diskfmt_store)
+    adata = adata_with_obs(col=obs_column([1, 2, 3]))
+    write_and_read(adata, diskfmt, diskfmt_store)
     adata.obs["period"] = pd.period_range("2020-01", periods=3, freq="M")
     adata.obsm["clean"] = np.ones((3, 2))
     assert adata.unwriteable()
@@ -1165,7 +1143,7 @@ def test_preflight_use_checks_only_used_elements(
         getattr(adata, f"write_{diskfmt}")(diskfmt_store, use=A.obsm["clean"])
     read = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
     np.testing.assert_array_equal(read.obsm["clean"], np.ones((3, 2)))
-    assert list(_df(read.obs).columns) == ["col"]
+    assert list(as_dataframe(read.obs).columns) == ["col"]
 
 
 @pytest.mark.parametrize("bad", ["column", "mapping"])
@@ -1173,8 +1151,8 @@ def test_preflight_use_refuses_unwritable_part(
     *, diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore, bad: str
 ) -> None:
     """An unwritable part fails the partial write before any part is written."""
-    adata = _adata(col=_series([1, 2, 3]))
-    _write(adata, diskfmt, diskfmt_store)
+    adata = adata_with_obs(col=obs_column([1, 2, 3]))
+    write_and_read(adata, diskfmt, diskfmt_store)
     period = pd.period_range("2020-01", periods=3, freq="M")
     adata.obsm["good"] = np.ones((3, 2))
     if bad == "column":
@@ -1188,7 +1166,7 @@ def test_preflight_use_refuses_unwritable_part(
         pytest.raises(IORegistryError) as exc_info,
     ):
         getattr(adata, f"write_{diskfmt}")(diskfmt_store, use=use)
-    assert f"Element: {path}" in _notes(exc_info.value)
+    assert f"Element: {path}" in exception_notes(exc_info.value)
     assert _keys_on_disk(diskfmt_store) == set()
 
     # without the preflight, the parts before the bad one are written
@@ -1222,16 +1200,18 @@ def test_use_object_column_converted_like_full_write(
     validate: bool,
 ) -> None:
     """`use=A.obs[col]` writes an object column the way a full write does."""
-    adata = _adata(col=_series([1, 2, 3]))
-    _write(adata, diskfmt, diskfmt_store)
+    adata = adata_with_obs(col=obs_column([1, 2, 3]))
+    write_and_read(adata, diskfmt, diskfmt_store)
     adata.obs["o"] = np.array([1, None, 3], dtype=object)
     full_store = tmp_path / "full.h5ad" if diskfmt == "h5ad" else MemoryStore()
-    full = _df(_write(adata, diskfmt, full_store).obs)["o"]
+    full = as_dataframe(write_and_read(adata, diskfmt, full_store).obs)["o"]
     with ad.settings.override(validate_before_write=validate):
-        read = _df(_write(adata, diskfmt, diskfmt_store, use=A.obs["o"]).obs)["o"]
+        read = as_dataframe(
+            write_and_read(adata, diskfmt, diskfmt_store, use=A.obs["o"]).obs
+        )["o"]
     assert read.dtype == full.dtype == "Int64"
     assert read.isna().tolist() == [False, True, False]
-    assert _df(adata.obs)["o"].dtype == object
+    assert as_dataframe(adata.obs)["o"].dtype == object
 
 
 @pytest.mark.parametrize("validate", [False, True], ids=["validate=F", "validate=T"])
@@ -1241,15 +1221,17 @@ def test_use_unconvertible_object_column_writes_nothing(
     diskfmt_store: Path | MemoryStore,
     validate: bool,
 ) -> None:
-    adata = _adata(col=_series([1, 2, 3]))
-    _write(adata, diskfmt, diskfmt_store)
+    adata = adata_with_obs(col=obs_column([1, 2, 3]))
+    write_and_read(adata, diskfmt, diskfmt_store)
     adata.obsm["good"] = np.ones((3, 2))
     adata.obs["mixed"] = np.array([1, "a", None], dtype=object)
     with (
         ad.settings.override(validate_before_write=validate),
         pytest.raises(UnsupportedColumnTypeError, match=r"'mixed'"),
     ):
-        _write(adata, diskfmt, diskfmt_store, use=[A.obsm["good"], A.obs["mixed"]])
+        write_and_read(
+            adata, diskfmt, diskfmt_store, use=[A.obsm["good"], A.obs["mixed"]]
+        )
     assert _keys_on_disk(diskfmt_store) == set()
     assert "mixed" not in _keys_on_disk(diskfmt_store, "obs")
 
@@ -1260,11 +1242,11 @@ def test_use_array_parts(
 ) -> None:
     adata = ad.AnnData(
         np.zeros((3, 2)),
-        obs=pd.DataFrame(index=_idx()),
+        obs=pd.DataFrame(index=obs_index()),
         var=pd.DataFrame(index=["x", "y"]),
     )
     adata.layers["L"] = np.zeros((3, 2))
-    _write(adata, diskfmt, diskfmt_store)
+    write_and_read(adata, diskfmt, diskfmt_store)
     use = A.X if part == "X" else A.layers["L"]
     adata.obsm["bad"] = pd.DataFrame(
         {"p": pd.period_range("2020-01", periods=3, freq="M")}, index=adata.obs_names
@@ -1277,11 +1259,11 @@ def test_use_array_parts(
     with ad.settings.override(validate_before_write=True):
         # an unwritable part alongside: nothing is written
         with pytest.raises(IORegistryError):
-            _write(adata, diskfmt, diskfmt_store, use=[use, A.obsm["bad"]])
+            write_and_read(adata, diskfmt, diskfmt_store, use=[use, A.obsm["bad"]])
         read = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
         assert not read.X.any()
         assert not read.layers["L"].any()
-        read = _write(adata, diskfmt, diskfmt_store, use=use)
+        read = write_and_read(adata, diskfmt, diskfmt_store, use=use)
     np.testing.assert_array_equal(read.X if part == "X" else read.layers["L"], new)
 
 
@@ -1343,7 +1325,7 @@ def _dense(x: object) -> np.ndarray:
 
 def test_unwriteable_leaves_closed_backed_file_closed(*, tmp_path: Path) -> None:
     """Stopping at the first problem still closes a backed file the walk reopened."""
-    adata = ad.AnnData(np.ones((3, 2)), obs=pd.DataFrame(index=_idx()))
+    adata = ad.AnnData(np.ones((3, 2)), obs=pd.DataFrame(index=obs_index()))
     adata.write_h5ad(tmp_path / "a.h5ad")
     backed = ad.read_h5ad(tmp_path / "a.h5ad", backed="r")
     # `layers` holds `X`, so walking it reopens the file
