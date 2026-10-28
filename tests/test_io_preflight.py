@@ -1421,7 +1421,9 @@ def test_preflight_use_refuses_non_2d_parts(*, part: str) -> None:
     ):
         adata.write_zarr(store, use=use)
     read = ad.read_zarr(store)
-    assert (read.X if part == "X" else read.layers["L"]).ndim == 2
+    written = read.X if part == "X" else read.layers["L"]
+    assert isinstance(written, np.ndarray)
+    assert written.shape == (3, 2)
 
 
 @pytest.mark.parametrize("source", ["backed", "view"])
