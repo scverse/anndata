@@ -166,6 +166,82 @@ def test_preflight_raw(*, diskfmt: Literal["h5ad", "zarr"], tmp_path: Path) -> N
         getattr(adata, f"write_{diskfmt}")(tmp_path / f"adata.{diskfmt}")
 
 
+def _strings_with_missing(source: str) -> ad.AnnData:
+    if source == "concat":
+        # an outer join leaves the other object's rows missing (object columns on pandas < 3)
+        return ad.concat(
+            [
+                ad.AnnData(obs=pd.DataFrame({"s": ["x", "y"]}, index=["a0", "a1"])),
+                ad.AnnData(obs=pd.DataFrame({"t": ["z", "z"]}, index=["b0", "b1"])),
+            ],
+            join="outer",
+        )
+    # pandas >= 3 infers `str` unless told otherwise
+    adata = ad.AnnData(
+        np.zeros((3, 2)),
+        obs=pd.DataFrame({"s": obs_column(["a", None, "b"], "object")}),
+        var=pd.DataFrame({"s": pd.Series(["a", None], index=["x", "y"], dtype=object)}),
+    )
+    adata.raw = adata
+    return adata
+
+
+@pytest.mark.parametrize("validate", [False, True], ids=["validate=F", "validate=T"])
+@pytest.mark.parametrize("source", ["concat", "object"])
+def test_unwriteable_judges_strings_as_the_writers_convert_them(
+    *,
+    diskfmt: Literal["h5ad", "zarr"],
+    diskfmt_store: Path | MemoryStore,
+    source: str,
+    validate: bool,
+) -> None:
+    """Strings with missing values in `obs`, `var` and `raw.var` are written as categoricals."""
+    adata = _strings_with_missing(source)
+    assert all(
+        pd.api.types.infer_dtype(col) == "string" and col.hasnans
+        for _, col in as_dataframe(adata.obs).items()
+    )
+    store_type = store_type_of(diskfmt)
+    assert not adata.unwriteable()
+    assert not adata.unwriteable(store_type=store_type)
+    if source == "object":
+        # without the conversion, the writers refuse them
+        paths = ["/obs/s", "/var/s", "/raw/var/s"]
+        errors = list(iter_unwriteable(adata, store_type=store_type))
+        assert [p for p, _ in errors] == paths
+        expected = ExceptionGroup if validate else UnsupportedColumnTypeError
+        with (
+            ad.settings.override(validate_before_write=validate),
+            pytest.raises(expected),
+        ):
+            write_and_read(adata, diskfmt, diskfmt_store)
+    with ad.settings.override(validate_before_write=validate):
+        getattr(adata, f"write_{diskfmt}")(diskfmt_store)
+    read = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
+    assert all(
+        isinstance(col.dtype, pd.CategoricalDtype)
+        for _, col in as_dataframe(read.obs).items()
+    )
+
+
+def test_unwriteable_does_not_convert_nested_or_aligned_strings() -> None:
+    """The writers convert only the top-level `obs`, `var` and `raw.var`."""
+    strings = obs_column(["a", None, "a"], "object")
+    inner = adata_with_obs(s=strings)
+    assert not inner.unwriteable()
+    adata = adata_with_obs(col=obs_column([1, 2, 3]))
+    adata.uns["inner"] = inner
+    adata.obsm["df"] = pd.DataFrame({"s": strings})
+    errors = list(iter_unwriteable(adata, strings_to_categoricals=True))
+    assert [(p, type(e)) for p, e in errors] == [
+        ("/uns/inner/obs/s", UnsupportedColumnTypeError),
+        ("/obsm/df/s", UnsupportedColumnTypeError),
+    ]
+    assert adata.unwriteable()
+    with pytest.raises(UnsupportedColumnTypeError):
+        adata.write_zarr(MemoryStore())
+
+
 def test_preflight_dataframe_structure() -> None:
     import pyarrow as pa
 

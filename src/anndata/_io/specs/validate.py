@@ -18,7 +18,7 @@ import pandas as pd
 import zarr
 from pandas.api.types import is_string_dtype
 
-from anndata._core.anndata import AnnData
+from anndata._core.anndata import AnnData, _categorical_from_strings
 from anndata._core.raw import Raw
 from anndata._core.storage import _non_2d_message
 from anndata.compat import XDataset, has_xp
@@ -41,7 +41,11 @@ if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
     from typing import Literal
 
+    from pandas.api.extensions import ExtensionArray
+
     from ..._types import _GroupStorageType
+    from ...compat import IndexManager
+    from ...typing import _Index1DNorm
 
     type Problems = Generator[tuple[str, Exception]]
     type GroupTypes = tuple[type[_GroupStorageType], ...]
@@ -62,17 +66,26 @@ def iter_unwriteable(
     elem: object,
     *,
     store_type: Literal["h5", "zarr"] | None = None,
+    strings_to_categoricals: bool = False,
     path: str = "/",
 ) -> Problems:
     """\
     Yield ``(path, exception)`` for every part of `elem` that cannot be written.
 
     `store_type` `None` means a writer for either store suffices.
+    `strings_to_categoricals` judges an AnnData's `obs`, `var` and `raw.var` as
+    :meth:`~anndata.AnnData.strings_to_categoricals` leaves them, as the writers do by default.
     """
     group_types = _group_types(store_type)
     if isinstance(elem, AnnData):
         # the write entry points take any AnnData; nested ones dispatch on their type
-        yield from _walk_anndata(elem, group_types, path, frozenset({id(elem)}))
+        yield from _walk_anndata(
+            elem,
+            group_types,
+            path,
+            frozenset({id(elem)}),
+            strings_to_categoricals=strings_to_categoricals,
+        )
     else:
         yield from _walk(elem, group_types, path)
 
@@ -88,7 +101,11 @@ def raise_if_unwriteable(
     a structural problem (the writers raise `AttributeError` for a non-str key
     and `RecursionError` for a cycle). Several raise an `ExceptionGroup`.
     """
-    _raise_problems(list(iter_unwriteable(adata, store_type=store_type)))
+    # the writers have converted strings to categoricals already, if asked to
+    problems = iter_unwriteable(
+        adata, store_type=store_type, strings_to_categoricals=False
+    )
+    _raise_problems(list(problems))
 
 
 def raise_if_unwriteable_parts(
@@ -171,8 +188,14 @@ def _walk(
     group_types: GroupTypes,
     path: str,
     ancestors: frozenset[int] = frozenset(),
+    *,
+    strings_to_categoricals: bool = False,
 ) -> Problems:
-    """Dispatch like `write_elem`; `ancestors` are the containers on this branch."""
+    """\
+    Dispatch like `write_elem`; `ancestors` are the containers on this branch.
+
+    `strings_to_categoricals` applies to a dataframe `elem`, see :func:`iter_unwriteable`.
+    """
     if elem is None:
         return
     # `normalize_nested` turns dict subclasses into dicts;
@@ -194,7 +217,9 @@ def _walk(
     elif isinstance(elem, Raw):
         yield from _walk_raw(elem, group_types, path, ancestors)
     elif isinstance(elem, pd.DataFrame):
-        yield from _walk_dataframe(elem, group_types, path)
+        yield from _walk_dataframe(
+            elem, group_types, path, strings_to_categoricals=strings_to_categoricals
+        )
     elif isinstance(elem, pd.Categorical):
         yield from _walk_categorical(elem, group_types, path)
     elif isinstance(elem, XDataset | Mapping):
@@ -241,7 +266,12 @@ def _walk_leaf(elem: object, group_types: GroupTypes, path: str) -> Problems:
 
 
 def _walk_anndata(
-    adata: AnnData, group_types: GroupTypes, path: str, ancestors: frozenset[int]
+    adata: AnnData,
+    group_types: GroupTypes,
+    path: str,
+    ancestors: frozenset[int],
+    *,
+    strings_to_categoricals: bool = False,
 ) -> Problems:
     # indexing a view's X/layers/obsm/… subsets the parent's payload
     payload_source = adata._adata_ref if adata.is_view else adata
@@ -262,9 +292,21 @@ def _walk_anndata(
                 ancestors=ancestors,
             )
         elif isinstance(attr, Raw):
-            yield from _walk_raw(attr, group_types, attr_path, ancestors)
+            yield from _walk_raw(
+                attr,
+                group_types,
+                attr_path,
+                ancestors,
+                strings_to_categoricals=strings_to_categoricals,
+            )
         else:
-            yield from _walk(attr, group_types, attr_path, ancestors)
+            yield from _walk(
+                attr,
+                group_types,
+                attr_path,
+                ancestors,
+                strings_to_categoricals=strings_to_categoricals,
+            )
 
 
 def _walk_aligned_mapping(
@@ -311,7 +353,12 @@ def _walk_aligned_mapping(
 
 
 def _walk_raw(
-    raw: Raw, group_types: GroupTypes, path: str, ancestors: frozenset[int]
+    raw: Raw,
+    group_types: GroupTypes,
+    path: str,
+    ancestors: frozenset[int],
+    *,
+    strings_to_categoricals: bool = False,
 ) -> Problems:
     X_path = _child_path(path, "X")
     X: object = raw._X
@@ -322,7 +369,13 @@ def _walk_raw(
         except AttributeError as e:
             yield X_path, _note_path(e, X_path)
     yield from _walk(X, group_types, X_path, ancestors)
-    yield from _walk(raw.var, group_types, _child_path(path, "var"), ancestors)
+    yield from _walk(
+        raw.var,
+        group_types,
+        _child_path(path, "var"),
+        ancestors,
+        strings_to_categoricals=strings_to_categoricals,
+    )
     yield from _walk(dict(raw.varm), group_types, _child_path(path, "varm"), ancestors)
 
 
@@ -350,12 +403,19 @@ def _walk_dataframe(
     group_types: GroupTypes,
     path: str,
     *,
-    rows: object = None,
+    rows: _Index1DNorm[IndexManager] | None = None,
+    strings_to_categoricals: bool = False,
 ) -> Problems:
     """Check `df` like `write_dataframe`; `rows`, a view's selection, applies to object columns."""
     yield from _check_dataframe_names(df, group_types, path)
     yield from _walk_index(df, group_types, path)
-    yield from _walk_columns(df, group_types, path, rows=rows)
+    yield from _walk_columns(
+        df,
+        group_types,
+        path,
+        rows=rows,
+        strings_to_categoricals=strings_to_categoricals,
+    )
 
 
 def _check_dataframe_names(
@@ -386,7 +446,12 @@ def _walk_index(df: pd.DataFrame, group_types: GroupTypes, path: str) -> Problem
 
 
 def _walk_columns(
-    df: pd.DataFrame, group_types: GroupTypes, path: str, *, rows: object
+    df: pd.DataFrame,
+    group_types: GroupTypes,
+    path: str,
+    *,
+    rows: _Index1DNorm[IndexManager] | None,
+    strings_to_categoricals: bool,
 ) -> Problems:
     # wide frames repeat a few numpy dtypes, whose writer depends on the dtype only
     numpy_dtype_has_writer: dict[np.dtype, bool] = {}
@@ -399,18 +464,46 @@ def _walk_columns(
             if (has_writer := numpy_dtype_has_writer.get(values.dtype)) is None:
                 has_writer = _has_writer(values, group_types)
                 numpy_dtype_has_writer[values.dtype] = has_writer
-        else:
-            if rows is not None and isinstance(values, np.ndarray):
-                values = values[rows if isinstance(rows, slice) else np.asarray(rows)]
-            try:
-                values = normalize_column(values, path=col_path)
-            except UnsupportedColumnTypeError as e:
-                yield col_path, _note_path(e, col_path)
-                continue
-            has_writer = _has_writer(values, group_types)
-        if not has_writer:
-            missing = _missing_writer_error(values, group_types, col_path)
-            add_column_note(missing, values, col_path)
-            yield col_path, missing
-        elif isinstance(values, pd.Categorical):
-            yield from _walk_categorical(values, group_types, col_path)
+            if not has_writer:
+                yield (
+                    col_path,
+                    _missing_column_writer_error(values, group_types, col_path),
+                )
+            continue
+        problems = list(_walk_column(values, group_types, col_path, rows=rows))
+        # the writers turn these into categoricals, which can be written
+        if (
+            problems
+            and strings_to_categoricals
+            and _categorical_from_strings(values) is not None
+        ):
+            continue
+        yield from problems
+
+
+def _walk_column(
+    values: np.ndarray | ExtensionArray,
+    group_types: GroupTypes,
+    path: str,
+    *,
+    rows: _Index1DNorm[IndexManager] | None,
+) -> Problems:
+    if rows is not None and isinstance(values, np.ndarray):
+        values = values[rows if isinstance(rows, slice) else np.asarray(rows)]
+    try:
+        values = normalize_column(values, path=path)
+    except UnsupportedColumnTypeError as e:
+        yield path, _note_path(e, path)
+        return
+    if not _has_writer(values, group_types):
+        yield path, _missing_column_writer_error(values, group_types, path)
+    elif isinstance(values, pd.Categorical):
+        yield from _walk_categorical(values, group_types, path)
+
+
+def _missing_column_writer_error(
+    values: np.ndarray | ExtensionArray, group_types: GroupTypes, path: str
+) -> IORegistryError:
+    e = _missing_writer_error(values, group_types, path)
+    add_column_note(e, values, path)
+    return e

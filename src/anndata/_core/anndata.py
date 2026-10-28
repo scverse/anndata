@@ -76,6 +76,7 @@ if TYPE_CHECKING:
     from typing import Any, ClassVar, Literal
 
     from numpy.typing import NDArray
+    from pandas.api.extensions import ExtensionArray
     from zarr.storage import StoreLike
 
     from anndata._types import AnnDataElem
@@ -1260,16 +1261,8 @@ class AnnData:  # noqa: PLW1641
             if not isinstance(frame, pd.DataFrame):
                 # lazy frames dedup their categories on access
                 continue
-            string_cols = [
-                key for key in frame.columns if infer_dtype(frame[key]) == "string"
-            ]
-            for key in string_cols:
-                c = pd.Categorical(frame[key])
-                # TODO: We should only check if non-null values are unique, but
-                # this would break cases where string columns with nulls could
-                # be written as categorical, but not as string.
-                # Possible solution: https://github.com/scverse/anndata/issues/504
-                if len(c.categories) >= len(c):
+            for key in list(frame.columns):
+                if (c := _categorical_from_strings(frame[key])) is None:
                     continue
                 # Ideally this could be done inplace
                 sorted_categories = natsorted(c.categories)
@@ -1563,7 +1556,10 @@ class AnnData:  # noqa: PLW1641
 
         from anndata._io.specs.validate import iter_unwriteable
 
-        problems = iter_unwriteable(self, store_type=store_type)
+        # like the writers, which call `strings_to_categoricals` by default
+        problems = iter_unwriteable(
+            self, store_type=store_type, strings_to_categoricals=True
+        )
         try:
             return next(problems, None) is not None
         finally:
@@ -1971,6 +1967,22 @@ def _widen_layers_type[T](
 ) -> Mapping[str | None, T] | None:
     """Work around Mapping’s key type being invariant, unlike dict’s."""
     return cast("Any", m)
+
+
+def _categorical_from_strings(
+    values: pd.Series | np.ndarray | ExtensionArray,
+) -> pd.Categorical | None:
+    """The categorical :meth:`AnnData.strings_to_categoricals` makes of a column, or `None` if it keeps it."""
+    if infer_dtype(values) != "string":
+        return None
+    c = pd.Categorical(values)
+    # TODO: We should only check if non-null values are unique, but
+    # this would break cases where string columns with nulls could
+    # be written as categorical, but not as string.
+    # Possible solution: https://github.com/scverse/anndata/issues/504
+    if len(c.categories) >= len(c):
+        return None
+    return c
 
 
 def _check_2d_shape(X):
