@@ -9,8 +9,8 @@ It backs :meth:`anndata.AnnData.unwriteable` and, with
 
 Caught: missing writers, unconvertible object columns, refused categories,
 non-2D ``X``/layers, invalid or duplicate names, unsupported index types.
-Not caught: backend, codec and IO failures, and writers that reject values
-rather than types.
+Not caught: backend, codec and IO failures, and data a backend refuses although
+a writer is registered for its type (e.g. h5py and datetime64).
 
 The walk never materialises data: no reads from backed files, no dask
 computation, no densifying, no subsetting of a view's payload, no dataframe
@@ -91,7 +91,12 @@ def iter_unwriteable(
         Slash-separated location of `elem`, used in the yielded paths
         and attached to each exception as a note.
     """
-    yield from _walk(elem, _group_types(store_type), path)
+    group_types = _group_types(store_type)
+    if isinstance(elem, AnnData):
+        # the write entry points take any AnnData; nested ones dispatch on their type
+        yield from _walk_anndata(elem, group_types, path, frozenset({id(elem)}))
+    else:
+        yield from _walk(elem, group_types, path)
 
 
 def raise_if_unwriteable(
@@ -100,12 +105,10 @@ def raise_if_unwriteable(
     """\
     Raise if any part of `adata` cannot be written, before anything is written.
 
-    One problem raises its own exception
-    (:exc:`~anndata._io.specs.registry.IORegistryError` for a missing writer,
-    :exc:`TypeError` for an unconvertible column or invalid key,
-    :exc:`ValueError` for a structural problem).
-    Several problems raise an :exc:`ExceptionGroup` listing their paths;
-    catch those with ``except*``.
+    One problem raises its own exception: `IORegistryError` for a missing writer,
+    `TypeError` for an unconvertible column or invalid key, `ValueError` for
+    a structural problem (the writers raise `AttributeError` for a non-str key
+    and `RecursionError` for a cycle). Several raise an `ExceptionGroup`.
     """
     errors = list(iter_unwriteable(adata, store_type=store_type))
     if not errors:
@@ -180,16 +183,21 @@ def _walk(
     """Dispatch like `write_elem`; `ancestors` are the containers on this branch."""
     if elem is None:
         return
-    if isinstance(elem, AnnData | Raw | XDataset | Mapping | list | tuple):
+    # `normalize_nested` turns dict subclasses into dicts;
+    # everything else needs a writer for its exact type, like `find_write_func`
+    if not isinstance(elem, dict) and not _has_writer(elem, group_types):
+        yield from _walk_leaf(elem, group_types, path)
+        return
+    if isinstance(elem, AnnData | Raw | XDataset | Mapping | list):
         if id(elem) in ancestors:
             msg = f"{type(elem).__name__} at {path!r} contains itself (reference cycle)"
             yield path, _note_path(ValueError(msg), path)
             return
         ancestors = ancestors | {id(elem)}
-    if isinstance(elem, list | tuple):
+    if isinstance(elem, list):
         # the list writer stores the whole sequence; only cycles matter here
         yield from _sequence_cycles(elem, path, ancestors)
-    if isinstance(elem, AnnData):
+    elif isinstance(elem, AnnData):
         yield from _walk_anndata(elem, group_types, path, ancestors)
     elif isinstance(elem, Raw):
         yield from _walk_raw(elem, group_types, path, ancestors)
@@ -197,19 +205,23 @@ def _walk(
         yield from _walk_dataframe(elem, group_types, path)
     elif isinstance(elem, pd.Categorical):
         yield from _walk_categorical(elem, group_types, path)
-    elif isinstance(elem, dict) or (
-        isinstance(elem, XDataset | Mapping) and _has_writer(elem, group_types)
-    ):
-        # `normalize_nested` turns dict subclasses into dicts
-        for key, value in elem.items():
-            try:
-                stored = _stored_key(key, path, group_types)
-            except (TypeError, ValueError) as e:
-                yield _child_path(path, key), _note_path(e, _child_path(path, key))
-                continue
-            yield from _walk(value, group_types, _child_path(path, stored), ancestors)
-    else:
-        yield from _walk_leaf(elem, group_types, path)
+    elif isinstance(elem, XDataset | Mapping):
+        yield from _walk_mapping(elem, group_types, path, ancestors)
+
+
+def _walk_mapping(
+    elem: XDataset | Mapping,
+    group_types: GroupTypes,
+    path: str,
+    ancestors: frozenset[int],
+) -> Problems:
+    for key, value in elem.items():
+        try:
+            stored = _stored_key(key, path, group_types)
+        except (TypeError, ValueError) as e:
+            yield _child_path(path, key), _note_path(e, _child_path(path, key))
+            continue
+        yield from _walk(value, group_types, _child_path(path, stored), ancestors)
 
 
 def _sequence_cycles(
@@ -292,7 +304,11 @@ def _walk_aligned_mapping(
             (shape_msg := _non_2d_message(value, name=name)) is not None
         ):
             yield elem_path, _note_path(ValueError(shape_msg), elem_path)
-        elif isinstance(value, pd.DataFrame) and adata.is_view:
+        elif (
+            adata.is_view
+            and isinstance(value, pd.DataFrame)
+            and _has_writer(value, group_types)
+        ):
             # the view writes a row (obsm/obsp) or column (varm/varp) selection
             rows = adata._oidx if attr_name.startswith("obs") else adata._vidx
             yield from _walk_dataframe(value, group_types, elem_path, rows=rows)

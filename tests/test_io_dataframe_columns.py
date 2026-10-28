@@ -6,12 +6,14 @@ See https://github.com/scverse/anndata/issues/1068
 from __future__ import annotations
 
 import contextlib
+import copy
 import functools
+import inspect
+import pickle
 import re
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
-import dask
 import dask.array as da
 import h5py
 import numpy as np
@@ -31,20 +33,26 @@ from anndata._io.specs.validate import iter_unwriteable, raise_if_unwriteable
 from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, gen_adata
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator
+    from collections.abc import Callable, Generator, Mapping
     from pathlib import Path
-    from typing import Literal
+    from typing import Any, Literal
+
+    from pandas.api.extensions import ExtensionArray
+
+    from anndata._io.specs.registry import Writer
 
 
-IDX = pd.Index([f"c{i}" for i in range(3)])
+def _idx() -> pd.Index:
+    """A fresh index for every frame: pandas < 3 shares the Index object between frames."""
+    return pd.Index([f"c{i}" for i in range(3)])
 
 
 def _series(values: object, dtype: str | None = None) -> pd.Series:
-    return pd.Series(values, index=IDX, dtype=dtype)
+    return pd.Series(values, index=_idx(), dtype=dtype)
 
 
 def _adata(**obs_columns: pd.Series) -> ad.AnnData:
-    return ad.AnnData(obs=pd.DataFrame(obs_columns, index=IDX))
+    return ad.AnnData(obs=pd.DataFrame(obs_columns, index=_idx()))
 
 
 def _write(adata: ad.AnnData, diskfmt: str, store: object, **kwargs) -> ad.AnnData:
@@ -52,6 +60,16 @@ def _write(adata: ad.AnnData, diskfmt: str, store: object, **kwargs) -> ad.AnnDa
         store, convert_strings_to_categoricals=False, **kwargs
     )
     return getattr(ad, f"read_{diskfmt}")(store)
+
+
+def _store_type(diskfmt: Literal["h5ad", "zarr"]) -> Literal["h5", "zarr"]:
+    return "h5" if diskfmt == "h5ad" else "zarr"
+
+
+def _df(elem: object) -> pd.DataFrame:
+    """Narrow an element (`adata.obs`, a read element, …) to a dataframe."""
+    assert isinstance(elem, pd.DataFrame)
+    return elem
 
 
 def _notes(e: BaseException) -> str:
@@ -70,7 +88,7 @@ SUPPORTED: dict[str, tuple[Callable[[], pd.Series], str]] = {
     "category-ordered": (
         lambda: pd.Series(
             pd.Categorical(["lo", "hi", "lo"], categories=["lo", "hi"], ordered=True),
-            index=IDX,
+            index=_idx(),
         ),
         "category",
     ),
@@ -101,13 +119,13 @@ UNSUPPORTED: dict[str, tuple[Callable[[], pd.Series], type[Exception], str]] = {
         r"no on-disk encoding for nullable floats",
     ),
     "datetime64": (
-        lambda: _series(pd.to_datetime(["2020-01-01", None, "2021-01-01"])),
+        lambda: _series(pd.to_datetime(["2020-01-01", "NaT", "2021-01-01"])),
         IORegistryError,
         r"datetime/timedelta columns are not supported yet, see scverse/anndata#2238",
     ),
     "datetime64-tz": (
         lambda: _series(
-            pd.to_datetime(["2020-01-01", None, "2021-01-01"]).tz_localize("UTC")
+            pd.to_datetime(["2020-01-01", "NaT", "2021-01-01"]).tz_localize("UTC")
         ),
         IORegistryError,
         r"scverse/anndata#2238",
@@ -164,7 +182,7 @@ def test_supported_column_roundtrip(
     with ad.settings.override(
         validate_before_write=True, allow_write_nullable_strings=True
     ):
-        read = _write(adata, diskfmt, diskfmt_store).obs["col"]
+        read = _df(_write(adata, diskfmt, diskfmt_store).obs)["col"]
     assert read.dtype == expected_dtype
     assert read.isna().tolist() == expected_na
     assert read.dropna().tolist() == expected_values
@@ -179,7 +197,7 @@ def test_unsupported_column_errors(
 ) -> None:
     """Preflight and write report the same error, naming the column and a way out."""
     make, exc_type, hint = UNSUPPORTED[family]
-    store_type = "h5" if diskfmt == "h5ad" else "zarr"
+    store_type = _store_type(diskfmt)
 
     adata = _adata(col=make())
     errors = list(iter_unwriteable(adata, store_type=store_type))
@@ -220,24 +238,23 @@ def test_nullable_float_passthrough(
     """Nullable floats are never converted: a masked NA and an unmasked NaN stay distinct."""
     if not hasattr(pd.options.future, "distinguish_nan_and_na"):
         pytest.skip("pandas has no `future.distinguish_nan_and_na` option")
-    store_type = "h5" if diskfmt == "h5ad" else "zarr"
+    store_type = _store_type(diskfmt)
     with pd.option_context("future.distinguish_nan_and_na", distinguish):
         values = pd.arrays.FloatingArray(
             np.array([1.5, 0.0, np.nan], dtype=dtype.lower()),
             np.array([False, True, False]),
         )
-        data_before, mask_before = values._data.copy(), values._mask.copy()
+        before = values.copy()
         assert normalize_column(values, path="col") is values
-        np.testing.assert_array_equal(values._data, data_before)
-        np.testing.assert_array_equal(values._mask, mask_before)
+        pd.testing.assert_extension_array_equal(values, before)
+        assert values.isna().tolist() == [False, True, False]
 
-        adata = _adata(col=pd.Series(values, index=IDX))
+        adata = _adata(col=pd.Series(values, index=_idx()))
         errors = list(iter_unwriteable(adata, store_type=store_type))
         assert [path for path, _ in errors] == ["/obs/col"]
         assert isinstance(errors[0][1], IORegistryError)
         assert "no on-disk encoding for nullable floats" in _notes(errors[0][1])
-        np.testing.assert_array_equal(adata.obs["col"]._values._data, data_before)
-        np.testing.assert_array_equal(adata.obs["col"]._values._mask, mask_before)
+        pd.testing.assert_extension_array_equal(_df(adata.obs)["col"].array, before)
         with (
             ad.settings.override(validate_before_write=False),
             pytest.raises(IORegistryError) as exc_info,
@@ -258,26 +275,31 @@ def test_nullable_float_passthrough(
         pytest.param(np.array([1.5, np.nan]), id="float64"),
     ],
 )
-def test_normalize_column_idempotent_and_non_mutating(values: object) -> None:
-    original = values.copy()
+def test_normalize_column_idempotent_and_non_mutating(
+    values: np.ndarray | ExtensionArray,
+) -> None:
+    original = pd.Series(values, copy=True)
     once = normalize_column(values, path="col")
-    twice = normalize_column(once, path="col")
-    assert type(twice) is type(once)
-    assert pd.array(twice).equals(pd.array(once))
-    assert type(values) is type(original)
-    assert pd.array(values).equals(pd.array(original))
+    # already writable: returned as is
+    assert normalize_column(once, path="col") is once
+    pd.testing.assert_series_equal(pd.Series(values), original)
 
 
-def test_unsupported_object_column_error_attributes() -> None:
+@pytest.mark.parametrize("copier", ["pickle", "copy"])
+def test_unsupported_object_column_error_roundtrips(copier: str) -> None:
+    """Errors from worker processes arrive pickled, so they must survive it."""
     with pytest.raises(UnsupportedColumnTypeError) as exc_info:
         normalize_column(np.array([1, "a", None], dtype=object), path="/obs/col")
     e = exc_info.value
-    assert isinstance(e, TypeError)
-    assert (e.path, e.dtype, e.kind) == ("/obs/col", "object", "mixed-integer")
+    e.add_note("Element: /obs/col")
+    restored = pickle.loads(pickle.dumps(e)) if copier == "pickle" else copy.copy(e)
+    assert type(restored) is UnsupportedColumnTypeError
+    assert str(restored) == str(e)
     assert str(e).startswith(
         "Cannot write column '/obs/col' (dtype object, inferred as 'mixed-integer'): "
     )
-    assert e.hint in str(e)
+    assert _notes(restored) == "Element: /obs/col"
+    assert (restored.path, restored.kind) == ("/obs/col", "mixed-integer")
 
 
 @pytest.mark.parametrize("storage", ["python", "pyarrow"])
@@ -320,7 +342,7 @@ def test_nullable_string_columns(
         getattr(adata, f"write_{diskfmt}")(
             diskfmt_store, convert_strings_to_categoricals=categorize
         )
-    read = getattr(ad, f"read_{diskfmt}")(diskfmt_store).obs["col"]
+    read = _df(getattr(ad, f"read_{diskfmt}")(diskfmt_store).obs)["col"]
     assert read.dtype == ("category" if categorize else "string")
     assert read.isna().tolist() == [False, True, False]
     assert read.dropna().tolist() == ["a", "a"]
@@ -364,7 +386,7 @@ def _bad_everywhere() -> ad.AnnData:
     )
     adata.var["dt"] = pd.to_datetime([])
     adata.obsm["df"] = pd.DataFrame(
-        {"mixed": np.array([1, "a", None], dtype=object)}, index=IDX
+        {"mixed": np.array([1, "a", None], dtype=object)}, index=_idx()
     )
     adata.uns["nested"] = {"ok": 1, "bad": object()}
     return adata
@@ -445,14 +467,15 @@ def test_write_elem_bypasses_preflight(
     *, diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore
 ) -> None:
     """`write_elem` is not validated up front, but still normalises columns."""
+    store: h5py.File | zarr.Group
     if diskfmt == "h5ad":
         store = h5py.File(diskfmt_store, "w")
     else:
         store = zarr.open_group(diskfmt_store, mode="w")
-    df = pd.DataFrame({"obj": np.array([1, None, 3], dtype=object)}, index=IDX)
+    df = pd.DataFrame({"obj": np.array([1, None, 3], dtype=object)}, index=_idx())
     with ad.settings.override(validate_before_write=True):
         ad.io.write_elem(store, "df", df)
-        assert ad.io.read_elem(store["df"])["obj"].dtype == "Int64"
+        assert _df(ad.io.read_elem(store["df"]))["obj"].dtype == "Int64"
         # no aggregation: the first problem is raised
         with pytest.raises(IORegistryError) as exc_info:
             ad.io.write_elem(store, "uns", {"a": object(), "b": object()})
@@ -460,8 +483,9 @@ def test_write_elem_bypasses_preflight(
 
 
 def test_preflight_raw(*, diskfmt: Literal["h5ad", "zarr"], tmp_path: Path) -> None:
-    adata = ad.AnnData(np.zeros((3, 2)), obs=pd.DataFrame(index=IDX))
+    adata = ad.AnnData(np.zeros((3, 2)), obs=pd.DataFrame(index=_idx()))
     adata.raw = adata
+    assert adata.raw is not None
     adata.raw.var["period"] = pd.period_range("2020-01", periods=2, freq="M")
     assert [p for p, _ in iter_unwriteable(adata)] == ["/raw/var/period"]
     with (
@@ -479,14 +503,14 @@ def test_preflight_dataframe_structure() -> None:
     assert [(p, type(e)) for p, e in iter_unwriteable(adata)] == [("/obs", ValueError)]
 
     adata = _adata(col=_series([1, 2, 3]))
-    adata.obs = pd.DataFrame(np.ones((3, 2)), columns=["dup", "dup"], index=IDX)
+    adata.obs = pd.DataFrame(np.ones((3, 2)), columns=["dup", "dup"], index=_idx())
     errors = list(iter_unwriteable(adata))
     assert [p for p, _ in errors] == ["/obs"]
     assert "repeated column names" in str(errors[0][1])
 
     # a value comparison: writer-time only
     adata = _adata(col=_series([1, 2, 3]))
-    adata.obs.index.name = "col"
+    adata.obs = _df(adata.obs).rename_axis("col")
     assert list(iter_unwriteable(adata)) == []
     with pytest.raises(ValueError, match=r"index.name"):
         adata.write_zarr(MemoryStore())
@@ -508,14 +532,21 @@ def test_preflight_dataframe_structure() -> None:
     assert adata.unwriteable()
 
 
-def _write_period(f, k, v, *, _writer, dataset_kwargs):
-    _writer.write_elem(f, k, np.asarray(v.asi8), dataset_kwargs=dataset_kwargs)
+def _write_period(
+    f: h5py.Group | zarr.Group,
+    k: str,
+    v: pd.arrays.PeriodArray,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any],
+) -> None:
+    _writer.write_elem(f, k, v.astype(np.int64), dataset_kwargs=dataset_kwargs)
 
 
 @pytest.fixture
 def period_writer() -> Generator[None]:
     """Temporarily register a writer for `PeriodArray`."""
-    keys = [
+    keys: list[tuple[type, type, frozenset[str]]] = [
         (store_type, pd.arrays.PeriodArray, frozenset())
         for store_type in (h5py.Group, zarr.Group)
     ]
@@ -544,72 +575,6 @@ def test_custom_registered_writer_is_honoured(
         getattr(adata, f"write_{diskfmt}")(
             diskfmt_store, convert_strings_to_categoricals=False
         )
-
-
-def _fail_on_compute(dsk, keys, **kwargs):
-    pytest.fail("the preflight check computed a dask array")
-
-
-def _fail_on_packing(*args, **kwargs):
-    pytest.fail("the preflight check packed an awkward array")
-
-
-def test_preflight_does_not_compute_dask() -> None:
-    adata = ad.AnnData(
-        da.zeros((4, 3), chunks=(2, 3)), obs=pd.DataFrame(index=list("abcd"))
-    )
-    adata.layers["L"] = da.ones((4, 3), chunks=(1, 1))
-    adata.obsm["m"] = da.zeros((4, 2), chunks=(2, 2))
-
-    with dask.config.set(scheduler=_fail_on_compute):
-        assert list(iter_unwriteable(adata)) == []
-        raise_if_unwriteable(adata)
-
-
-@pytest.mark.parametrize("sparse_format", [None, "csr", "csc"])
-def test_preflight_does_not_read_backed(
-    *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sparse_format: str | None
-) -> None:
-    """Backed datasets (X, layers, raw.X; also a Raw nested in uns) are never read."""
-    import scipy.sparse as sp
-
-    path = tmp_path / "backed.h5ad"
-    X = np.arange(12.0).reshape(4, 3)
-    if sparse_format is not None:
-        X = getattr(sp, f"{sparse_format}_matrix")(X)
-    adata = ad.AnnData(X, obs=pd.DataFrame(index=list("abcd")))
-    adata.raw = adata
-    adata.write_h5ad(path)
-    backed = ad.read_h5ad(path, backed="r")
-    reads: list[str] = []
-    getitem = h5py.Dataset.__getitem__
-    monkeypatch.setattr(
-        h5py.Dataset,
-        "__getitem__",
-        lambda self, *args, **kw: (reads.append(self.name), getitem(self, *args, **kw))[
-            1
-        ],
-    )
-    view = backed[:2]
-    assert view.is_view
-    nested = ad.AnnData(np.zeros((2, 1)), obs=pd.DataFrame(index=list("ab")))
-    nested.uns["raw"] = view.raw
-    for elem in (backed, view, nested):
-        assert list(iter_unwriteable(elem, store_type="h5")) == []
-        raise_if_unwriteable(elem, store_type="h5")
-    assert reads == []
-
-
-def test_preflight_does_not_pack_awkward(*, monkeypatch: pytest.MonkeyPatch) -> None:
-    ak = pytest.importorskip("awkward")
-    adata = ad.AnnData(np.zeros((3, 1)), obs=pd.DataFrame(index=IDX))
-    adata.obsm["ragged"] = ak.Array([[1, 2], [], [3]])
-    adata.uns["ragged"] = ak.Array([[1.0], [2.0, 3.0]])
-
-    monkeypatch.setattr(ak, "to_packed", _fail_on_packing)
-    monkeypatch.setattr(ak, "to_buffers", _fail_on_packing)
-    assert list(iter_unwriteable(adata)) == []
-    assert not adata.unwriteable()
 
 
 def test_preflight_view_uses_own_metadata(
@@ -650,7 +615,7 @@ def test_preflight_multiindex_aggregates() -> None:
     assert len(exc_info.value.exceptions) == 2
 
 
-CATEGORY_FAMILIES: dict[str, tuple[Callable[[], pd.Categorical], bool]] = {
+CATEGORY_FAMILIES: dict[str, tuple[Callable[[], pd.Categorical[Any]], bool]] = {
     # name: (factory, has a faithful on-disk representation)
     "str": (lambda: pd.Categorical(["a", "b", "a"]), True),
     "Int64": (lambda: pd.Categorical(pd.array([1, None, 2], dtype="Int64")), True),
@@ -681,10 +646,10 @@ CATEGORY_FAMILIES: dict[str, tuple[Callable[[], pd.Categorical], bool]] = {
     ),
     "arrow-str": (
         lambda: pd.Categorical(
-            pd.array(
+            pd.Series(
                 ["a", "b", "a"],
                 dtype=pd.ArrowDtype(pytest.importorskip("pyarrow").string()),
-            )
+            ).array
         ),
         True,
     ),
@@ -708,8 +673,8 @@ def test_categorical_categories_agreement(
 ) -> None:
     """The walker judges categories the way the writer stores them (`to_numpy()`)."""
     make, registered = CATEGORY_FAMILIES[family]
-    store_type = "h5" if diskfmt == "h5ad" else "zarr"
-    adata = _adata(cat=pd.Series(make(), index=IDX))
+    store_type = _store_type(diskfmt)
+    adata = _adata(cat=pd.Series(make(), index=_idx()))
     errors = list(iter_unwriteable(adata, store_type=store_type))
     assert [p for p, _ in errors] == ([] if registered else ["/obs/cat/categories"])
     assert adata.unwriteable(store_type=store_type) is not registered
@@ -725,7 +690,7 @@ def test_categorical_categories_agreement(
         with pytest.raises(TypeError, match=r"No conversion path"):
             _write(adata, diskfmt, diskfmt_store)
         return
-    read = _write(adata, diskfmt, diskfmt_store).obs["cat"]
+    read = _df(_write(adata, diskfmt, diskfmt_store).obs)["cat"]
     assert read.dtype == "category"
     assert read.isna().tolist() == adata.obs["cat"].isna().tolist()
 
@@ -768,6 +733,43 @@ def test_preflight_matches_writer_dispatch_for_leaves() -> None:
             ad.io.write_elem(
                 zarr.open_group(MemoryStore(), mode="w"), key, adata.uns[key]
             )
+
+
+class _DataFrameSubclass(pd.DataFrame):
+    @property
+    def _constructor(self) -> type[_DataFrameSubclass]:
+        return _DataFrameSubclass
+
+
+class _CategoricalSubclass(pd.Categorical):
+    pass
+
+
+class _ArraySubclass(np.ndarray):
+    pass
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        pytest.param(lambda: _DataFrameSubclass({"a": [1, 2]}), id="DataFrame"),
+        pytest.param(lambda: _CategoricalSubclass(["a", "b"]), id="Categorical"),
+        pytest.param(lambda: np.zeros(3).view(_ArraySubclass), id="ndarray"),
+    ],
+)
+def test_preflight_dispatches_subclasses_like_writer(
+    *,
+    diskfmt: Literal["h5ad", "zarr"],
+    diskfmt_store: Path | MemoryStore,
+    make: Callable[[], object],
+) -> None:
+    """Containers are only walked if their exact type has a writer, as in `write_elem`."""
+    adata = ad.AnnData(np.zeros((2, 1)), obs=pd.DataFrame(index=list("ab")))
+    adata.uns["x"] = make()
+    errors = list(iter_unwriteable(adata))
+    assert [(p, type(e)) for p, e in errors] == [("/uns/x", IORegistryError)]
+    with pytest.raises(IORegistryError):
+        _write(adata, diskfmt, diskfmt_store)
 
 
 def test_preflight_invalid_column_name_keeps_destination(
@@ -813,9 +815,7 @@ def test_preflight_aggregates_non_2d_with_column(
         getattr(adata, f"write_{diskfmt}")(tmp_path / f"adata2.{diskfmt}")
 
 
-def test_preflight_does_not_read_aligned_mappings_of_views(
-    *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_preflight_does_not_read_aligned_mappings_of_views(*, tmp_path: Path) -> None:
     """Aligned mappings of a view are inspected via the parent, never subset."""
     with h5py.File(tmp_path / "arrays.h5", "w") as f:
         f["m"] = np.zeros((4, 2))
@@ -828,29 +828,19 @@ def test_preflight_does_not_read_aligned_mappings_of_views(
         adata.obsm["m"], adata.varm["m"] = f["m"], f["m"]
         adata.obsp["p"], adata.varp["p"] = f["p"], f["p"]
         adata.obsm["df"] = pd.DataFrame({"x": [1, 2, 3, 4]}, index=adata.obs_names)
-        reads: list[str] = []
-        getitem = h5py.Dataset.__getitem__
-        monkeypatch.setattr(
-            h5py.Dataset,
-            "__getitem__",
-            lambda self, *a, **kw: (reads.append(self.name), getitem(self, *a, **kw))[
-                1
-            ],
-        )
         view = adata[[0, 2], [0, 2]]
         assert view.is_view
-        assert list(iter_unwriteable(view, store_type="h5")) == []
-        raise_if_unwriteable(view, store_type="h5")
-        assert reads == []
+        with forbid_payload_access():
+            assert list(iter_unwriteable(view, store_type="h5")) == []
+            raise_if_unwriteable(view, store_type="h5")
 
 
 def test_preflight_does_not_materialize_range_categories() -> None:
     cat = pd.Categorical.from_codes([0, 1, 0], categories=pd.RangeIndex(100_000))
-    adata = _adata(cat=pd.Series(cat, index=IDX))
-    assert list(iter_unwriteable(adata)) == []
-    assert not adata.unwriteable()
-    assert "_data" not in adata.obs["cat"].cat.categories._cache
-    assert "_data" not in cat.categories._cache
+    adata = _adata(cat=pd.Series(cat, index=_idx()))
+    with forbid_payload_access():  # forbids `RangeIndex._data`
+        assert list(iter_unwriteable(adata)) == []
+        assert not adata.unwriteable()
 
 
 def test_preflight_multiindex_with_colliding_name() -> None:
@@ -890,7 +880,7 @@ def test_preflight_slash_keys_keep_destination(
         bad.uns["bad/key"] = 1
     else:
         bad.uns["outer"] = {"bad/key": 1}
-    store_type = "h5" if diskfmt == "h5ad" else "zarr"
+    store_type = _store_type(diskfmt)
     errors = list(iter_unwriteable(bad, store_type=store_type))
     assert [type(e) for _, e in errors] == [ValueError]
     assert "Forward slashes" in str(errors[0][1])
@@ -930,6 +920,7 @@ def test_preflight_accepts_dict_subclasses(
 ) -> None:
     import collections
 
+    value: dict[str, Any]
     if kind == "OrderedDict":
         value = collections.OrderedDict(a=1, b=np.zeros(2))
     elif kind == "defaultdict":
@@ -993,7 +984,7 @@ def forbid_payload_access() -> Generator[None]:
     import anndata._core.anndata as core_anndata
     from anndata._core import aligned_mapping, views
 
-    patches = [
+    patches: list[contextlib.AbstractContextManager[object]] = [
         mock.patch.object(
             pd.DataFrame, "__getitem__", _ForbiddenAccess("DataFrame.__getitem__")
         ),
@@ -1011,8 +1002,7 @@ def forbid_payload_access() -> Generator[None]:
             "array",
             property(
                 _ForbiddenOnNonEmpty(
-                    "Index.array",
-                    pd.Index.array.__get__,
+                    "Index.array", inspect.getattr_static(pd.Index, "array").__get__
                 )
             ),
         ),
@@ -1030,7 +1020,10 @@ def forbid_payload_access() -> Generator[None]:
             pd.RangeIndex,
             "_data",
             property(
-                _ForbiddenOnNonEmpty("RangeIndex._data", pd.RangeIndex._data.__get__)
+                _ForbiddenOnNonEmpty(
+                    "RangeIndex._data",
+                    inspect.getattr_static(pd.RangeIndex, "_data").__get__,
+                )
             ),
         ),
         mock.patch.object(
@@ -1082,7 +1075,8 @@ def _payload_adata(*, dlpack: bool = True) -> ad.AnnData:
     rng = np.random.default_rng(0)
     n = N_PAYLOAD
     index = pd.Index([f"cell{i}" for i in range(n)])
-    obj = np.where(rng.random(n) < 0.1, None, rng.integers(0, 9, n))
+    obj = rng.integers(0, 9, n).astype(object)
+    obj[rng.random(n) < 0.1] = None
     obs = pd.DataFrame(
         {
             "cat": pd.Categorical(rng.choice(["a", "b", "c"], n)),
@@ -1173,16 +1167,19 @@ def _subject(kind: str, tmp_path: Path) -> object:  # noqa: PLR0911
         return adata[np.arange(1, N_PAYLOAD), np.arange(1, 20)]
     if kind.startswith("backed"):
         adata = _payload_adata(dlpack=False)
+        assert isinstance(adata.X, sp.csr_matrix)
         fmt = kind.split("-")[1]
         if fmt == "dense":
             adata.X = adata.X.toarray()
         elif fmt == "csc":
             adata.X = sp.csc_matrix(adata.X)
         path = tmp_path / f"{kind}.h5ad"
-        adata.write_h5ad(path)
+        with ad.settings.override(allow_write_nullable_strings=True):
+            adata.write_h5ad(path)
         backed = ad.read_h5ad(path, backed="r")
         return backed[[0, 2, 4], [0, 2]]
     if kind == "dask":
+        assert isinstance(adata.X, sp.csr_matrix)
         adata.X = da.from_array(adata.X.toarray(), chunks=(1000, 20))
         adata.layers["dense"] = da.zeros((N_PAYLOAD, 20), chunks=(1000, 20))
         return adata
@@ -1232,20 +1229,24 @@ def test_harness_catches_payload_access(*, tmp_path: Path) -> None:
     adata.uns["dlpack"] = _ArrayApiNoExport(np.zeros(3))
     view = adata[::2]
     backed_path = tmp_path / "h.h5ad"
-    _payload_adata(dlpack=False).write_h5ad(backed_path)
+    with ad.settings.override(allow_write_nullable_strings=True):
+        _payload_adata(dlpack=False).write_h5ad(backed_path)
     backed = ad.read_h5ad(backed_path, backed="r")
-    probes = {
-        "getitem": lambda: adata.obs["num"],
-        "iloc": lambda: adata.obs.iloc[:, 0],
-        "take": lambda: adata.obs.take([0]),
-        "copy": lambda: adata.obs.copy(),  # noqa: PLW0108
-        "index.array": lambda: adata.obs.index.array,
-        "index.to_numpy": lambda: adata.obs.index.to_numpy(),  # noqa: PLW0108
+    obs = _df(adata.obs)
+    backed_num = backed.file["obs/num"]
+    assert isinstance(backed_num, h5py.Dataset)
+    probes: dict[str, Callable[[], object]] = {
+        "getitem": lambda: obs["num"],
+        "iloc": lambda: obs.iloc[:, 0],
+        "take": lambda: obs.take([0]),
+        "copy": lambda: obs.copy(),  # noqa: PLW0108
+        "index.array": lambda: obs.index.array,
+        "index.to_numpy": lambda: obs.index.to_numpy(),  # noqa: PLW0108
         "rangeindex": lambda: adata.uns["table"].index._data,
         "view obsm": lambda: view.obsm["numeric_df"],
-        "backed read": lambda: backed.file["obs/num"][()],
-        "to_numpy": lambda: adata.obs.to_numpy(),  # noqa: PLW0108
-        "read_direct": lambda: backed.file["obs/num"].read_direct(np.empty(N_PAYLOAD)),
+        "backed read": lambda: backed_num[()],
+        "to_numpy": lambda: obs.to_numpy(),  # noqa: PLW0108
+        "read_direct": lambda: backed_num.read_direct(np.empty(N_PAYLOAD)),
         "dask compute": lambda: da.zeros(3).compute(),
         "dlpack": lambda: np.from_dlpack(adata.uns["dlpack"]),
     }
@@ -1253,7 +1254,7 @@ def test_harness_catches_payload_access(*, tmp_path: Path) -> None:
         with forbid_payload_access(), pytest.raises(pytest.fail.Exception):
             probe()
     with forbid_payload_access():
-        assert len(adata.obs.index[:0].to_numpy()) == 0  # empty indexes are allowed
+        assert len(obs.index[:0].to_numpy()) == 0  # empty indexes are allowed
 
 
 def test_preflight_reports_cycles() -> None:
@@ -1297,7 +1298,7 @@ def test_preflight_mapping_key_rules(
     getattr(_adata(col=_series([1, 2, 3])), f"write_{diskfmt}")(path)
     adata = _adata(col=_series([1, 2, 3]))
     adata.uns[key] = 1
-    store_type = "h5" if diskfmt == "h5ad" else "zarr"
+    store_type = _store_type(diskfmt)
     with ad.settings.override(disallow_forward_slash_in_h5ad=False):
         errors = list(iter_unwriteable(adata, store_type=store_type))
         if expected is None:
@@ -1351,7 +1352,7 @@ def test_preflight_categorical_index_policy(categories: pd.Index) -> None:
 
 
 def test_write_entry_points_do_not_read_view_payloads_before_preflight(
-    *, diskfmt: Literal["h5ad", "zarr"], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    *, diskfmt: Literal["h5ad", "zarr"], tmp_path: Path
 ) -> None:
     """The `no_write_dataset_2d` guard inspects a view through its parent too."""
     with h5py.File(tmp_path / "arrays.h5", "w") as f:
@@ -1363,23 +1364,14 @@ def test_write_entry_points_do_not_read_view_payloads_before_preflight(
         adata.obsm["m"] = f["m"]
         adata.varm["m"] = np.zeros((0, 1))
         view = adata[[0, 2]]
-        reads: list[str] = []
-        getitem = h5py.Dataset.__getitem__
-        monkeypatch.setattr(
-            h5py.Dataset,
-            "__getitem__",
-            lambda self, *a, **kw: (reads.append(self.name), getitem(self, *a, **kw))[
-                1
-            ],
-        )
         with (
+            forbid_payload_access(),
             ad.settings.override(validate_before_write=True),
             pytest.raises(IORegistryError),
         ):
             getattr(view, f"write_{diskfmt}")(
                 tmp_path / f"out.{diskfmt}", convert_strings_to_categoricals=False
             )
-        assert reads == []
 
 
 def test_preflight_rejects_dataset2d() -> None:
@@ -1402,7 +1394,7 @@ def test_preflight_view_object_columns_in_mappings(
     """Object columns of a view's obsm/varm dataframes are judged on the view's rows."""
     adata = ad.AnnData(
         np.zeros((3, 3)),
-        obs=pd.DataFrame(index=IDX),
+        obs=pd.DataFrame(index=_idx()),
         var=pd.DataFrame(index=list("xyz")),
     )
     adata.obsm["t"] = pd.DataFrame(
@@ -1416,8 +1408,8 @@ def test_preflight_view_object_columns_in_mappings(
     assert list(iter_unwriteable(view)) == []
     with ad.settings.override(validate_before_write=True):
         read = _write(view, diskfmt, diskfmt_store)
-    assert read.obsm["t"]["o"].tolist() == [1]
-    assert read.varm["t"]["o"].isna().tolist() == [False, True]
+    assert _df(read.obsm["t"])["o"].tolist() == [1]
+    assert _df(read.varm["t"])["o"].isna().tolist() == [False, True]
 
 
 @pytest.mark.parametrize("mapping", ["obsm", "varm", "obsp", "varp"])

@@ -593,7 +593,6 @@ Therefore an R implementation SHOULD write a `character` array with `"na-value":
 and when reading a `"nullable-string-array"`, it MAY choose to read it into a `character` array,
 ignoring the `"na-value"` attribute (since `character` arrays can not be made to behave with `"NaN"` semantics).
 
-(awkward-array)=
 (type-mapping)=
 ## In-memory to on-disk type mapping
 
@@ -629,28 +628,36 @@ and `bytes` are written as strings.
 Set {attr}`anndata.settings.validate_before_write` to check every element of an
 {class}`~anndata.AnnData` object against this table before anything is written;
 {meth}`~anndata.AnnData.unwriteable` runs the same check and returns a boolean.
-The check is best effort: it finds elements and dataframe columns without an on-disk
-encoding, object columns that cannot be converted, non-2D `X`/layers, and dataframe
-structure problems (reserved, invalid or duplicate names, `MultiIndex`), without reading
-backed data, computing lazy arrays or materialising indexes; object-dtype columns are
-scanned (and converted, which allocates) because only their values tell. Whether a column
-that shares its name with the index holds the same values as the index is a value
-comparison and is only checked by the writer.
-Backend, codec and IO failures, and writers that reject particular *values* rather than
-types (for example a categorical with datetime categories on `h5ad`), can still fail
-mid-write. A single problem is raised as the exception writing it would have raised;
-several are raised together as an {exc}`ExceptionGroup` whose message lists their paths
-and whose members keep their types, so they can be handled with `except*`:
+The check looks at types, dtypes and shapes: it finds elements and dataframe columns
+without a writer, object columns that cannot be converted, non-2D `X`/layers,
+invalid keys, reference cycles, and dataframe structure problems (reserved, invalid
+or duplicate names, `MultiIndex`). It reads no backed data, computes no lazy arrays
+and materialises no indexes; only object-dtype columns are scanned (and converted,
+which allocates), because only their values tell.
+It cannot see what the writers only find out while writing: backend, codec and IO
+failures, a column that shares its name with the index but holds different values,
+and data a backend refuses although a writer is registered for its type
+(h5py refuses `datetime64`/`timedelta64` data, for example datetime categories or
+datetime arrays in `uns` on `h5ad`). These can still fail mid-write.
+
+If the check finds a single problem, it raises that problem's exception:
+{exc}`TypeError` for an unconvertible column or an invalid key, {exc}`ValueError`
+for a structural problem, and anndata's registry error for a missing writer.
+These are the types the writers raise, except that writing a non-string key raises
+{exc}`AttributeError` and a reference cycle {exc}`RecursionError`.
+Several problems are raised together as an {exc}`ExceptionGroup` whose message lists
+their paths and whose members keep their types, so they can be handled with `except*`:
 
 ```python
 try:
     adata.write_h5ad("out.h5ad")
-except* anndata._io.specs.registry.IORegistryError as missing_writers:
-    ...
-except* TypeError as unconvertible_columns:
+except* TypeError as unconvertible:
+    ...  # columns to convert, keys to rename
+except* ValueError as structural:
     ...
 ```
 
+(awkward-array)=
 ## AwkwardArrays
 
 ```{warning}

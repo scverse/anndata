@@ -36,37 +36,21 @@ __all__ = [
 class UnsupportedColumnTypeError(TypeError):
     """An object-dtype dataframe column cannot be converted for writing.
 
-    Attributes
-    ----------
-    path
-        Name or path of the column, as given to :func:`normalize_column`.
-    dtype
-        The column's in-memory dtype.
-    kind
-        What :func:`pandas.api.types.infer_dtype` made of an object column, if applicable.
-    reason
-        Why the column cannot be written.
-    hint
-        What the user can do about it.
+    `path` names the column, `kind` is what :func:`~pandas.api.types.infer_dtype`
+    made of it, `reason` says why it cannot be written and `hint` what to do about it.
     """
 
     def __init__(
-        self,
-        path: str,
-        dtype: object,
-        reason: str,
-        *,
-        hint: str = "",
-        kind: str | None = None,
+        self, path: str, reason: str, hint: str = "", kind: str | None = None
     ) -> None:
-        self.path = path
-        self.dtype = dtype
-        self.kind = kind
-        self.reason = reason
-        self.hint = hint
+        self.path, self.reason, self.hint, self.kind = path, reason, hint, kind
         inferred = "" if kind is None else f", inferred as {kind!r}"
-        msg = f"Cannot write column {path!r} (dtype {dtype}{inferred}): {reason}."
+        msg = f"Cannot write column {path!r} (dtype object{inferred}): {reason}."
         super().__init__(f"{msg} {hint}" if hint else msg)
+
+    def __reduce__(self) -> tuple[type, tuple[str, str, str, str | None], dict]:
+        # for pickling and copying: the default passes only the message to `__init__`
+        return type(self), (self.path, self.reason, self.hint, self.kind), self.__dict__
 
 
 _CONVERT_HINT = (
@@ -212,7 +196,6 @@ def _object_column_to_writable(
             return values
         raise UnsupportedColumnTypeError(
             path,
-            "object",
             "it has no supported on-disk representation",
             hint=_CONVERT_HINT,
             kind=kind,
@@ -230,7 +213,6 @@ def _object_column_to_writable(
     except (TypeError, ValueError, OverflowError) as e:
         raise UnsupportedColumnTypeError(
             path,
-            "object",
             f"converting it to {nullable_dtype.name!r} failed",
             hint=_CONVERT_HINT,
             kind=kind,
@@ -253,7 +235,6 @@ def _object_column_to_writable(
         if any(x != f for x, f in zip(original, floats[suspect].tolist(), strict=True)):
             raise UnsupportedColumnTypeError(
                 path,
-                "object",
                 "its values cannot be represented exactly as float64",
                 hint=_CONVERT_HINT,
                 kind=kind,

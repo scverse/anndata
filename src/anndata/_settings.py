@@ -32,22 +32,7 @@ class Settings(scverse_misc.Settings):
     """Whether or not to use zarr's auto computation of sharding for v3.  For v2 this setting will be ignored. The setting will apply to all calls to anndata's writing mechanism (write_zarr / write_elem) and will **not** override any user-defined kwargs for shards."""
 
     validate_before_write: bool = False
-    """\
-    Whether :func:`~anndata.io.write_h5ad` and :func:`~anndata.io.write_zarr` check every element
-    for a writer (see :meth:`~anndata.AnnData.unwriteable`) before creating the file or store.
-
-    When `True`, nothing is written if a problem is found: a single problem is raised as the
-    exception writing it would have raised, several are raised together as an
-    :exc:`ExceptionGroup` whose message lists their paths (catch with ``except*``).
-    The check is best effort: it catches elements and columns without an on-disk encoding,
-    unconvertible object columns, non-2D ``X``/layers and dataframe structure problems,
-    but backend, codec and IO failures and writers that reject particular values can still fail
-    mid-write. It reads no data from backed files and computes nothing, but object-dtype
-    dataframe columns are scanned and converted once more (allocating) to find out whether
-    they are writable.
-    When `False`, writing stops at the first unwritable element, reports only that one,
-    and may leave a partially written file.
-    """
+    """Whether :func:`~anndata.io.write_h5ad` and :func:`~anndata.io.write_zarr` check every element for a writer (like :meth:`~anndata.AnnData.unwriteable`) before creating the file, and raise all problems at once (several as an :exc:`ExceptionGroup`). The check is best effort, see :ref:`type-mapping`."""
 
     restrict_index_types: bool = True
     """

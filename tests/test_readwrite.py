@@ -708,7 +708,10 @@ def test_write_object_column_converted(
     assert orig.obs["col"].dtype == object
     curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
 
-    for read_col in (curr.obs["col"], curr.varm["df"]["col"]):
+    assert isinstance(curr.obs, pd.DataFrame)
+    varm_df = curr.varm["df"]
+    assert isinstance(varm_df, pd.DataFrame)
+    for read_col in (curr.obs["col"], varm_df["col"]):
         assert read_col.dtype == expected_dtype
         assert read_col.isna().tolist() == col.isna().tolist()
         assert read_col.dropna().tolist() == col.dropna().tolist()
@@ -803,6 +806,7 @@ def test_write_object_column_roundtrip_values(
         diskfmt_store, convert_strings_to_categoricals=False
     )
     curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
+    assert isinstance(curr.obs, pd.DataFrame)
     read = curr.obs["col"]
     assert read.isna().tolist() == col.isna().tolist()
     expected = [v.decode() if isinstance(v, bytes) else v for v in col.dropna()]
@@ -825,11 +829,17 @@ def _realistic_object_columns() -> dict[str, tuple[pd.Series, str]]:
     partial = pd.DataFrame({"rank": counts.iloc[:4].astype(object)})
     return {
         "np.where-int-none": (
-            pd.Series(np.where(flags, counts, None), index=counts.index),
+            pd.Series(
+                np.where(flags.to_numpy(), counts.to_numpy(), np.array(None)),
+                index=counts.index,
+            ),
             "Int64",
         ),
         "np.where-bool-none": (
-            pd.Series(np.where(flags, flags, None), index=counts.index),
+            pd.Series(
+                np.where(flags.to_numpy(), flags.to_numpy(), np.array(None)),
+                index=counts.index,
+            ),
             "boolean",
         ),
         "Int64-astype-object": (
@@ -869,6 +879,7 @@ def test_write_object_column_realistic(
     orig = ad.AnnData(obs=pd.DataFrame({"col": col}))
     getattr(orig, f"write_{diskfmt}")(diskfmt_store)
     curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
+    assert isinstance(curr.obs, pd.DataFrame)
     read = curr.obs["col"]
     assert read.dtype == expected_dtype
     assert read.isna().tolist() == col.isna().tolist()
@@ -884,6 +895,7 @@ def test_write_object_column_elem_and_empty_view(
     store = open_store(diskfmt_store)
     ad.io.write_elem(store, "df", df)
     read = ad.io.read_elem(store["df"])
+    assert isinstance(read, pd.DataFrame)
     if isinstance(store, h5py.File):
         store.close()  # the h5ad write below reopens the file
     assert read["col"].dtype == "Int64"
@@ -947,7 +959,7 @@ def test_write_object_column_int_keeps_exotic_missing(missing: object) -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         converted = _object_column_to_writable(values, "col")
-    assert converted.dtype == "Int64"
+    assert isinstance(converted, pd.arrays.IntegerArray)
     assert converted.isna().tolist() == [False, True, False]
     assert converted[[0, 2]].tolist() == [1, 3]
 
