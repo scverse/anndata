@@ -38,7 +38,7 @@ from .methods import (
 from .registry import _REGISTRY, IORegistryError, _iter_patterns, _normalize_write_key
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Iterable
     from typing import Literal
 
     from ..._types import _GroupStorageType
@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     type GroupTypes = tuple[type[_GroupStorageType], ...]
 
 
-__all__ = ["iter_unwriteable", "raise_if_unwriteable"]
+__all__ = ["iter_unwriteable", "raise_if_unwriteable", "raise_if_unwriteable_parts"]
 
 
 _GROUP_TYPES: Mapping[str, GroupTypes] = MappingProxyType({
@@ -88,7 +88,31 @@ def raise_if_unwriteable(
     a structural problem (the writers raise `AttributeError` for a non-str key
     and `RecursionError` for a cycle). Several raise an `ExceptionGroup`.
     """
-    errors = list(iter_unwriteable(adata, store_type=store_type))
+    _raise_problems(list(iter_unwriteable(adata, store_type=store_type)))
+
+
+def raise_if_unwriteable_parts(
+    parts: Iterable[tuple[str | None, str, object]], *, store: _GroupStorageType
+) -> None:
+    """\
+    Like :func:`raise_if_unwriteable`, for the `(parent, key, element)` triples
+    `write_use` writes into `store` (`parent` `None` is the root).
+    """
+    group_types = (zarr.Group,) if isinstance(store, zarr.Group) else (h5py.Group,)
+    errors: list[tuple[str, Exception]] = []
+    for parent, key, elem in parts:
+        group_path = "/" if parent is None else f"/{parent}"
+        try:
+            stored = _stored_key(key, group_path, group_types)
+        except (TypeError, ValueError) as e:
+            path = _child_path(group_path, key)
+            errors.append((path, _note_path(e, path)))
+            continue
+        errors.extend(_walk(elem, group_types, _child_path(group_path, stored)))
+    _raise_problems(errors)
+
+
+def _raise_problems(errors: list[tuple[str, Exception]]) -> None:
     if not errors:
         return
     if len(errors) == 1:

@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
+from .._settings import settings
 from ..utils import warn
 
 if TYPE_CHECKING:
@@ -188,7 +189,12 @@ def write_use(
 
     # resolve everything first so an invalid accessor fails before anything is written
     uses = use if isinstance(use, Sequence) else [use]
-    for parent, key, elem in [_resolve_use(f, adata, u) for u in uses]:
+    parts = [_resolve_use(f, adata, u) for u in uses]
+    if settings.validate_before_write:
+        from .specs.validate import raise_if_unwriteable_parts
+
+        raise_if_unwriteable_parts(parts, store=f)
+    for parent, key, elem in parts:
         if parent is not None and parent not in f:
             write_elem(f, parent, {})
         write_elem(

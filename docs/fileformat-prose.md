@@ -628,6 +628,7 @@ and `bytes` are written as strings.
 Set {attr}`anndata.settings.validate_before_write` to check every element of an
 {class}`~anndata.AnnData` object against this table before anything is written;
 {meth}`~anndata.AnnData.unwriteable` runs the same check and returns a boolean.
+A partial write with `use=` checks only the elements it writes.
 The check looks at types, dtypes and shapes: it finds elements and dataframe columns
 without a writer, object columns that cannot be converted, non-2D `X`/layers,
 invalid keys, reference cycles, and dataframe structure problems (reserved, invalid

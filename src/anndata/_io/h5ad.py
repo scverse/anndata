@@ -63,7 +63,7 @@ def write_h5ad(  # noqa: PLR0912
     **kwargs,
 ) -> None:
     """See :meth:`~anndata.AnnData.write_h5ad`."""
-    if not settings.validate_before_write:  # else the preflight reports it
+    if use is not None or not settings.validate_before_write:  # else the preflight does
         _check_x_and_layers_are_2d_on_write(adata)
     if isinstance(as_dense, str):
         as_dense = [as_dense]
@@ -83,12 +83,12 @@ def write_h5ad(  # noqa: PLR0912
             adata.strings_to_categoricals(adata.raw.var)
     dataset_kwargs = {**dataset_kwargs, **kwargs}
     filepath = Path(filepath)
-    if settings.validate_before_write:
-        raise_if_unwriteable(adata, store_type="h5")
-    if use is not None:
+    if use is not None:  # `write_use` checks its parts if `validate_before_write`
         with h5py.File(filepath, "r+") as f:
             write_use(f, adata, use, dataset_kwargs=dataset_kwargs)
         return
+    if settings.validate_before_write:
+        raise_if_unwriteable(adata, store_type="h5")
     mode = "a" if adata.isbacked else "w"
     if adata.isbacked:  # close so that we can reopen below
         adata.file.close()

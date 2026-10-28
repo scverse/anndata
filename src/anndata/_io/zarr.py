@@ -108,7 +108,7 @@ def write_zarr(
         adata.strings_to_categoricals()
         if adata.raw is not None:
             adata.strings_to_categoricals(adata.raw.var)
-    if settings.validate_before_write:
+    if settings.validate_before_write and use is None:  # `write_use` checks its parts
         raise_if_unwriteable(adata, store_type="zarr")
 
     def callback(

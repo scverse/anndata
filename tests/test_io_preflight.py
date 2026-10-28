@@ -23,6 +23,7 @@ from zarr.storage import MemoryStore
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError
 from anndata._io.specs.validate import iter_unwriteable, raise_if_unwriteable
+from anndata.acc import A
 from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, gen_adata
 
 if TYPE_CHECKING:
@@ -1141,3 +1142,64 @@ def test_preflight_accepts_sequences_of_writable_members(
     assert [(p, type(e)) for p, e in iter_unwriteable(adata)] == [
         ("/uns/tuple", IORegistryError)
     ]
+
+
+def test_preflight_use_checks_only_used_elements(
+    *, diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore
+) -> None:
+    """A partial write is judged on what it writes, not on the rest of the object."""
+    adata = _adata(col=_series([1, 2, 3]))
+    _write(adata, diskfmt, diskfmt_store)
+    adata.obs["period"] = pd.period_range("2020-01", periods=3, freq="M")
+    adata.obsm["clean"] = np.ones((3, 2))
+    assert adata.unwriteable()
+    with ad.settings.override(validate_before_write=True):
+        getattr(adata, f"write_{diskfmt}")(diskfmt_store, use=A.obsm["clean"])
+    read = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
+    np.testing.assert_array_equal(read.obsm["clean"], np.ones((3, 2)))
+    assert list(_df(read.obs).columns) == ["col"]
+
+
+@pytest.mark.parametrize("bad", ["column", "mapping"])
+def test_preflight_use_refuses_unwritable_part(
+    *, diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore, bad: str
+) -> None:
+    """An unwritable part fails the partial write before any part is written."""
+    adata = _adata(col=_series([1, 2, 3]))
+    _write(adata, diskfmt, diskfmt_store)
+    period = pd.period_range("2020-01", periods=3, freq="M")
+    adata.obsm["good"] = np.ones((3, 2))
+    if bad == "column":
+        adata.obs["period"] = period
+        use, path = [A.obsm["good"], A.obs["period"]], "/obs/period"
+    else:
+        adata.obsm["bad"] = pd.DataFrame({"p": period}, index=adata.obs_names)
+        use, path = [A.obsm["good"], A.obsm["bad"]], "/obsm/bad/p"
+    with (
+        ad.settings.override(validate_before_write=True),
+        pytest.raises(IORegistryError) as exc_info,
+    ):
+        getattr(adata, f"write_{diskfmt}")(diskfmt_store, use=use)
+    assert f"Element: {path}" in _notes(exc_info.value)
+    assert _obsm_keys_on_disk(diskfmt_store) == set()
+
+    # without the preflight, the parts before the bad one are written
+    with (
+        ad.settings.override(validate_before_write=False),
+        pytest.raises(IORegistryError),
+    ):
+        getattr(adata, f"write_{diskfmt}")(diskfmt_store, use=use)
+    assert "good" in _obsm_keys_on_disk(diskfmt_store)
+
+
+def _obsm_keys_on_disk(store: Path | MemoryStore) -> set[str]:
+    """Read the store directly: a failed partial write may leave it unreadable or stale."""
+    if isinstance(store, MemoryStore):
+        group = zarr.open_group(store, mode="r", use_consolidated=False)
+        if "obsm" not in group:
+            return set()
+        obsm = group["obsm"]
+        assert isinstance(obsm, zarr.Group)
+        return set(obsm.keys())
+    with h5py.File(store, "r") as f:
+        return set(f["obsm"].keys()) if "obsm" in f else set()
