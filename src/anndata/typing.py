@@ -21,7 +21,7 @@ from .compat import (
     CSArray,
     CSMatrix,
     CupyArray,
-    CupySparseMatrix,
+    CupyCSMatrix,
     DaskArray,
     IndexManager,
     XDataArray,
@@ -32,7 +32,7 @@ __all__ = ["AlignedArray", "Index", "Index1D", "RWAble", "Storable"]
 
 
 if TYPE_CHECKING:
-    from typing import TypeAlias
+    from typing import TypeAlias, TypeIs
 
 # private aliases are no `type`s, so subscripting substitutes into the union and Sphinx expands them in the public ones
 _M = TypeVar("_M", bound=IndexManager, default=Never)
@@ -88,10 +88,15 @@ type InMemoryArray = (
     | CSArray
     | DaskArray
     | CupyArray
-    | CupySparseMatrix
+    | CupyCSMatrix
     | SupportsArrayApiBase
 )
 """An Array that is possibly stored in Memory (Dask Arrays are possibly stored on disk)."""
+
+
+def _is_in_memory(a: object, /) -> TypeIs[InMemoryArray]:
+    return isinstance(a, InMemoryArray.__value__)
+
 
 type AlignedArray = (
     InMemoryArray

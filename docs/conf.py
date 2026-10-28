@@ -100,6 +100,7 @@ def setup(app: Sphinx) -> None:
 
 intersphinx_mapping = intersphinx("mudata", core=False) | dict(
     array_api=("https://array-api.readthedocs.io/en/stable", None),
+    array_api_spec=("https://data-apis.org/array-api/latest", None),
     awkward=("https://awkward-array.org/doc/stable", None),
     cupy=("https://docs.cupy.dev/en/stable", None),
     dask=("https://docs.dask.org/en/stable", None),
@@ -157,8 +158,8 @@ nitpick_ignore = [  # APIs without an intersphinx entry
     ("py:class", "anndata.utils.Default"),
     # TODO: remove zappy support; the zappy repo is archived
     ("py:class", "anndata.compat.ZappyArray"),
-    #### type variables
-    *(("py:class", v) for v in "DIMR"),
+    #### type variables (in generic bases, PEP 695 ones are rendered as `typing.*`)
+    *(t for v in "DIMR" for t in [("py:class", v), ("py:obj", f"typing.{v}")]),
 ]
 
 # -- Social cards ---------------------------------------------------------
