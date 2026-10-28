@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from ...compat import PANDAS_STRING_ARRAY_TYPES
+from ...compat import PANDAS_3, PANDAS_STRING_ARRAY_TYPES
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -45,7 +45,12 @@ class UnsupportedColumnTypeError(TypeError):
 
 _CONVERT_HINT = (
     "Convert it to a supported dtype before writing, e.g. with `.astype(...)`. "
-    "For missing values, use a nullable dtype such as 'Int64', 'boolean', or 'string'."
+    "For missing values, use a nullable dtype such as 'Int64', 'boolean', or 'string'"
+    + (
+        "."
+        if PANDAS_3
+        else " (with `anndata.settings.allow_write_nullable_strings = True`)."
+    )
 )
 
 

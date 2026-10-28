@@ -131,13 +131,13 @@ def test_supported_column_roundtrip(
     expected_na = col.isna().tolist()
     expected_values = col.dropna().tolist()
     adata = adata_with_obs(col=col)
-    assert list(iter_unwriteable(adata)) == []
-    assert not adata.unwriteable()
-
-    with ad.settings.override(
-        validate_before_write=True, allow_write_nullable_strings=True
-    ):
-        read = as_dataframe(write_and_read(adata, diskfmt, diskfmt_store).obs)["col"]
+    with ad.settings.override(allow_write_nullable_strings=True):
+        assert list(iter_unwriteable(adata)) == []
+        assert not adata.unwriteable()
+        with ad.settings.override(validate_before_write=True):
+            read = as_dataframe(write_and_read(adata, diskfmt, diskfmt_store).obs)[
+                "col"
+            ]
     assert read.dtype == expected_dtype
     assert read.isna().tolist() == expected_na
     assert read.dropna().tolist() == expected_values

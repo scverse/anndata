@@ -30,6 +30,7 @@ from anndata._io.specs.validate import (
 )
 from anndata._io.utils import _resolve_use
 from anndata.acc import A
+from anndata.compat import PANDAS_3
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
     adata_with_obs,
@@ -240,6 +241,40 @@ def test_unwriteable_does_not_convert_nested_or_aligned_strings() -> None:
     assert adata.unwriteable()
     with pytest.raises(UnsupportedColumnTypeError):
         adata.write_zarr(MemoryStore())
+
+
+@pytest.mark.parametrize("where", ["obsm", "uns"])
+def test_preflight_nullable_strings_follow_setting(
+    *, diskfmt: Literal["h5ad", "zarr"], tmp_path: Path, where: str
+) -> None:
+    """Without `infer_string`, pandas < 3 needs `allow_write_nullable_strings` to write them."""
+    path = tmp_path / f"adata.{diskfmt}"
+    adata = adata_with_obs(col=obs_column([1, 2, 3]))
+    strings = obs_column(["a", None, "b"], "string")
+    if where == "obsm":
+        adata.obsm["df"] = pd.DataFrame({"s": strings})
+        elem_path = "/obsm/df/s"
+    else:
+        adata.uns["s"] = strings.array
+        elem_path = "/uns/s"
+    implicit = not PANDAS_3 and not pd.options.future.infer_string
+    with ad.settings.override(allow_write_nullable_strings=None):
+        errors = list(iter_unwriteable(adata))
+        assert [(p, type(e)) for p, e in errors] == (
+            [(elem_path, RuntimeError)] if implicit else []
+        )
+        if implicit:
+            with (
+                ad.settings.override(validate_before_write=True),
+                pytest.raises(RuntimeError, match=r"allow_write_nullable_strings"),
+            ):
+                getattr(adata, f"write_{diskfmt}")(path)
+            assert not path.exists()
+    with ad.settings.override(
+        allow_write_nullable_strings=True, validate_before_write=True
+    ):
+        assert list(iter_unwriteable(adata)) == []
+        getattr(adata, f"write_{diskfmt}")(path)
 
 
 def test_preflight_dataframe_structure() -> None:
@@ -908,7 +943,10 @@ def test_preflight_never_materialises(
     *, kind: str, store_type: Literal["h5", "zarr"], tmp_path: Path
 ) -> None:
     subject = _subject(kind, tmp_path)
-    with forbid_payload_access():
+    with (
+        forbid_payload_access(),
+        ad.settings.override(allow_write_nullable_strings=True),
+    ):
         assert list(iter_unwriteable(subject, store_type=store_type)) == []
         if isinstance(subject, ad.AnnData):
             assert not subject.unwriteable(store_type=store_type)

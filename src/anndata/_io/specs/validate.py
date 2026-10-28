@@ -32,6 +32,7 @@ from .dataframe_columns import (
 )
 from .methods import (
     _check_dataframe_columns,
+    _check_nullable_strings_opted_in,
     _dataframe_index_name,
     _dataframe_index_values,
 )
@@ -224,6 +225,8 @@ def _walk(
         yield from _walk_categorical(elem, group_types, path)
     elif isinstance(elem, XDataset | Mapping):
         yield from _walk_mapping(elem, group_types, path, ancestors)
+    elif isinstance(elem, pd.arrays.StringArray | pd.arrays.ArrowStringArray):
+        yield from _walk_nullable_strings(path)
 
 
 def _walk_mapping(
@@ -499,6 +502,15 @@ def _walk_column(
         yield path, _missing_column_writer_error(values, group_types, path)
     elif isinstance(values, pd.Categorical):
         yield from _walk_categorical(values, group_types, path)
+    elif isinstance(values, pd.arrays.StringArray | pd.arrays.ArrowStringArray):
+        yield from _walk_nullable_strings(path)
+
+
+def _walk_nullable_strings(path: str) -> Problems:
+    try:
+        _check_nullable_strings_opted_in()
+    except RuntimeError as e:
+        yield path, _note_path(e, path)
 
 
 def _missing_column_writer_error(

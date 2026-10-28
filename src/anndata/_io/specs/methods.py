@@ -1364,19 +1364,7 @@ def write_nullable(
             return
 
         # if implicitly set to `False`, we error out
-        if (
-            settings.allow_write_nullable_strings is None
-            and not PANDAS_3
-            and not pd.options.future.infer_string
-        ):
-            msg = (
-                "`anndata.settings.allow_write_nullable_strings` is None and "
-                "`pd.options.future.infer_string` is False. "
-                "Opt-in to writing these arrays by toggling either setting to True, "
-                "or make `anndata` attempt to write the non-nullable format supported by "
-                "anndata < 0.11 by setting `anndata.settings.allow_write_nullable_strings` to False."
-            )
-            raise RuntimeError(msg)
+        _check_nullable_strings_opted_in()
 
     g = f.require_group(k)
     if isinstance(v, pd.arrays.StringArray | pd.arrays.ArrowStringArray):
@@ -1394,6 +1382,23 @@ def write_nullable(
     )
     _writer.write_elem(g, "values", values, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "mask", v.isna(), dataset_kwargs=dataset_kwargs)
+
+
+def _check_nullable_strings_opted_in() -> None:
+    """Raise if writing nullable strings needs an explicit setting first."""
+    if (
+        settings.allow_write_nullable_strings is None
+        and not PANDAS_3
+        and not pd.options.future.infer_string
+    ):
+        msg = (
+            "`anndata.settings.allow_write_nullable_strings` is None and "
+            "`pd.options.future.infer_string` is False. "
+            "Opt-in to writing these arrays by toggling either setting to True, "
+            "or make `anndata` attempt to write the non-nullable format supported by "
+            "anndata < 0.11 by setting `anndata.settings.allow_write_nullable_strings` to False."
+        )
+        raise RuntimeError(msg)
 
 
 for store_type, array_type in product(_STORE_TYPES, PANDAS_STRING_ARRAY_TYPES):
