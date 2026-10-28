@@ -403,16 +403,19 @@ def _walk_categorical(
     # `write_categorical` stores `categories.to_numpy()`; an empty slice has its dtype
     categories = cat.categories[:0]
     stored = categories.to_numpy()
-    if stored.dtype == object and not is_string_dtype(categories.dtype):
-        # stricter than the writers, which fail (h5py) or store strings (zarr)
-        msg = (
-            f"Cannot write categories of dtype {categories.dtype}: "
-            "h5ad cannot store them and zarr would store them as strings. "
-            "Convert them first, e.g. with `.cat.rename_categories(str)`."
-        )
-        yield categories_path, _note_path(TypeError(msg), categories_path)
+    if stored.dtype != object or is_string_dtype(categories.dtype):
+        yield from _walk(stored, group_types, categories_path)
         return
-    yield from _walk(stored, group_types, categories_path)
+    # h5py refuses other objects and zarr stores them as strings, but `unwriteable`
+    # has always refused categories whose values (e.g. intervals) have no writer
+    if zarr.Group in group_types and _has_writer(categories.values, (zarr.Group,)):
+        return
+    msg = (
+        f"Cannot write categories of dtype {categories.dtype}: "
+        "h5ad cannot store them and zarr would store them as strings. "
+        "Convert them first, e.g. with `.cat.rename_categories(str)`."
+    )
+    yield categories_path, _note_path(TypeError(msg), categories_path)
 
 
 def _walk_dataframe(

@@ -713,35 +713,38 @@ def test_custom_registered_writer_is_honoured(
         )
 
 
-CATEGORY_FAMILIES: dict[str, tuple[Callable[[], pd.Categorical[Any]], bool]] = {
-    # name: (factory, accepted by the preflight)
-    "str": (lambda: pd.Categorical(["a", "b", "a"]), True),
-    "Int64": (lambda: pd.Categorical(pd.array([1, None, 2], dtype="Int64")), True),
+_BOTH = frozenset({"h5ad", "zarr"})
+CATEGORY_FAMILIES: dict[
+    str, tuple[Callable[[], pd.Categorical[Any]], frozenset[str]]
+] = {
+    # name: (factory, formats the preflight accepts them for)
+    "str": (lambda: pd.Categorical(["a", "b", "a"]), _BOTH),
+    "Int64": (lambda: pd.Categorical(pd.array([1, None, 2], dtype="Int64")), _BOTH),
     "Float64": (
         lambda: pd.Categorical(pd.array([1.5, 2.0, 1.5], dtype="Float64")),
-        True,
+        _BOTH,
     ),
     "arrow-int": (
         lambda: pd.Categorical(pd.array([1, 2, 1], dtype="int64[pyarrow]")),
-        True,
+        _BOTH,
     ),
     "datetime": (
         lambda: pd.Categorical(
             pd.to_datetime(["2020-01-01", "2021-01-01", "2020-01-01"])
         ),
-        True,
+        _BOTH,
     ),
-    "timedelta": (lambda: pd.Categorical(pd.to_timedelta(["1h", "2h", "1h"])), True),
+    "timedelta": (lambda: pd.Categorical(pd.to_timedelta(["1h", "2h", "1h"])), _BOTH),
     "interval": (
         lambda: pd.Categorical.from_codes(
             [0, 1, 0],
             dtype=pd.CategoricalDtype(pd.IntervalIndex.from_tuples([(0, 1), (1, 2)])),
         ),
-        False,
+        frozenset(),
     ),
     "period": (
         lambda: pd.Categorical(pd.period_range("2020-01", periods=3, freq="M")),
-        False,
+        frozenset({"zarr"}),
     ),
     "arrow-str": (
         lambda: pd.Categorical(
@@ -750,7 +753,7 @@ CATEGORY_FAMILIES: dict[str, tuple[Callable[[], pd.Categorical[Any]], bool]] = {
                 dtype=pd.ArrowDtype(pytest.importorskip("pyarrow").string()),
             ).array
         ),
-        True,
+        _BOTH,
     ),
     "datetime-tz": (
         lambda: pd.Categorical(
@@ -758,7 +761,7 @@ CATEGORY_FAMILIES: dict[str, tuple[Callable[[], pd.Categorical[Any]], bool]] = {
                 "UTC"
             )
         ),
-        False,
+        frozenset({"zarr"}),
     ),
 }
 
@@ -772,10 +775,12 @@ def test_categorical_categories_agreement(
 ) -> None:
     """The walker judges categories on what the writer stores (`to_numpy()`).
 
-    Object arrays of non-strings (intervals, periods, tz-aware datetimes) are refused
-    on both formats; the writer itself is unchanged: h5py fails, zarr stores strings.
+    For object arrays of non-strings (intervals, periods, tz-aware datetimes) h5py
+    fails and zarr stores strings; intervals are refused on zarr too, as
+    `unwriteable` always did.
     """
-    make, accepted = CATEGORY_FAMILIES[family]
+    make, accepted_for = CATEGORY_FAMILIES[family]
+    accepted = diskfmt in accepted_for
     store_type = store_type_of(diskfmt)
     adata = adata_with_obs(cat=pd.Series(make(), index=obs_index()))
     errors = list(iter_unwriteable(adata, store_type=store_type))
@@ -794,5 +799,5 @@ def test_categorical_categories_agreement(
     read = as_dataframe(write_and_read(adata, diskfmt, diskfmt_store).obs)["cat"]
     assert read.dtype == "category"
     assert read.isna().tolist() == adata.obs["cat"].isna().tolist()
-    if not accepted:  # zarr stores what it cannot encode as strings
+    if family in {"interval", "period", "datetime-tz"}:  # zarr stores them as strings
         assert pd.api.types.is_string_dtype(read.cat.categories.dtype)

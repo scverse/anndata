@@ -1107,12 +1107,15 @@ def test_preflight_categorical_index_policy(categories: pd.Index) -> None:
             pd.Categorical.from_codes([0, 1, 0], categories=categories)
         ),
     )
-    errors = list(iter_unwriteable(adata))
+    errors = list(iter_unwriteable(adata, store_type="h5"))
     assert [(p, type(e)) for p, e in errors] == [
         ("/uns/table/_index/categories", TypeError)
     ]
     assert "Cannot write categories" in str(errors[0][1])
-    assert adata.unwriteable()
+    # zarr stores them as strings, except intervals
+    is_interval = isinstance(categories, pd.IntervalIndex)
+    assert adata.unwriteable(store_type="zarr") is is_interval
+    assert adata.unwriteable() is is_interval
     good = pd.DataFrame(
         {"x": [1.0, 2.0]}, index=pd.CategoricalIndex(["a", "b"], categories=["a", "b"])
     )
