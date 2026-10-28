@@ -21,8 +21,14 @@ import zarr
 from zarr.storage import MemoryStore
 
 import anndata as ad
+from anndata._io.specs.dataframe_columns import UnsupportedColumnTypeError
 from anndata._io.specs.registry import IORegistryError
-from anndata._io.specs.validate import iter_unwriteable, raise_if_unwriteable
+from anndata._io.specs.validate import (
+    iter_unwriteable,
+    raise_if_unwriteable,
+    raise_if_unwriteable_parts,
+)
+from anndata._io.utils import _resolve_use
 from anndata.acc import A
 from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, gen_adata
 
@@ -30,6 +36,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator
     from pathlib import Path
     from typing import Any, Literal
+
+    from anndata.acc import AdRef, MapAcc, RefAcc
 
 
 def _idx() -> pd.Index:
@@ -1181,7 +1189,7 @@ def test_preflight_use_refuses_unwritable_part(
     ):
         getattr(adata, f"write_{diskfmt}")(diskfmt_store, use=use)
     assert f"Element: {path}" in _notes(exc_info.value)
-    assert _obsm_keys_on_disk(diskfmt_store) == set()
+    assert _keys_on_disk(diskfmt_store) == set()
 
     # without the preflight, the parts before the bad one are written
     with (
@@ -1189,17 +1197,157 @@ def test_preflight_use_refuses_unwritable_part(
         pytest.raises(IORegistryError),
     ):
         getattr(adata, f"write_{diskfmt}")(diskfmt_store, use=use)
-    assert "good" in _obsm_keys_on_disk(diskfmt_store)
+    assert "good" in _keys_on_disk(diskfmt_store)
 
 
-def _obsm_keys_on_disk(store: Path | MemoryStore) -> set[str]:
+def _keys_on_disk(store: Path | MemoryStore, group_name: str = "obsm") -> set[str]:
     """Read the store directly: a failed partial write may leave it unreadable or stale."""
     if isinstance(store, MemoryStore):
-        group = zarr.open_group(store, mode="r", use_consolidated=False)
-        if "obsm" not in group:
+        root = zarr.open_group(store, mode="r", use_consolidated=False)
+        if group_name not in root:
             return set()
-        obsm = group["obsm"]
-        assert isinstance(obsm, zarr.Group)
-        return set(obsm.keys())
+        group = root[group_name]
+        assert isinstance(group, zarr.Group)
+        return set(group.keys())
     with h5py.File(store, "r") as f:
-        return set(f["obsm"].keys()) if "obsm" in f else set()
+        return set(f[group_name].keys()) if group_name in f else set()
+
+
+@pytest.mark.parametrize("validate", [False, True], ids=["validate=F", "validate=T"])
+def test_use_object_column_converted_like_full_write(
+    *,
+    diskfmt: Literal["h5ad", "zarr"],
+    diskfmt_store: Path | MemoryStore,
+    tmp_path: Path,
+    validate: bool,
+) -> None:
+    """`use=A.obs[col]` writes an object column the way a full write does."""
+    adata = _adata(col=_series([1, 2, 3]))
+    _write(adata, diskfmt, diskfmt_store)
+    adata.obs["o"] = np.array([1, None, 3], dtype=object)
+    full_store = tmp_path / "full.h5ad" if diskfmt == "h5ad" else MemoryStore()
+    full = _df(_write(adata, diskfmt, full_store).obs)["o"]
+    with ad.settings.override(validate_before_write=validate):
+        read = _df(_write(adata, diskfmt, diskfmt_store, use=A.obs["o"]).obs)["o"]
+    assert read.dtype == full.dtype == "Int64"
+    assert read.isna().tolist() == [False, True, False]
+    assert _df(adata.obs)["o"].dtype == object
+
+
+@pytest.mark.parametrize("validate", [False, True], ids=["validate=F", "validate=T"])
+def test_use_unconvertible_object_column_writes_nothing(
+    *,
+    diskfmt: Literal["h5ad", "zarr"],
+    diskfmt_store: Path | MemoryStore,
+    validate: bool,
+) -> None:
+    adata = _adata(col=_series([1, 2, 3]))
+    _write(adata, diskfmt, diskfmt_store)
+    adata.obsm["good"] = np.ones((3, 2))
+    adata.obs["mixed"] = np.array([1, "a", None], dtype=object)
+    with (
+        ad.settings.override(validate_before_write=validate),
+        pytest.raises(UnsupportedColumnTypeError, match=r"'mixed'"),
+    ):
+        _write(adata, diskfmt, diskfmt_store, use=[A.obsm["good"], A.obs["mixed"]])
+    assert _keys_on_disk(diskfmt_store) == set()
+    assert "mixed" not in _keys_on_disk(diskfmt_store, "obs")
+
+
+@pytest.mark.parametrize("part", ["X", "layer"])
+def test_use_array_parts(
+    *, diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore, part: str
+) -> None:
+    adata = ad.AnnData(
+        np.zeros((3, 2)),
+        obs=pd.DataFrame(index=_idx()),
+        var=pd.DataFrame(index=["x", "y"]),
+    )
+    adata.layers["L"] = np.zeros((3, 2))
+    _write(adata, diskfmt, diskfmt_store)
+    use = A.X if part == "X" else A.layers["L"]
+    adata.obsm["bad"] = pd.DataFrame(
+        {"p": pd.period_range("2020-01", periods=3, freq="M")}, index=adata.obs_names
+    )
+    new = np.arange(6.0).reshape(3, 2)
+    if part == "X":
+        adata.X = new
+    else:
+        adata.layers["L"] = new
+    with ad.settings.override(validate_before_write=True):
+        # an unwritable part alongside: nothing is written
+        with pytest.raises(IORegistryError):
+            _write(adata, diskfmt, diskfmt_store, use=[use, A.obsm["bad"]])
+        read = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
+        assert not read.X.any()
+        assert not read.layers["L"].any()
+        read = _write(adata, diskfmt, diskfmt_store, use=use)
+    np.testing.assert_array_equal(read.X if part == "X" else read.layers["L"], new)
+
+
+@pytest.mark.parametrize("source", ["backed", "view"])
+def test_use_from_backed_or_view(*, tmp_path: Path, source: str) -> None:
+    """Parts of a backed object or a view are checked without reading them."""
+    rng = np.random.default_rng(0)
+    base = ad.AnnData(
+        rng.random((4, 3)),
+        obs=pd.DataFrame(index=list("abcd")),
+        var=pd.DataFrame(index=list("xyz")),
+        layers={"L": sp.random(4, 3, density=0.5, format="csr", rng=rng)},
+        obsm={"m": rng.random((4, 2))},
+    )
+    period = pd.period_range("2020-01", periods=4, freq="M")
+    subject: ad.AnnData
+    if source == "backed":
+        base.write_h5ad(tmp_path / "src.h5ad")
+        subject = ad.read_h5ad(tmp_path / "src.h5ad", backed="r")
+        subject.obsm["bad"] = pd.DataFrame({"p": period}, index=subject.obs_names)
+    else:
+        base.obsm["bad"] = pd.DataFrame({"p": period}, index=base.obs_names)
+        subject = base[:2]
+        assert subject.is_view
+    dest = tmp_path / "dest.h5ad"
+    blank = ad.AnnData(
+        np.zeros(subject.shape),
+        obs=pd.DataFrame(index=subject.obs_names),
+        var=pd.DataFrame(index=subject.var_names),
+    )
+    blank.write_h5ad(dest)
+    uses: list[AdRef | RefAcc | MapAcc] = [A.X, A.layers["L"], A.obsm["m"]]
+
+    with h5py.File(dest, "r+") as f:
+        parts = [_resolve_use(f, subject, use) for use in uses]
+        with forbid_payload_access():
+            raise_if_unwriteable_parts(parts, store=f)
+    with ad.settings.override(validate_before_write=True):
+        with pytest.raises(IORegistryError):
+            subject.write_h5ad(dest, use=[*uses, A.obsm["bad"]])
+        assert _keys_on_disk(dest) == set()
+        assert not _dense(ad.read_h5ad(dest).X).any()
+        subject.write_h5ad(dest, use=uses)
+    read = ad.read_h5ad(dest)
+    expected = subject.to_memory()
+    np.testing.assert_array_equal(_dense(read.X), _dense(expected.X))
+    np.testing.assert_array_equal(
+        _dense(read.layers["L"]), _dense(expected.layers["L"])
+    )
+    np.testing.assert_array_equal(_dense(read.obsm["m"]), _dense(expected.obsm["m"]))
+
+
+def _dense(x: object) -> np.ndarray:
+    if isinstance(x, sp.csr_matrix | sp.csc_matrix | sp.csr_array | sp.csc_array):
+        return x.toarray()
+    assert isinstance(x, np.ndarray)
+    return x
+
+
+def test_unwriteable_leaves_closed_backed_file_closed(*, tmp_path: Path) -> None:
+    """Stopping at the first problem still closes a backed file the walk reopened."""
+    adata = ad.AnnData(np.ones((3, 2)), obs=pd.DataFrame(index=_idx()))
+    adata.write_h5ad(tmp_path / "a.h5ad")
+    backed = ad.read_h5ad(tmp_path / "a.h5ad", backed="r")
+    # `layers` holds `X`, so walking it reopens the file
+    backed.layers["bad"] = np.zeros((3, 2)).view(_ArraySubclass)
+    backed.file.close()
+    assert backed.unwriteable()
+    assert not backed.file.is_open

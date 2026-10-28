@@ -830,14 +830,14 @@ def _realistic_object_columns() -> dict[str, tuple[pd.Series, str]]:
     return {
         "np.where-int-none": (
             pd.Series(
-                np.where(flags.to_numpy(), counts.to_numpy(), np.array(None)),
+                np.where(flags, counts, None),  # type: ignore[call-overload]  # stubs: no None
                 index=counts.index,
             ),
             "Int64",
         ),
         "np.where-bool-none": (
             pd.Series(
-                np.where(flags.to_numpy(), flags.to_numpy(), np.array(None)),
+                np.where(flags, flags, None),  # type: ignore[call-overload]  # stubs: no None
                 index=counts.index,
             ),
             "boolean",
