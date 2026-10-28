@@ -672,6 +672,23 @@ CATEGORY_FAMILIES: dict[str, tuple[Callable[[], pd.Categorical], bool]] = {
         lambda: pd.Categorical(pd.period_range("2020-01", periods=3, freq="M")),
         False,
     ),
+    "arrow-str": (
+        lambda: pd.Categorical(
+            pd.array(
+                ["a", "b", "a"],
+                dtype=pd.ArrowDtype(pytest.importorskip("pyarrow").string()),
+            )
+        ),
+        True,
+    ),
+    "datetime-tz": (
+        lambda: pd.Categorical(
+            pd.to_datetime(["2020-01-01", "2021-01-01", "2020-01-01"]).tz_localize(
+                "UTC"
+            )
+        ),
+        False,
+    ),
 }
 
 
@@ -687,12 +704,14 @@ def test_categorical_categories_agreement(
     store_type = "h5" if diskfmt == "h5ad" else "zarr"
     adata = _adata(cat=pd.Series(make(), index=IDX))
     errors = list(iter_unwriteable(adata, store_type=store_type))
-    assert [p for p, _ in errors] == ([] if registered else ["/obs/cat"])
+    assert [p for p, _ in errors] == ([] if registered else ["/obs/cat/categories"])
     assert adata.unwriteable(store_type=store_type) is not registered
     if not registered:
         # The writer hands these categories to the string writer as arbitrary objects:
         # h5py refuses them, zarr silently stores `str(value)`. The preflight (like
         # `unwriteable()` before it) rejects both rather than mirror the corruption.
+        assert isinstance(errors[0][1], TypeError)
+        assert re.search(r"Categories of dtype .* are not written", str(errors[0][1]))
         if diskfmt == "h5ad":
             with pytest.raises(TypeError):
                 _write(adata, diskfmt, diskfmt_store)
@@ -788,3 +807,134 @@ def test_preflight_aggregates_non_2d_with_column(
         pytest.raises(ValueError, match=r"must be 2-dimensional"),
     ):
         getattr(adata, f"write_{diskfmt}")(tmp_path / f"adata2.{diskfmt}")
+
+
+def test_preflight_does_not_read_aligned_mappings_of_views(
+    *, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Aligned mappings of a view are inspected via the parent, never subset."""
+    with h5py.File(tmp_path / "arrays.h5", "w") as f:
+        f["m"] = np.zeros((4, 2))
+        f["p"] = np.zeros((4, 4))
+        adata = ad.AnnData(
+            np.zeros((4, 4)),
+            obs=pd.DataFrame(index=list("abcd")),
+            var=pd.DataFrame(index=list("wxyz")),
+        )
+        adata.obsm["m"], adata.varm["m"] = f["m"], f["m"]
+        adata.obsp["p"], adata.varp["p"] = f["p"], f["p"]
+        adata.obsm["df"] = pd.DataFrame({"x": [1, 2, 3, 4]}, index=adata.obs_names)
+        reads: list[str] = []
+        getitem = h5py.Dataset.__getitem__
+        monkeypatch.setattr(
+            h5py.Dataset,
+            "__getitem__",
+            lambda self, *a, **kw: (reads.append(self.name), getitem(self, *a, **kw))[
+                1
+            ],
+        )
+        view = adata[[0, 2], [0, 2]]
+        assert view.is_view
+        assert list(iter_unwriteable(view, store_type="h5")) == []
+        raise_if_unwriteable(view, store_type="h5")
+        assert reads == []
+
+
+def test_preflight_does_not_materialize_range_categories() -> None:
+    cat = pd.Categorical.from_codes([0, 1, 0], categories=pd.RangeIndex(100_000))
+    adata = _adata(cat=pd.Series(cat, index=IDX))
+    assert list(iter_unwriteable(adata)) == []
+    assert not adata.unwriteable()
+    assert "_data" not in adata.obs["cat"].cat.categories._cache
+    assert "_data" not in cat.categories._cache
+
+
+def test_preflight_multiindex_with_colliding_name() -> None:
+    with ad.settings.override(restrict_index_types=False):
+        adata = ad.AnnData(
+            np.zeros((2, 1)),
+            obs=pd.DataFrame(
+                {
+                    "col": [1, 2],
+                    "period": pd.period_range("2020-01", periods=2, freq="M"),
+                },
+                index=pd.MultiIndex.from_tuples([("a", 1), ("b", 2)]),
+            ),
+        )
+    adata.obs.index.name = "col"
+    errors = list(iter_unwriteable(adata))
+    assert [(p, type(e)) for p, e in errors] == [
+        ("/obs/col", ValueError),
+        ("/obs/period", IORegistryError),
+    ]
+    assert "MultiIndex" in str(errors[0][1])
+    assert adata.unwriteable()
+
+
+@pytest.mark.parametrize("where", ["layers", "uns", "nested-uns"])
+def test_preflight_slash_keys_keep_destination(
+    *, diskfmt: Literal["h5ad", "zarr"], tmp_path: Path, where: str
+) -> None:
+    path = tmp_path / f"adata.{diskfmt}"
+    good = _adata(col=_series([1, 2, 3]))
+    getattr(good, f"write_{diskfmt}")(path)
+
+    bad = _adata(col=_series([1, 2, 3]))
+    if where == "layers":
+        bad.layers["bad/key"] = np.zeros((3, 0))
+    elif where == "uns":
+        bad.uns["bad/key"] = 1
+    else:
+        bad.uns["outer"] = {"bad/key": 1}
+    store_type = "h5" if diskfmt == "h5ad" else "zarr"
+    errors = list(iter_unwriteable(bad, store_type=store_type))
+    assert [type(e) for _, e in errors] == [ValueError]
+    assert "Forward slashes" in str(errors[0][1])
+    with (
+        ad.settings.override(validate_before_write=True),
+        pytest.raises(ValueError, match=r"Forward slashes"),
+    ):
+        getattr(bad, f"write_{diskfmt}")(path)
+    read = getattr(ad, f"read_{diskfmt}")(path)
+    assert list(read.obs.columns) == ["col"]
+    assert read.obs["col"].tolist() == [1, 2, 3]
+
+
+def test_preflight_slash_keys_follow_h5ad_setting(*, tmp_path: Path) -> None:
+    """With the h5ad slash setting off, `uns` keys with slashes are allowed (with a warning)."""
+    adata = _adata(col=_series([1, 2, 3]))
+    adata.uns["bad/key"] = 1
+    with ad.settings.override(disallow_forward_slash_in_h5ad=False):
+        assert list(iter_unwriteable(adata, store_type="h5")) == []
+        assert [p for p, _ in iter_unwriteable(adata, store_type="zarr")] == [
+            "/uns/bad/key"
+        ]
+        with (
+            ad.settings.override(validate_before_write=True),
+            pytest.warns(FutureWarning, match=r"Forward slashes"),
+        ):
+            adata.write_h5ad(tmp_path / "adata.h5ad")
+    # layers keys are refused by the writers regardless of the setting
+    adata.layers["bad/key"] = np.zeros((3, 0))
+    with ad.settings.override(disallow_forward_slash_in_h5ad=False):
+        assert [p for p, _ in iter_unwriteable(adata, store_type="h5")] == ["/layers"]
+
+
+@pytest.mark.parametrize("kind", ["OrderedDict", "defaultdict", "Counter"])
+def test_preflight_accepts_dict_subclasses(
+    *, diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore, kind: str
+) -> None:
+    import collections
+
+    if kind == "OrderedDict":
+        value = collections.OrderedDict(a=1, b=np.zeros(2))
+    elif kind == "defaultdict":
+        value = collections.defaultdict(int, a=1)
+    else:
+        value = collections.Counter({"a": 2})
+    adata = _adata(col=_series([1, 2, 3]))
+    adata.uns["sub"] = value
+    assert list(iter_unwriteable(adata)) == []
+    with ad.settings.override(validate_before_write=True):
+        read = _write(adata, diskfmt, diskfmt_store)
+    assert read.uns["sub"]["a"] == value["a"]

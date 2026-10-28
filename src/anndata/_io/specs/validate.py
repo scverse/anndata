@@ -32,13 +32,14 @@ import h5py
 import numpy as np
 import pandas as pd
 import zarr
+from pandas.api.types import is_string_dtype
 
 from anndata._core.aligned_mapping import _on_disk_x
 from anndata._core.anndata import AnnData
 from anndata._core.raw import Raw
 from anndata._core.storage import _non_2d_message
 from anndata._settings import settings
-from anndata.compat import PANDAS_STRING_ARRAY_TYPES, XDataset, has_xp
+from anndata.compat import XDataset, has_xp
 from anndata.utils import iter_outer
 
 from ..utils import check_key
@@ -46,7 +47,7 @@ from .dataframe_columns import add_column_note, normalize_column
 from .registry import _REGISTRY, IORegistryError, _iter_patterns
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Generator
     from typing import Literal
 
     from ..._types import _GroupStorageType
@@ -160,10 +161,17 @@ def _walk(
         yield from _walk_dataframe(elem, dests, path)
     elif isinstance(elem, pd.Categorical):
         yield from _walk_categorical(elem, dests, path)
-    elif isinstance(elem, XDataset | Mapping) and _registered(elem, dests):
-        # `dict` has a writer that writes each item; other mappings have none
+    elif isinstance(elem, dict) or (
+        isinstance(elem, XDataset | Mapping) and _registered(elem, dests)
+    ):
+        # `normalize_nested` turns any dict subclass into a plain dict, which
+        # has a writer that writes each item; other mappings need their own
         for key, value in elem.items():
-            yield from _walk(value, dests, _join(path, key))
+            key_path = _join(path, key)
+            if isinstance(key, str) and "/" in key and _slash_forbidden(dests):
+                msg = f"Forward slashes are not allowed in keys in {dests[0]}"
+                yield key_path, _with_path(ValueError(msg), key_path)
+            yield from _walk(value, dests, key_path)
     else:
         yield from _walk_leaf(elem, dests, path)
 
@@ -189,30 +197,32 @@ def _walk_anndata(
     assert payload_source is not None
     for attr_name, attr in iter_outer(adata):
         attr_path = _join(path, attr_name)
-        if attr_name == "layers":
-            assert isinstance(attr, Mapping)
-            layers = payload_source.layers
-            for key in cast("Iterable[str | None]", attr):
-                value = layers[key]
-                name, elem_path = (
-                    ("X", _join(path, "X"))
-                    if key is None
-                    else (f"Layer {key!r}", _join(attr_path, key))
-                )
-                if (msg := _non_2d_message(value, name=name)) is not None:
-                    yield elem_path, _with_path(ValueError(msg), elem_path)
-                else:
-                    yield from _walk(value, dests, elem_path)
-        elif isinstance(attr, Raw):
+        if isinstance(attr, Raw):
             yield from _walk_raw(attr, dests, attr_path)
+        elif attr_name == "uns":
+            yield from _walk(dict(cast("Mapping[str, object]", attr)), dests, attr_path)
         elif isinstance(attr, Mapping):
+            # Aligned mappings (layers, obsm, …): indexing a view's mapping subsets
+            # the parent's value, so array types come from the parent's mapping;
+            # only dataframes (metadata) are taken from the view itself.
+            stored: Mapping[str | None, object] = getattr(payload_source, attr_name)
             # the writers refuse slashes in these keys up front
-            if attr_name != "uns" and any(
-                isinstance(k, str) and "/" in k for k in attr
-            ):
-                msg = f"Forward slashes are not allowed in keys in {attr_name}"
-                yield attr_path, _with_path(ValueError(msg), attr_path)
-            yield from _walk(dict(attr), dests, attr_path)
+            if any(isinstance(k, str) and "/" in k for k in stored):
+                slash_msg = f"Forward slashes are not allowed in keys in {attr_name}"
+                yield attr_path, _with_path(ValueError(slash_msg), attr_path)
+            for key, value in stored.items():
+                if key is None:  # `.X`, stored under `layers[None]`
+                    name, elem_path = "X", _join(path, "X")
+                else:
+                    name, elem_path = f"Layer {key!r}", _join(attr_path, key)
+                if attr_name == "layers" and (
+                    (msg := _non_2d_message(value, name=name)) is not None
+                ):
+                    yield elem_path, _with_path(ValueError(msg), elem_path)
+                    continue
+                if isinstance(value, pd.DataFrame) and adata.is_view:
+                    value = cast("Mapping[str | None, object]", attr)[key]
+                yield from _walk(value, dests, elem_path)
         else:
             yield from _walk(attr, dests, attr_path)
 
@@ -239,17 +249,23 @@ def _walk_categorical(
     cat: pd.Categorical, dests: tuple[type, ...], path: str
 ) -> Generator[tuple[str, Exception]]:
     # The writer stores `categories.to_numpy()`; an empty slice has the same dtype
-    # as the whole index without converting the real categories.
-    representative = cat.categories[:0].to_numpy()
-    backing = cat.categories.array
-    if representative.dtype == object and not isinstance(
-        backing, (*PANDAS_STRING_ARRAY_TYPES, pd.arrays.NumpyExtensionArray)
-    ):
-        # e.g. intervals, periods, tz-aware datetimes: they would be handed to
-        # the string writer as arbitrary objects
-        yield path, _registry_miss(backing, dests, _join(path, "categories"))
+    # as the whole index, so neither the categories nor (for a `RangeIndex`) their
+    # materialisation is ever touched.
+    categories_path = _join(path, "categories")
+    categories = cat.categories[:0]
+    representative = categories.to_numpy()
+    if representative.dtype == object and not is_string_dtype(categories.dtype):
+        # e.g. intervals, periods, tz-aware datetimes: `to_numpy()` makes them
+        # arbitrary Python objects, which the string writer would stringify (zarr)
+        # or refuse (h5py); say so instead of letting either happen
+        msg = (
+            f"Categories of dtype {categories.dtype} are not written: "
+            "zarr would store them as strings and h5py refuses them. "
+            "Convert the categories first, e.g. with `.cat.rename_categories(str)`."
+        )
+        yield categories_path, _with_path(TypeError(msg), categories_path)
     else:
-        yield from _walk_leaf(representative, dests, _join(path, "categories"))
+        yield from _walk_leaf(representative, dests, categories_path)
 
 
 def _walk_dataframe(  # noqa: PLR0912
@@ -273,8 +289,10 @@ def _walk_dataframe(  # noqa: PLR0912
             if "/" in key and _slash_forbidden(dests):
                 msg = f"Forward slashes are not allowed in keys in {dests[0]}"
                 yield _join(path, key), _with_path(ValueError(msg), _join(path, key))
+    is_multi = isinstance(df.index, pd.MultiIndex)
     if (
-        df.index.name is not None
+        not is_multi  # a MultiIndex cannot be compared this way; reported below
+        and df.index.name is not None
         and df.index.name in df.columns
         and not pd.Series(df.index, index=df.index).equals(df[df.index.name])
     ):
@@ -285,7 +303,7 @@ def _walk_dataframe(  # noqa: PLR0912
         )
         yield path, _with_path(ValueError(msg), path)
     index_path = _join(path, index_name)
-    if isinstance(df.index, pd.MultiIndex):
+    if is_multi:
         msg = "Cannot write a DataFrame with a MultiIndex. Use a single-level index."
         yield index_path, _with_path(ValueError(msg), index_path)
     else:
