@@ -156,7 +156,7 @@ def _slash_forbidden(dests: tuple[type, ...]) -> bool:
     )
 
 
-def _walk(  # noqa: PLR0912
+def _walk(
     elem: object,
     dests: tuple[type, ...],
     path: str,
@@ -176,11 +176,10 @@ def _walk(  # noqa: PLR0912
         ancestors = ancestors | {id(elem)}
     if isinstance(elem, list | tuple):
         # `normalize_nested` recurses into sequences (registry.py:53-58) before the
-        # registry sees the sequence as one element, so a cycle through a list or
-        # tuple would recurse forever too; only cycles are looked for here
-        for i, item in enumerate(elem):
-            if isinstance(item, AnnData | Raw | XDataset | Mapping | list | tuple):
-                yield from _walk(item, dests, _join(path, i), ancestors)
+        # registry sees the sequence as one element (e.g. `np.array([(1, 2), (3, 4)])`),
+        # so a cycle through a list or tuple would recurse forever too. Only cycles
+        # are looked for in the members; they are not validated individually.
+        yield from _sequence_cycles(elem, path, ancestors)
     if isinstance(elem, AnnData):
         yield from _walk_anndata(elem, dests, path, ancestors)
     elif isinstance(elem, Raw):
@@ -204,6 +203,22 @@ def _walk(  # noqa: PLR0912
             yield from _walk(value, dests, _join(path, normalized), ancestors)
     else:
         yield from _walk_leaf(elem, dests, path)
+
+
+def _sequence_cycles(
+    seq: list | tuple | Mapping, path: str, ancestors: frozenset[int]
+) -> Generator[tuple[str, Exception]]:
+    """Report containers inside a sequence that are already on the current branch."""
+    members = seq.items() if isinstance(seq, Mapping) else enumerate(seq)
+    for key, item in members:
+        if not isinstance(item, Mapping | list | tuple):
+            continue
+        item_path = _join(path, key)
+        if id(item) in ancestors:
+            msg = f"{type(item).__name__} at {item_path!r} contains itself (reference cycle)"
+            yield item_path, _with_path(ValueError(msg), item_path)
+            continue
+        yield from _sequence_cycles(item, item_path, ancestors | {id(item)})
 
 
 def _check_mapping_key(

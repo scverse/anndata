@@ -1436,9 +1436,34 @@ def test_preflight_reports_sequence_cycles() -> None:
     adata.uns["indirect"] = indirect
     shared = [1, 2]
     adata.uns["shared"] = {"a": shared, "b": [shared, shared]}
+    via_dict: list = [{"back": None}]
+    via_dict[0]["back"] = via_dict
+    adata.uns["via_dict"] = via_dict
     errors = list(iter_unwriteable(adata))
     assert [(p, type(e)) for p, e in errors] == [
         ("/uns/cycle/0", ValueError),
         ("/uns/indirect/seq/1/1", ValueError),
+        ("/uns/via_dict/0/back", ValueError),
     ]
     assert adata.unwriteable()
+
+
+def test_preflight_accepts_sequences_of_writable_members(
+    *, diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore
+) -> None:
+    """Sequence members are not validated individually: the list writer stores the whole list."""
+    adata = _adata(col=_series([1, 2, 3]))
+    adata.uns["pairs"] = [(1, 2), (3, 4)]
+    adata.uns["nested"] = [[1, 2], [3, 4]]
+    adata.uns["strings"] = ["a", "b"]
+    assert list(iter_unwriteable(adata)) == []
+    with ad.settings.override(validate_before_write=True):
+        read = _write(adata, diskfmt, diskfmt_store)
+    np.testing.assert_array_equal(read.uns["pairs"], [[1, 2], [3, 4]])
+    np.testing.assert_array_equal(read.uns["nested"], [[1, 2], [3, 4]])
+    assert list(read.uns["strings"]) == ["a", "b"]
+    # a standalone tuple still has no writer
+    adata.uns["tuple"] = (1, 2)
+    assert [(p, type(e)) for p, e in iter_unwriteable(adata)] == [
+        ("/uns/tuple", IORegistryError)
+    ]
