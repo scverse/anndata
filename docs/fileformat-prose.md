@@ -629,6 +629,25 @@ and `bytes` are written as strings.
 Set {attr}`anndata.settings.validate_before_write` to check every element of an
 {class}`~anndata.AnnData` object against this table before anything is written;
 {meth}`~anndata.AnnData.unwriteable` runs the same check and returns a boolean.
+The check is best effort: it finds elements and dataframe columns without an on-disk
+encoding, object columns that cannot be converted, non-2D `X`/layers, and dataframe
+structure problems (reserved, invalid or duplicate names, index-name collisions,
+`MultiIndex`), without reading backed data or computing lazy arrays; object-dtype columns
+are scanned (and converted, which allocates) because only their values tell.
+Backend, codec and IO failures, and writers that reject particular *values* rather than
+types (for example a categorical with datetime categories on `h5ad`), can still fail
+mid-write. A single problem is raised as the exception writing it would have raised;
+several are raised together as an {exc}`ExceptionGroup` whose message lists their paths
+and whose members keep their types, so they can be handled with `except*`:
+
+```python
+try:
+    adata.write_h5ad("out.h5ad")
+except* anndata._io.specs.registry.IORegistryError as missing_writers:
+    ...
+except* TypeError as unconvertible_columns:
+    ...
+```
 
 ## AwkwardArrays
 

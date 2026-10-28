@@ -35,10 +35,18 @@ class Settings(scverse_misc.Settings):
     """\
     Whether :func:`~anndata.io.write_h5ad` and :func:`~anndata.io.write_zarr` check every element
     for a writer (see :meth:`~anndata.AnnData.unwriteable`) before creating the file or store.
-    When `True`, every unwritable element is reported in one error (an :exc:`ExceptionGroup` if
-    there are several) and nothing is written. When `False`, writing stops at the first unwritable
-    element, reports only that one, and may leave a partially written file;
-    the check itself costs a pass over the metadata (no data is loaded or copied).
+
+    When `True`, nothing is written if a problem is found: a single problem is raised as the
+    exception writing it would have raised, several are raised together as an
+    :exc:`ExceptionGroup` whose message lists their paths (catch with ``except*``).
+    The check is best effort: it catches elements and columns without an on-disk encoding,
+    unconvertible object columns, non-2D ``X``/layers and dataframe structure problems,
+    but backend, codec and IO failures and writers that reject particular values can still fail
+    mid-write. It reads no data from backed files and computes nothing, but object-dtype
+    dataframe columns are scanned and converted once more (allocating) to find out whether
+    they are writable.
+    When `False`, writing stops at the first unwritable element, reports only that one,
+    and may leave a partially written file.
     """
 
     restrict_index_types: bool = True
