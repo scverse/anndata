@@ -5,6 +5,7 @@ See https://github.com/scverse/anndata/issues/1068
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import pickle
 import re
@@ -386,18 +387,32 @@ def _realistic_object_columns() -> dict[str, tuple[pd.Series, str]]:
     }
 
 
+@pytest.mark.parametrize("distinguish", [False, True], ids=["collapse", "distinguish"])
 @pytest.mark.parametrize("case", list(_realistic_object_columns()))
 def test_write_object_column_realistic(
     *,
     diskfmt: Literal["h5ad", "zarr"],
     diskfmt_store: Path | MemoryStore,
     case: str,
+    distinguish: bool,
 ) -> None:
-    """Object columns produced by common pandas/numpy idioms round-trip."""
-    col, expected_dtype = _realistic_object_columns()[case]
-    assert col.dtype == object
-    orig = ad.AnnData(obs=pd.DataFrame({"col": col}))
-    getattr(orig, f"write_{diskfmt}")(diskfmt_store)
+    """Object columns produced by common pandas/numpy idioms round-trip.
+
+    pandas >= 3 can keep NaN apart from NA, so an integer column with NaN
+    from a join must still be written as `Int64`.
+    """
+    has_option = hasattr(pd.options.future, "distinguish_nan_and_na")
+    if distinguish and not has_option:
+        pytest.skip("pandas has no `future.distinguish_nan_and_na` option")
+    with (
+        pd.option_context("future.distinguish_nan_and_na", distinguish)
+        if has_option
+        else contextlib.nullcontext()
+    ):
+        col, expected_dtype = _realistic_object_columns()[case]
+        assert col.dtype == object
+        orig = ad.AnnData(obs=pd.DataFrame({"col": col}))
+        getattr(orig, f"write_{diskfmt}")(diskfmt_store)
     curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
     assert isinstance(curr.obs, pd.DataFrame)
     read = curr.obs["col"]

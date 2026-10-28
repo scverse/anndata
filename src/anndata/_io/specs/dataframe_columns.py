@@ -123,6 +123,20 @@ _OBJECT_COLUMN_CONVERSIONS: Mapping[
 _LONGDOUBLE_IS_WIDER = np.finfo(np.longdouble).nmant > np.finfo(np.float64).nmant
 
 
+def _with_mask(
+    values: np.ndarray,
+    nullable_dtype: pd.Int64Dtype | pd.BooleanDtype | pd.Float64Dtype,
+    numpy_dtype: np.dtype,
+) -> np.ndarray | ExtensionArray:
+    """`values` as `numpy_dtype`, or as `nullable_dtype` if any are missing."""
+    # what `infer_dtype` skipped: `pd.array` keeps NaN with `future.distinguish_nan_and_na`
+    missing = pd.isna(values)
+    if not missing.any():
+        return values.astype(numpy_dtype)
+    filled = np.where(missing, numpy_dtype.type(0), values).astype(numpy_dtype)
+    return nullable_dtype.construct_array_type()(filled, missing)
+
+
 def _object_column_to_writable(
     values: np.ndarray, *, path: str
 ) -> np.ndarray | ExtensionArray:
@@ -153,13 +167,8 @@ def _object_column_to_writable(
         )
     nullable_dtype, numpy_dtype = conversion
     try:
-        if (
-            kind == "integer"
-            and pd.api.types.infer_dtype(values, skipna=False) == "integer"
-        ):
-            # ints only: a bool cast turns None into False
-            assert numpy_dtype is not None
-            return values.astype(numpy_dtype)
+        if numpy_dtype is not None:
+            return _with_mask(values, nullable_dtype, numpy_dtype)
         converted = pd.array(values, dtype=nullable_dtype)
     except (TypeError, ValueError, OverflowError) as e:
         raise UnsupportedColumnTypeError(
@@ -168,8 +177,6 @@ def _object_column_to_writable(
             hint=_CONVERT_HINT,
             kind=kind,
         ) from e
-    if numpy_dtype is not None:
-        return converted if converted.isna().any() else converted.to_numpy(numpy_dtype)
     floats = converted.to_numpy(dtype=np.float64, na_value=np.nan)
     # only magnitudes >= 2**53 can lose precision in float64
     suspect = np.abs(floats) >= 2.0**53
