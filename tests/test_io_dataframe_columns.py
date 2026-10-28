@@ -5,7 +5,9 @@ See https://github.com/scverse/anndata/issues/1068
 
 from __future__ import annotations
 
+import contextlib
 import re
+from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 import dask
@@ -14,6 +16,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import pytest
+import scipy.sparse as sp
 import zarr
 from zarr.storage import MemoryStore
 
@@ -938,3 +941,362 @@ def test_preflight_accepts_dict_subclasses(
     with ad.settings.override(validate_before_write=True):
         read = _write(adata, diskfmt, diskfmt_store)
     assert read.uns["sub"]["a"] == value["a"]
+
+
+# Instrumented "never materialise" harness
+
+
+@contextmanager
+def forbid_payload_access() -> Generator[None]:
+    """Fail on anything that would subset, copy, materialise or read payload data.
+
+    Patched: dataframe item access, slicing, `take` and `copy`; `.array`,
+    `.to_numpy()` and `__array__` on any non-empty index, and `RangeIndex._data`;
+    anndata's `_subset`/`as_view`; `h5py.Dataset` and `zarr.Array` item reads.
+    `np.ndarray.copy`/`__array__` are C-level and cannot be patched.
+    """
+    from unittest import mock
+
+    import zarr.core.array as zarr_array
+    from pandas.core.indexing import _iLocIndexer, _LocIndexer
+
+    import anndata._core.anndata as core_anndata
+    from anndata._core import aligned_mapping, views
+
+    def forbid(what: str):
+        def fail(*args, **kwargs):
+            pytest.fail(f"the preflight check touched payload data: {what}")
+
+        return fail
+
+    def forbid_non_empty(what: str, original):
+        def guarded(self, *args, **kwargs):
+            if len(self) > 0:
+                pytest.fail(f"the preflight check materialised an index: {what}")
+            return original(self, *args, **kwargs)
+
+        return guarded
+
+    index_array = pd.Index.array.fget if isinstance(pd.Index.array, property) else None
+    patches = [
+        mock.patch.object(pd.DataFrame, "__getitem__", forbid("DataFrame.__getitem__")),
+        mock.patch.object(pd.DataFrame, "_slice", forbid("DataFrame._slice")),
+        mock.patch.object(pd.DataFrame, "take", forbid("DataFrame.take")),
+        mock.patch.object(pd.DataFrame, "copy", forbid("DataFrame.copy")),
+        mock.patch.object(_iLocIndexer, "__getitem__", forbid("DataFrame.iloc")),
+        mock.patch.object(_LocIndexer, "__getitem__", forbid("DataFrame.loc")),
+        mock.patch.object(
+            pd.Index,
+            "array",
+            property(
+                forbid_non_empty(
+                    "Index.array",
+                    index_array if index_array is not None else pd.Index.array.__get__,
+                )
+            ),
+        ),
+        mock.patch.object(
+            pd.Index, "to_numpy", forbid_non_empty("Index.to_numpy", pd.Index.to_numpy)
+        ),
+        mock.patch.object(
+            pd.Index,
+            "__array__",
+            forbid_non_empty("Index.__array__", pd.Index.__array__),
+        ),
+        mock.patch.object(
+            pd.RangeIndex,
+            "_data",
+            property(forbid_non_empty("RangeIndex._data", pd.RangeIndex._data.__get__)),
+        ),
+        mock.patch.object(
+            aligned_mapping, "_subset", forbid("_subset (aligned mapping)")
+        ),
+        mock.patch.object(core_anndata, "_subset", forbid("_subset (AnnData)")),
+        mock.patch.object(views, "as_view", forbid("as_view")),
+        mock.patch.object(
+            aligned_mapping, "as_view", forbid("as_view (aligned mapping)")
+        ),
+        mock.patch.object(
+            h5py.Dataset, "__getitem__", forbid("h5py.Dataset.__getitem__")
+        ),
+        mock.patch.object(
+            zarr_array.Array, "__getitem__", forbid("zarr.Array.__getitem__")
+        ),
+    ]
+    with contextlib.ExitStack() as stack:
+        for p in patches:
+            stack.enter_context(p)
+        yield
+
+
+N_PAYLOAD = 5_000
+
+
+def _payload_adata() -> ad.AnnData:
+    rng = np.random.default_rng(0)
+    n = N_PAYLOAD
+    index = pd.Index([f"cell{i}" for i in range(n)])
+    obj = np.where(rng.random(n) < 0.1, None, rng.integers(0, 9, n))
+    obs = pd.DataFrame(
+        {
+            "cat": pd.Categorical(rng.choice(["a", "b", "c"], n)),
+            "num": rng.random(n),
+            "obj": pd.Series(obj, dtype=object, index=index),
+            "Int64": pd.array(rng.integers(0, 9, n), dtype="Int64"),
+            "str": pd.array([f"s{i}" for i in range(n)], dtype="string"),
+        },
+        index=index,
+    )
+    adata = ad.AnnData(sp.csr_matrix(rng.random((n, 20))), obs=obs)
+    adata.layers["dense"] = np.zeros((n, 20), dtype=np.float32)
+    adata.obsm["numeric_df"] = pd.DataFrame(
+        rng.random((n, 10)), index=adata.obs_names, columns=[f"c{i}" for i in range(10)]
+    )
+    adata.obsm["object_df"] = pd.DataFrame(
+        {"o": pd.Series(obj, dtype=object, index=adata.obs_names)},
+        index=adata.obs_names,
+    )
+    adata.obsm["arr"] = np.zeros((n, 3))
+    adata.varm["arr"] = np.zeros((20, 3))
+    adata.obsp["p"] = sp.csr_matrix((n, n))
+    adata.varp["p"] = np.zeros((20, 20))
+    adata.uns["nested"] = {
+        "arr": np.zeros(n),
+        "scalar": 1,
+        "none": None,
+        "list": [1, 2],
+    }
+    adata.uns["table"] = pd.DataFrame({"number": np.zeros(n)})  # RangeIndex
+    adata.uns["cat_index_table"] = pd.DataFrame(
+        {"x": np.zeros(3)}, index=pd.CategoricalIndex(["a", "b", "a"])
+    )
+    adata.uns["range_cat"] = pd.DataFrame(
+        {"c": pd.Categorical.from_codes([0, 1, 0], categories=pd.RangeIndex(n))},
+        index=list("abc"),
+    )
+    adata.raw = adata
+    return adata
+
+
+def _subject(kind: str, tmp_path: Path) -> object:
+    adata = _payload_adata()
+    if kind == "memory":
+        return adata
+    if kind == "view":
+        return adata[np.arange(0, N_PAYLOAD, 2), [0, 2, 4]]
+    if kind.startswith("backed"):
+        fmt = kind.split("-")[1]
+        if fmt == "dense":
+            adata.X = adata.X.toarray()
+        elif fmt == "csc":
+            adata.X = sp.csc_matrix(adata.X)
+        path = tmp_path / f"{kind}.h5ad"
+        adata.write_h5ad(path)
+        backed = ad.read_h5ad(path, backed="r")
+        return backed[[0, 2, 4], [0, 2]]
+    if kind == "dask":
+        adata.X = da.from_array(adata.X.toarray(), chunks=(1000, 20))
+        adata.layers["dense"] = da.zeros((N_PAYLOAD, 20), chunks=(1000, 20))
+        return adata
+    if kind == "awkward":
+        ak = pytest.importorskip("awkward")
+        adata.obsm["ragged"] = ak.Array([[i] * (i % 3) for i in range(N_PAYLOAD)])
+        return adata
+    if kind == "nested-raw":
+        outer = ad.AnnData(np.zeros((2, 1)), obs=pd.DataFrame(index=list("ab")))
+        outer.uns["raw"] = adata.raw
+        outer.uns["adata"] = adata
+        outer.uns["view"] = adata[::2]
+        return outer
+    msg = f"unknown subject {kind}"
+    raise ValueError(msg)
+
+
+SUBJECTS = [
+    "memory",
+    "view",
+    "backed-dense",
+    "backed-csr",
+    "backed-csc",
+    "dask",
+    "awkward",
+    "nested-raw",
+]
+
+
+@pytest.mark.parametrize("kind", SUBJECTS)
+@pytest.mark.parametrize("store_type", ["h5", "zarr"])
+def test_preflight_never_materialises(
+    *, kind: str, store_type: Literal["h5", "zarr"], tmp_path: Path
+) -> None:
+    subject = _subject(kind, tmp_path)
+    with forbid_payload_access():
+        assert list(iter_unwriteable(subject, store_type=store_type)) == []
+        if isinstance(subject, ad.AnnData):
+            assert not subject.unwriteable(store_type=store_type)
+            raise_if_unwriteable(subject, store_type=store_type)
+
+
+def test_harness_catches_payload_access(*, tmp_path: Path) -> None:
+    """The harness itself: each forbidden operation is detected."""
+    adata = _payload_adata()
+    view = adata[::2]
+    backed_path = tmp_path / "h.h5ad"
+    adata.write_h5ad(backed_path)
+    backed = ad.read_h5ad(backed_path, backed="r")
+    probes = {
+        "getitem": lambda: adata.obs["num"],
+        "iloc": lambda: adata.obs.iloc[:, 0],
+        "take": lambda: adata.obs.take([0]),
+        "copy": lambda: adata.obs.copy(),  # noqa: PLW0108
+        "index.array": lambda: adata.obs.index.array,
+        "index.to_numpy": lambda: adata.obs.index.to_numpy(),  # noqa: PLW0108
+        "rangeindex": lambda: adata.uns["table"].index._data,
+        "view obsm": lambda: view.obsm["numeric_df"],
+        "backed read": lambda: backed.file["obs/num"][()],
+    }
+    for probe in probes.values():
+        with forbid_payload_access(), pytest.raises(pytest.fail.Exception):
+            probe()
+    with forbid_payload_access():
+        assert len(adata.obs.index[:0].to_numpy()) == 0  # empty indexes are allowed
+
+
+def test_preflight_reports_cycles() -> None:
+    """A container that contains itself is reported, not recursed into forever."""
+    adata = _adata(col=_series([1, 2, 3]))
+    adata.uns["self"] = adata.uns
+    adata.uns["adata"] = adata
+    adata.uns["shared"] = shared = {"x": 1}
+    adata.uns["shared_again"] = shared  # ordinary shared references are fine
+    errors = list(iter_unwriteable(adata))
+    assert [(p, type(e)) for p, e in errors] == [
+        ("/uns/self", ValueError),
+        ("/uns/adata", ValueError),
+    ]
+    assert all("reference cycle" in str(e) for _, e in errors)
+    assert adata.unwriteable()
+    with pytest.raises(ExceptionGroup):
+        raise_if_unwriteable(adata)
+
+
+@pytest.mark.parametrize(
+    ("key", "expected"),
+    [
+        pytest.param(7, TypeError, id="int"),
+        pytest.param(None, TypeError, id="none"),
+        pytest.param(("a", "b"), TypeError, id="tuple"),
+        pytest.param("/uns/foo", None, id="absolute-inside"),
+        pytest.param("/else/key", ValueError, id="absolute-outside"),
+        pytest.param("plain", None, id="plain"),
+    ],
+)
+def test_preflight_mapping_key_rules(
+    *,
+    diskfmt: Literal["h5ad", "zarr"],
+    tmp_path: Path,
+    key: object,
+    expected: type | None,
+) -> None:
+    """Mapping keys are judged the way `Writer.write_elem` treats them."""
+    path = tmp_path / f"adata.{diskfmt}"
+    getattr(_adata(col=_series([1, 2, 3])), f"write_{diskfmt}")(path)
+    adata = _adata(col=_series([1, 2, 3]))
+    adata.uns[key] = 1
+    store_type = "h5" if diskfmt == "h5ad" else "zarr"
+    with ad.settings.override(disallow_forward_slash_in_h5ad=False):
+        errors = list(iter_unwriteable(adata, store_type=store_type))
+        if expected is None:
+            assert errors == []
+            with ad.settings.override(validate_before_write=True):
+                getattr(adata, f"write_{diskfmt}")(path)
+            read = getattr(ad, f"read_{diskfmt}")(path)
+            assert read.uns[str(key).removeprefix("/uns/")] == 1
+            return
+        assert [type(e) for _, e in errors] == [expected]
+        with (
+            ad.settings.override(validate_before_write=True),
+            pytest.raises(expected),
+        ):
+            getattr(adata, f"write_{diskfmt}")(path)
+    read = getattr(ad, f"read_{diskfmt}")(path)
+    assert list(read.obs.columns) == ["col"]
+    assert "uns" not in read.uns
+
+
+@pytest.mark.parametrize(
+    "categories",
+    [
+        pytest.param(pd.period_range("2020-01", periods=2, freq="M"), id="period"),
+        pytest.param(pd.IntervalIndex.from_tuples([(0, 1), (1, 2)]), id="interval"),
+        pytest.param(
+            pd.to_datetime(["2020-01-01", "2021-01-01"]).tz_localize("UTC"), id="tz"
+        ),
+    ],
+)
+def test_preflight_categorical_index_policy(categories: pd.Index) -> None:
+    """A categorical index goes through the same category policy as a column."""
+    adata = _adata(col=_series([1, 2, 3]))
+    adata.uns["table"] = pd.DataFrame(
+        {"x": [1.0, 2.0, 3.0]},
+        index=pd.CategoricalIndex(
+            pd.Categorical.from_codes([0, 1, 0], categories=categories)
+        ),
+    )
+    errors = list(iter_unwriteable(adata))
+    assert [(p, type(e)) for p, e in errors] == [
+        ("/uns/table/_index/categories", TypeError)
+    ]
+    assert "Categories of dtype" in str(errors[0][1])
+    assert adata.unwriteable()
+    good = pd.DataFrame(
+        {"x": [1.0, 2.0]}, index=pd.CategoricalIndex(["a", "b"], categories=["a", "b"])
+    )
+    adata.uns["table"] = good
+    assert list(iter_unwriteable(adata)) == []
+
+
+def test_write_entry_points_do_not_read_view_payloads_before_preflight(
+    *, diskfmt: Literal["h5ad", "zarr"], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The `no_write_dataset_2d` guard inspects a view through its parent too."""
+    with h5py.File(tmp_path / "arrays.h5", "w") as f:
+        f["m"] = np.zeros((3, 2))
+        adata = _adata(
+            col=_series([1, 2, 3]),
+            period=_series(pd.period_range("2020-01", periods=3, freq="M")),
+        )
+        adata.obsm["m"] = f["m"]
+        adata.varm["m"] = np.zeros((0, 1))
+        view = adata[[0, 2]]
+        reads: list[str] = []
+        getitem = h5py.Dataset.__getitem__
+        monkeypatch.setattr(
+            h5py.Dataset,
+            "__getitem__",
+            lambda self, *a, **kw: (reads.append(self.name), getitem(self, *a, **kw))[
+                1
+            ],
+        )
+        with (
+            ad.settings.override(validate_before_write=True),
+            pytest.raises(IORegistryError),
+        ):
+            getattr(view, f"write_{diskfmt}")(
+                tmp_path / f"out.{diskfmt}", convert_strings_to_categoricals=False
+            )
+        assert reads == []
+
+
+def test_preflight_rejects_dataset2d() -> None:
+    xr = pytest.importorskip("xarray")
+    from anndata.experimental.backed import Dataset2D
+
+    adata = ad.AnnData(np.zeros((2, 1)), obs=pd.DataFrame(index=list("ab")))
+    empty = Dataset2D(
+        xr.Dataset(coords={"obs_names": ("obs_names", np.array(list("ab")))})
+    )
+    adata.obs = empty
+    errors = list(iter_unwriteable(adata))
+    assert [(p, type(e)) for p, e in errors] == [("/obs", IORegistryError)]
+    assert adata.unwriteable()

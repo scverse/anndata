@@ -607,7 +607,7 @@ with an error naming the column, its dtype, and what to convert it to.
 | In-memory column | On disk |
 |---|---|
 | numpy numeric, boolean, complex, or fixed-length string array | `array` |
-| {class}`~pandas.Categorical` | `categorical`; the categories are stored as `categories.to_numpy()`, so string, numeric, boolean and datetime categories work (datetime only on zarr), while interval, period and tz-aware datetime categories are refused up front because `to_numpy()` would hand arbitrary objects to the string writer |
+| {class}`~pandas.Categorical` | `categorical`; the categories are stored as `categories.to_numpy()`, so string, numeric, boolean and datetime categories work (datetime only on zarr), while interval, period and tz-aware datetime categories are refused by the preflight check (when {attr}`anndata.settings.validate_before_write` is on, or via {meth}`~anndata.AnnData.unwriteable`) because `to_numpy()` would hand arbitrary objects to the string writer, which zarr stringifies and h5py refuses; the writers themselves are unchanged. Object-dtype categories are assumed to hold strings and are not checked value by value |
 | nullable integer (`Int8` … `UInt64`) | `nullable-integer` |
 | nullable boolean (`boolean`) | `nullable-boolean` |
 | nullable string (`string`, `string[pyarrow]`, `str`) | `nullable-string-array`; see {attr}`anndata.settings.allow_write_nullable_strings` |
