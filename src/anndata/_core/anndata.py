@@ -1141,6 +1141,34 @@ class AnnData:  # noqa: PLW1641
 
         return self._getitem(index)
 
+    def __setitem__(self, index: AdRef | RefAcc, value: object) -> None:
+        """Set an array or element using an accessor.
+
+        Parameters
+        ----------
+        index
+            One of
+
+            - an :class:`~anndata.acc.AdRef`, assigning into the referenced 1D or 2D array,
+              e.g. `adata[A.obs["cell-type"]] = ...` or `adata[A.layers["counts"][:, "gene-1"]] = ...`;
+            - a :term:`reference accessor`, replacing the full element (see :meth:`~anndata.acc.RefAcc.set`),
+              e.g. `adata[A.obs] = ...` or `adata[A.obsm["pca"]] = ...`.
+        value
+            The value to assign.
+        """
+        from ..acc import NO_IDX, AdRef, MapAcc, RefAcc
+
+        if isinstance(index, AdRef):
+            index.acc.set(self, index.idx, value)
+        elif isinstance(index, RefAcc):
+            index.set(self, NO_IDX, value)
+        elif isinstance(index, MapAcc):
+            msg = f"Cannot index with {index} because this is not a path to an array-like structure."
+            raise IndexError(msg)
+        else:
+            msg = f"{type(self).__name__} only supports item assignment via accessors, not {index!r}."
+            raise TypeError(msg)
+
     def _getitem(self, index: _Index[IndexManager]) -> AnnData:
         """Like `__getitem__`, but also accepts `IndexManager` objects stored by views."""
         oidx, vidx = self._normalize_indices(index)
