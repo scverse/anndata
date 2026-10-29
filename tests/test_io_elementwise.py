@@ -615,6 +615,29 @@ def test_write_indices_min(
         assert (result != X).nnz == 0
 
 
+@pytest.mark.parametrize("format", ["csr", "csc"])
+def test_write_indices_match_indptr_dtype(
+    store: h5py.Group | zarr.Group, format: Literal["csr", "csc"]
+):
+    """indices are written at least as wide as indptr so on-disk dtypes
+    match when a caller widens indptr. Regression test for
+    https://github.com/scverse/anndata/issues/2690"""
+    shape = (20, 10) if format == "csc" else (10, 20)
+    X = getattr(sparse, f"{format}_array")(
+        sparse.random(
+            *shape, density=0.4, format="coo", dtype=np.float32, random_state=0
+        )
+    )
+    write_elem(store, "X", X, dataset_kwargs={"indptr_dtype": "int64"})
+
+    indptr = store["X/indptr"]
+    indices = store["X/indices"]
+    assert isinstance(indptr, h5py.Dataset | zarr.Array)
+    assert isinstance(indices, h5py.Dataset | zarr.Array)
+    assert indptr.dtype == np.int64
+    assert indices.dtype == np.int64
+
+
 def test_io_spec_raw(store):
     adata = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
     adata.raw = adata.copy()
