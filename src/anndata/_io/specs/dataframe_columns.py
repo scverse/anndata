@@ -8,17 +8,10 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import infer_dtype
 
-from ...compat import PANDAS_3, PANDAS_STRING_ARRAY_TYPES
+from ...compat import PANDAS_3
 
 if TYPE_CHECKING:
     from pandas.api.extensions import ExtensionArray
-
-
-__all__ = [
-    "UnsupportedColumnTypeError",
-    "add_column_note",
-    "normalize_column",
-]
 
 
 class UnsupportedColumnTypeError(TypeError):
@@ -46,51 +39,32 @@ def _unsupported(name: str, kind: str, reason: str) -> UnsupportedColumnTypeErro
 def normalize_column(
     values: np.ndarray | ExtensionArray, *, name: str
 ) -> np.ndarray | ExtensionArray:
-    """Make an object-dtype column writable, return any other column unchanged."""
-    if isinstance(values, np.ndarray) and values.dtype == object:
-        return _object_column_to_writable(values, name=name)
-    return values
+    """Convert a dataframe column for writing where needed, return it unchanged otherwise."""
+    if isinstance(values, np.ndarray):
+        return (
+            _object_column_to_writable(values, name=name)
+            if values.dtype == object
+            else values
+        )
+    return _extension_column_to_writable(values, name=name)
 
 
-_DATETIME_HINT = (
-    "datetime/timedelta columns are not supported yet, see scverse/anndata#2238. "
-    "Convert the column before writing, e.g. with `.astype(str)` or `.astype('int64')`."
-)
-_NULLABLE_FLOAT_HINT = (
-    "There is no on-disk encoding for nullable floats yet. "
-    "Call `.to_numpy(np.float64, na_value=np.nan)` on the column "
-    "if collapsing NA into NaN is acceptable."
-)
-_ARROW_HINT = (
-    "pyarrow-backed columns are not supported. Convert the column before writing, "
-    "e.g. with `.convert_dtypes(dtype_backend='numpy_nullable')` or `.astype(...)`."
-)
-_GENERIC_HINT = (
-    "Convert the column to a numpy, nullable integer/boolean, string, "
-    "or categorical column before writing."
-)
-
-
-def _column_hint(values: np.ndarray | ExtensionArray) -> str:
-    if isinstance(values, pd.arrays.DatetimeArray | pd.arrays.TimedeltaArray):
-        return _DATETIME_HINT
-    if isinstance(values, pd.arrays.FloatingArray):
-        return _NULLABLE_FLOAT_HINT
-    if isinstance(values, pd.arrays.ArrowExtensionArray) and not isinstance(
-        values, tuple(PANDAS_STRING_ARRAY_TYPES)
+def _object_column_to_writable(
+    values: np.ndarray, *, name: str
+) -> np.ndarray | ExtensionArray:
+    """Convert an object-dtype column for writing, see :ref:`type-mapping`."""
+    kind = infer_dtype(values, skipna=True)
+    if kind in {"integer", "boolean"}:
+        return _to_integer_or_boolean(values, kind, name=name)
+    if kind in {"floating", "mixed-integer-float"}:
+        return _to_float64(values, kind, name=name)
+    if (
+        len(values) == 0
+        or (kind in {"string", "bytes"} and not pd.isna(values).any())
+        or (kind == "mixed" and all(isinstance(v, str | bytes) for v in values))
     ):
-        return _ARROW_HINT
-    return _GENERIC_HINT
-
-
-def add_column_note(
-    e: BaseException, values: np.ndarray | ExtensionArray, name: str
-) -> None:
-    """Explain a registry miss for a dataframe column: which column, which dtype, what to do."""
-    e.add_note(
-        f"Column {name!r} (dtype {values.dtype}) has no on-disk encoding. "
-        f"{_column_hint(values)}"
-    )
+        return values
+    raise _unsupported(name, kind, "it has no supported on-disk representation")
 
 
 def _to_integer_or_boolean(
@@ -123,19 +97,47 @@ def _to_float64(values: np.ndarray, kind: str, *, name: str) -> np.ndarray:
     return floats.to_numpy(np.float64, na_value=np.nan)
 
 
-def _object_column_to_writable(
-    values: np.ndarray, *, name: str
-) -> np.ndarray | ExtensionArray:
-    """Convert an object-dtype column for writing, see :ref:`type-mapping`."""
-    kind = infer_dtype(values, skipna=True)
-    if kind in {"integer", "boolean"}:
-        return _to_integer_or_boolean(values, kind, name=name)
-    if kind in {"floating", "mixed-integer-float"}:
-        return _to_float64(values, kind, name=name)
-    if (
-        len(values) == 0
-        or (kind in {"string", "bytes"} and not pd.isna(values).any())
-        or (kind == "mixed" and all(isinstance(v, str | bytes) for v in values))
-    ):
-        return values
-    raise _unsupported(name, kind, "it has no supported on-disk representation")
+def _extension_column_to_writable(
+    values: ExtensionArray, *, name: str
+) -> ExtensionArray:
+    """Pass extension arrays to the registry unchanged; conversions for nullable floats, datetimes (#2238) or pyarrow columns belong here."""
+    return values
+
+
+_DATETIME_HINT = (
+    "datetime/timedelta columns are not supported yet, see scverse/anndata#2238. "
+    "Convert the column before writing, e.g. with `.astype(str)` or `.astype('int64')`."
+)
+_NULLABLE_FLOAT_HINT = (
+    "There is no on-disk encoding for nullable floats yet. "
+    "Call `.to_numpy(np.float64, na_value=np.nan)` on the column "
+    "if collapsing NA into NaN is acceptable."
+)
+_ARROW_HINT = (
+    "pyarrow-backed columns are not supported. Convert the column before writing, "
+    "e.g. with `.convert_dtypes(dtype_backend='numpy_nullable')` or `.astype(...)`."
+)
+_GENERIC_HINT = (
+    "Convert the column to a numpy, nullable integer/boolean, string, "
+    "or categorical column before writing."
+)
+
+
+def _column_hint(values: np.ndarray | ExtensionArray) -> str:
+    if isinstance(values, pd.arrays.DatetimeArray | pd.arrays.TimedeltaArray):
+        return _DATETIME_HINT
+    if isinstance(values, pd.arrays.FloatingArray):
+        return _NULLABLE_FLOAT_HINT
+    if isinstance(values, pd.arrays.ArrowExtensionArray):
+        return _ARROW_HINT
+    return _GENERIC_HINT
+
+
+def add_column_note(
+    e: BaseException, values: np.ndarray | ExtensionArray, name: str
+) -> None:
+    """Explain a registry miss for a dataframe column: which column, which dtype, what to do."""
+    e.add_note(
+        f"Column {name!r} (dtype {values.dtype}) has no on-disk encoding. "
+        f"{_column_hint(values)}"
+    )
