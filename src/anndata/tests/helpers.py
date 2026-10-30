@@ -737,8 +737,7 @@ def assert_equal_sparse(
 def assert_equal_cupy_sparse(
     a: CupySparseMatrix, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
-    a = a.toarray()
-    assert_equal(b, a, exact=exact, elem_name=elem_name)
+    assert_equal(b, a.toarray(), exact=exact, elem_name=elem_name)
 
 
 @assert_equal.register(h5py.Dataset)
@@ -1042,8 +1041,10 @@ def _as_sparse_dask_inner(
         msg = "Dask <2025.3 without fast-array-utils doesn’t support sparse arrays"
         raise TypeError(msg)
     if issubclass(typ, CupySparseMatrix):
+        import cupy as cp
+
         # Cupy sparse constructors don’t accept numpy ndarrays
-        return typ(as_cupy(a))
+        return typ(cp.asarray(a) if isinstance(a, np.ndarray) else a)
     return typ(a)
 
 
@@ -1088,7 +1089,10 @@ def _(a):
 try:
     import cupyx.scipy.sparse as cpsparse
 
-    format_to_memory_class = {"csr": cpsparse.csr_matrix, "csc": cpsparse.csc_matrix}
+    format_to_memory_class: dict[str, type[CupyCSMatrix]] = {
+        "csr": cpsparse.csr_matrix,
+        "csc": cpsparse.csc_matrix,
+    }
 except ImportError:
     format_to_memory_class = {}
 

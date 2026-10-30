@@ -49,6 +49,14 @@ def test_raw_gpu():
 
 
 @pytest.mark.gpu
+def test_fail_on_non_csr_csc_matrix_gpu():
+    from cupyx.scipy import sparse as cupy_sparse
+
+    with pytest.raises(ValueError, match=r"Only CSR and CSC matrices"):
+        AnnData(X=cupy_sparse.eye(100, format="coo"))
+
+
+@pytest.mark.gpu
 @pytest.mark.parametrize(
     "index",
     [

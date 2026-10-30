@@ -211,6 +211,7 @@ def is_cupy_importable() -> bool:
 
 if is_cupy_importable() or TYPE_CHECKING:
     from cupy import ndarray as CupyArray
+    from cupyx.scipy.sparse import coo_matrix as CupyCOOMatrix
     from cupyx.scipy.sparse import csc_matrix as CupyCSCMatrix
     from cupyx.scipy.sparse import csr_matrix as CupyCSRMatrix
     from cupyx.scipy.sparse import spmatrix as CupySparseMatrix
@@ -224,9 +225,10 @@ if is_cupy_importable() or TYPE_CHECKING:
         da.register_chunk_type(CupyCSCMatrix)
 else:
     CupyArray = type("ndarray", (), dict(__module__="cupy"))
-    CupySparseMatrix = type("spmatrix", (), dict(__module__="cupyx.scipy.sparse"))
-    CupyCSRMatrix = type("csr_matrix", (), dict(__module__="cupyx.scipy.sparse"))
+    CupyCOOMatrix = type("coo_matrix", (), dict(__module__="cupyx.scipy.sparse"))
     CupyCSCMatrix = type("csc_matrix", (), dict(__module__="cupyx.scipy.sparse"))
+    CupyCSRMatrix = type("csr_matrix", (), dict(__module__="cupyx.scipy.sparse"))
+    CupySparseMatrix = type("spmatrix", (), dict(__module__="cupyx.scipy.sparse"))
 
 
 # no `type` keyword so `isinstance` checking works
