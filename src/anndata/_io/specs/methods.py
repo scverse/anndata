@@ -239,7 +239,9 @@ def suppress_autoshard_warning[S: StorageType, T: RWAble](
 @_REGISTRY.register_read(h5py.Dataset, IOSpec("", ""))
 def read_basic(
     elem: h5py.File | h5py.Group | h5py.Dataset, *, _reader: Reader
-) -> dict[str, _StorableArrayOrScalar] | npt.NDArray | CSMatrix | CSArray:
+) -> (
+    dict[str, _StorableArrayOrScalar] | npt.NDArray | CSMatrix | CSArray | CupyCSMatrix
+):
     from anndata._io.h5ad import read_dataset
 
     msg = f"Element '{elem.name}' was written without encoding metadata."
@@ -257,7 +259,9 @@ def read_basic(
 @_REGISTRY.register_read(zarr.Array, IOSpec("", ""))
 def read_basic_zarr(
     elem: zarr.Group | zarr.Array, *, _reader: Reader
-) -> dict[str, _StorableArrayOrScalar] | npt.NDArray | CSMatrix | CSArray:
+) -> (
+    dict[str, _StorableArrayOrScalar] | npt.NDArray | CSMatrix | CSArray | CupyCSMatrix
+):
     from anndata._io.zarr import read_dataset
 
     msg = f"Element '{elem.name}' was written without encoding metadata."
@@ -1029,7 +1033,9 @@ for array_type, group_type in product([DaskArray, views.DaskArrayView], _STORE_T
 @_REGISTRY.register_read(h5py.Group, IOSpec("csr_matrix", "0.1.0"))
 @_REGISTRY.register_read(zarr.Group, IOSpec("csc_matrix", "0.1.0"))
 @_REGISTRY.register_read(zarr.Group, IOSpec("csr_matrix", "0.1.0"))
-def read_sparse(elem: _GroupStorageType, *, _reader: Reader) -> CSMatrix | CSArray:
+def read_sparse(
+    elem: _GroupStorageType, *, _reader: Reader
+) -> CSMatrix | CSArray | CupyCSMatrix:
     return sparse_dataset(elem).to_memory()
 
 
