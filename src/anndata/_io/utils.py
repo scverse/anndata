@@ -213,14 +213,15 @@ def _resolve_use(  # noqa: PLR0911
         MultiAcc,
         MultiMapAcc,
     )
+    from .specs.dataframe_columns import normalize_column
 
     match use:
         case AdRef(acc=MetaAcc(dim=dim) as acc, idx=str() as col):
             if col in {"_index", cast("_GroupStorageType", f[dim]).attrs["_index"]}:
                 msg = f"Cannot write column {col!r}: it is the name of the {dim} index."
                 raise ValueError(msg)
-            # `._values` is what `write_dataframe` writes for each column
-            return dim, col, acc.get(adata)[col]._values
+            # what `write_dataframe` writes for each column
+            return dim, col, normalize_column(acc.get(adata)[col]._values, name=col)
         case AdRef():
             msg = f"Cannot write {use}: only `obs`/`var` columns can be written as single vectors."
             raise ValueError(msg)
