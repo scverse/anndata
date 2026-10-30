@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import infer_dtype
 
 from ...compat import PANDAS_3, PANDAS_STRING_ARRAY_TYPES
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from pandas.api.extensions import ExtensionArray
 
 
@@ -48,14 +46,7 @@ def _unsupported(name: str, kind: str, reason: str) -> UnsupportedColumnTypeErro
 def normalize_column(
     values: np.ndarray | ExtensionArray, *, name: str
 ) -> np.ndarray | ExtensionArray:
-    """\
-    Return a writable version of a dataframe column's backing array (``series._values``).
-
-    Only object-dtype columns are converted, see :func:`_object_column_to_writable`;
-    everything else is returned unchanged for the IO registry to judge.
-    Idempotent, and the input is never modified.
-    `name` names the column in error messages.
-    """
+    """Make an object-dtype column writable, return any other column unchanged."""
     if isinstance(values, np.ndarray) and values.dtype == object:
         return _object_column_to_writable(values, name=name)
     return values
@@ -85,7 +76,6 @@ def _column_hint(values: np.ndarray | ExtensionArray) -> str:
         return _DATETIME_HINT
     if isinstance(values, pd.arrays.FloatingArray):
         return _NULLABLE_FLOAT_HINT
-    # `ArrowStringArray` has a writer, other arrow arrays do not
     if isinstance(values, pd.arrays.ArrowExtensionArray) and not isinstance(
         values, tuple(PANDAS_STRING_ARRAY_TYPES)
     ):
@@ -103,79 +93,49 @@ def add_column_note(
     )
 
 
-# object columns with one unambiguous on-disk type, by `infer_dtype` kind
-_OBJECT_COLUMN_CONVERSIONS: Mapping[
-    str, tuple[pd.Int64Dtype | pd.BooleanDtype | pd.Float64Dtype, np.dtype | None]
-] = MappingProxyType({
-    "integer": (pd.Int64Dtype(), np.dtype(np.int64)),
-    "boolean": (pd.BooleanDtype(), np.dtype(np.bool_)),
-    # no nullable float on disk: numpy float64 with NaN, as pandas does
-    "floating": (pd.Float64Dtype(), None),
-    "mixed-integer-float": (pd.Float64Dtype(), None),
-})
-# 80-bit on x86: even small values may not fit float64
-_LONGDOUBLE_IS_WIDER = np.finfo(np.longdouble).nmant > np.finfo(np.float64).nmant
-
-
-def _with_mask(
-    values: np.ndarray,
-    nullable_dtype: pd.Int64Dtype | pd.BooleanDtype | pd.Float64Dtype,
-    numpy_dtype: np.dtype,
+def _to_integer_or_boolean(
+    values: np.ndarray, kind: str, *, name: str
 ) -> np.ndarray | ExtensionArray:
-    """`values` as `numpy_dtype`, or as `nullable_dtype` if any are missing."""
-    # what `infer_dtype` skipped: `pd.array` keeps NaN with `future.distinguish_nan_and_na`
+    """`values` as `int64`/`bool`, or as `Int64`/`boolean` if any are missing."""
+    nullable_dtype: pd.Int64Dtype | pd.BooleanDtype
+    numpy_dtype: np.dtype
+    if kind == "integer":
+        nullable_dtype, numpy_dtype = pd.Int64Dtype(), np.dtype(np.int64)
+    else:
+        nullable_dtype, numpy_dtype = pd.BooleanDtype(), np.dtype(np.bool_)
     missing = pd.isna(values)
-    if not missing.any():
-        return values.astype(numpy_dtype)
-    filled = np.where(missing, numpy_dtype.type(0), values).astype(numpy_dtype)
+    try:
+        if not missing.any():
+            return values.astype(numpy_dtype)
+        filled = np.where(missing, numpy_dtype.type(0), values).astype(numpy_dtype)
+    except (TypeError, ValueError, OverflowError) as e:
+        msg = f"converting it to {nullable_dtype.name!r} failed"
+        raise _unsupported(name, kind, msg) from e
     return nullable_dtype.construct_array_type()(filled, missing)
+
+
+def _to_float64(values: np.ndarray, kind: str, *, name: str) -> np.ndarray:
+    """`values` as `float64` with NaN for missing values, rounding integers above 2**53."""
+    try:
+        floats = pd.array(values, dtype=pd.Float64Dtype())
+    except (TypeError, ValueError, OverflowError) as e:
+        raise _unsupported(name, kind, "converting it to 'Float64' failed") from e
+    return floats.to_numpy(np.float64, na_value=np.nan)
 
 
 def _object_column_to_writable(
     values: np.ndarray, *, name: str
 ) -> np.ndarray | ExtensionArray:
-    """\
-    Convert an object-dtype column into something we can write.
-
-    Columns inferred as integer or boolean become the matching nullable pandas array
-    if they contain missing values, and the plain numpy dtype otherwise.
-    Columns inferred as floating become numpy float64 (missing values become NaN)
-    if that loses no precision.
-    String/bytes columns without missing values and empty columns are returned unchanged.
-    Everything else raises an :exc:`UnsupportedColumnTypeError` naming the column.
-    """
-    kind = pd.api.types.infer_dtype(values, skipna=True)
-    if (conversion := _OBJECT_COLUMN_CONVERSIONS.get(kind)) is None:
-        # the string writers take str/bytes mixtures without missing values
-        if (
-            len(values) == 0
-            or pd.api.types.infer_dtype(values, skipna=False) in {"string", "bytes"}
-            or (kind == "mixed" and all(isinstance(v, str | bytes) for v in values))
-        ):
-            return values
-        raise _unsupported(name, kind, "it has no supported on-disk representation")
-    nullable_dtype, numpy_dtype = conversion
-    try:
-        if numpy_dtype is not None:
-            return _with_mask(values, nullable_dtype, numpy_dtype)
-        converted = pd.array(values, dtype=nullable_dtype)
-    except (TypeError, ValueError, OverflowError) as e:
-        msg = f"converting it to {nullable_dtype.name!r} failed"
-        raise _unsupported(name, kind, msg) from e
-    floats = converted.to_numpy(dtype=np.float64, na_value=np.nan)
-    # only magnitudes >= 2**53 can lose precision in float64
-    suspect = np.abs(floats) >= 2.0**53
-    if _LONGDOUBLE_IS_WIDER and any(
-        issubclass(t, np.longdouble) for t in {type(v) for v in values}
+    """Convert an object-dtype column for writing, see :ref:`type-mapping`."""
+    kind = infer_dtype(values, skipna=True)
+    if kind in {"integer", "boolean"}:
+        return _to_integer_or_boolean(values, kind, name=name)
+    if kind in {"floating", "mixed-integer-float"}:
+        return _to_float64(values, kind, name=name)
+    if (
+        len(values) == 0
+        or (kind in {"string", "bytes"} and not pd.isna(values).any())
+        or (kind == "mixed" and all(isinstance(v, str | bytes) for v in values))
     ):
-        # extended precision can be rounded at any magnitude
-        suspect = ~np.isnan(floats)
-    if suspect.any():
-        # numpy scalars promote to float64 on comparison, Python ints do not
-        original = (
-            x.item() if isinstance(x, np.generic) else x for x in values[suspect]
-        )
-        if any(x != f for x, f in zip(original, floats[suspect].tolist(), strict=True)):
-            msg = "its values cannot be represented exactly as float64"
-            raise _unsupported(name, kind, msg)
-    return floats
+        return values
+    raise _unsupported(name, kind, "it has no supported on-disk representation")

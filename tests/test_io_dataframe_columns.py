@@ -140,30 +140,8 @@ def test_write_object_column_converted(
             [2**63, 1, None], r"inferred as 'integer'.*'Int64' failed", id="int-too-big"
         ),
         pytest.param([-(2**63) - 1, None], r"'Int64' failed", id="int-too-small"),
-        # without missing values, the direct numpy cast must fail the same way
         pytest.param(
             [2**63, 1], r"inferred as 'integer'.*'Int64' failed", id="int-too-big-full"
-        ),
-        pytest.param(
-            [2**53 + 1, 0.5, None],
-            r"inferred as 'mixed-integer-float'.*exactly as float64",
-            id="int-float-lossy",
-        ),
-        pytest.param(
-            [2**53 + 1, 0.5], r"exactly as float64", id="int-float-lossy-full"
-        ),
-        pytest.param(
-            [-(2**60) - 1, 0.5, None], r"exactly as float64", id="negint-float-lossy"
-        ),
-        pytest.param(
-            [np.int64(2**53 + 1), 0.5, None],
-            r"exactly as float64",
-            id="npint-float-lossy",
-        ),
-        pytest.param(
-            [np.uint64(2**64 - 1), 0.5, None],
-            r"exactly as float64",
-            id="npuint-float-lossy",
         ),
         pytest.param([1, "a", None, 2], r"inferred as 'mixed-integer'", id="mixed"),
         pytest.param([None, None], r"inferred as 'empty'", id="all-missing"),
@@ -178,10 +156,7 @@ def test_write_object_column_unconvertible(
     values: list[object],
     match: str,
 ) -> None:
-    """Object columns that cannot be written raise an error naming the column.
-
-    This also covers zarr, which used to silently write `str(value)` for such columns.
-    """
+    """Object columns that cannot be written raise an error naming the column."""
     col = pd.Series(values, index=[f"c{i}" for i in range(len(values))], dtype=object)
     orig = ad.AnnData(obs=pd.DataFrame({"col": col}))
     assert orig.obs["col"].dtype == object
@@ -341,39 +316,11 @@ def test_write_object_column_elem_and_empty_view(
     assert "col" in curr.obs
 
 
-class _LongDouble(np.longdouble):
-    pass
-
-
 class _NaNWithInt(float):
     """A NaN that numpy casts to the integer 2."""
 
     def __int__(self) -> int:
         return 2
-
-
-@pytest.mark.skipif(
-    np.finfo(np.longdouble).nmant <= np.finfo(np.float64).nmant,
-    reason="np.longdouble is not wider than float64 on this platform",
-)
-@pytest.mark.parametrize("with_missing", [True, False], ids=["missing", "full"])
-@pytest.mark.parametrize("sign", [1, -1], ids=["pos", "neg"])
-@pytest.mark.parametrize("subclass", [False, True], ids=["longdouble", "subclass"])
-def test_write_object_column_longdouble_lossy(
-    *, with_missing: bool, sign: int, subclass: bool
-) -> None:
-    """Extended-precision scalars below 2**53 are still checked for exactness."""
-    cls = _LongDouble if subclass else np.longdouble
-    x = cls(sign * (np.longdouble(1) + np.finfo(np.longdouble).eps))
-    tail = [None] if with_missing else []
-    values = np.array([x, 0.5, *tail], dtype=object)
-    with pytest.raises(TypeError, match=r"exactly as float64"):
-        _object_column_to_writable(values, name="col")
-    exact = np.array([cls(sign * 0.5), 2.0, *tail], dtype=object)
-    np.testing.assert_array_equal(
-        _object_column_to_writable(exact, name="col"),
-        np.array([sign * 0.5, 2.0, *([np.nan] if with_missing else [])]),
-    )
 
 
 @pytest.mark.parametrize(
@@ -405,6 +352,14 @@ def test_write_object_column_nan_distinct_from_na() -> None:
             _object_column_to_writable(values, name="col"),
             np.array([0.5, np.nan, np.nan]),
         )
+
+
+def test_write_object_column_large_int_float_rounds() -> None:
+    """Integers above 2**53 mixed with floats are rounded to float64, not refused."""
+    values = np.array([2**53 + 1, 0.5, None], dtype=object)
+    np.testing.assert_array_equal(
+        _object_column_to_writable(values, name="col"), np.array([2.0**53, 0.5, np.nan])
+    )
 
 
 @pytest.mark.parametrize(

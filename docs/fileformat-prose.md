@@ -612,7 +612,7 @@ with an error naming the column, its dtype, and what to convert it to.
 | nullable string (`string`, `string[pyarrow]`, `str`) | `nullable-string-array`; see {attr}`anndata.settings.allow_write_nullable_strings` |
 | object-dtype column of integers that fit `int64`, with missing values / without | `nullable-integer` / `array` of `int64` (larger integers are refused) |
 | object-dtype column of booleans, with missing values / without | `nullable-boolean` / `array` of `bool` |
-| object-dtype column of floats, or of integers and floats (missing values become `NaN`) | `array` of `float64`, only if every value is exactly representable |
+| object-dtype column of floats, or of integers and floats (missing values become `NaN`, integers above `2**53` are rounded) | `array` of `float64` |
 | object-dtype column of `str`/`bytes` without missing values | `string-array` |
 | object-dtype column of anything else (e.g. mixed types, lists, dicts, `Decimal`, `date`, strings with missing values, only missing values) | not supported: convert the column first, e.g. with `.astype(...)` or a nullable dtype |
 | nullable float (`Float32`, `Float64`) | not supported yet: `.to_numpy(np.float64, na_value=np.nan)` if collapsing `NA` into `NaN` is acceptable |
