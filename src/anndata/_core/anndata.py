@@ -1264,10 +1264,6 @@ class AnnData:  # noqa: PLW1641
                 continue
             for key in frame.columns:
                 c = _strings_as_categorical(frame[key])
-                # TODO: We should only check if non-null values are unique, but
-                # this would break cases where string columns with nulls could
-                # be written as categorical, but not as string.
-                # Possible solution: https://github.com/scverse/anndata/issues/504
                 if c is None:
                     continue
                 # Ideally this could be done inplace
@@ -2050,6 +2046,10 @@ def _strings_as_categorical(values: pd.Series) -> pd.Categorical | None:
     if infer_dtype(values) != "string":
         return None
     c = pd.Categorical(values)
+    # TODO: We should only check if non-null values are unique, but
+    # this would break cases where string columns with nulls could
+    # be written as categorical, but not as string.
+    # Possible solution: https://github.com/scverse/anndata/issues/504
     return c if len(c.categories) < len(c) else None
 
 
