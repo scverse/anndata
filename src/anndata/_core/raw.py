@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, cast, final, overload
 import numpy as np
 import pandas as pd
 
-from ..compat import CupyArray, CupySparseMatrix
+from ..compat import CupyArray, CupyCSMatrix
 from ..types import SupportsArrayApiBase
 from ..utils import asarray
 from .aligned_df import _gen_dataframe
@@ -27,10 +27,9 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, MutableMapping, Sequence
     from typing import ClassVar
 
-    from ..abc import CSCDataset, CSRDataset
-    from ..acc import AdRef
+    from ..acc import AdRef, Array
     from ..compat import IndexManager
-    from ..typing import Index, InMemoryArray, _Index, _Index1DNorm
+    from ..typing import Index, _Index, _Index1DNorm
     from .aligned_mapping import AlignedArray, AxisArraysView
     from .anndata import AnnData
     from .xarray import Dataset2D
@@ -48,13 +47,13 @@ class Raw:
     _varm: MutableMapping[str, AlignedArray]
     """Backing store for the `varm` `AlignedMappingProperty`."""
 
-    _X: InMemoryArray | None
+    _X: AlignedArray | None
     """In-memory `.X`; `None` if the parent `AnnData` is backed."""
 
     def __init__(
         self,
         adata: AnnData,
-        X: InMemoryArray | None = None,
+        X: AlignedArray | None = None,
         var: pd.DataFrame | Dataset2D | Mapping[str, Sequence] | None = None,
         varm: Mapping[str, AlignedArray] | None = None,
     ) -> None:
@@ -67,7 +66,7 @@ class Raw:
         # construct manually
         if adata.isbacked == (X is None):
             # Move from GPU to CPU since it's large and not always used
-            if isinstance(X, CupyArray | CupySparseMatrix):
+            if isinstance(X, CupyArray | CupyCSMatrix):
                 self._X = X.get()
             else:
                 self._X = X
@@ -80,7 +79,7 @@ class Raw:
             # Move from GPU to CPU since it's large and not always used
             if adata.X is None:
                 self._X = None
-            elif isinstance(adata.X, CupyArray | CupySparseMatrix):
+            elif isinstance(adata.X, CupyArray | CupyCSMatrix):
                 self._X = adata.X.get()
             else:
                 self._X = _copy_array(adata.X)
@@ -99,7 +98,7 @@ class Raw:
         return self.X
 
     @property
-    def X(self) -> InMemoryArray | CSRDataset | CSCDataset | None:
+    def X(self) -> AlignedArray | None:
         # TODO: Handle unsorted array of integer indices for h5py.Datasets
         if not self._adata.isbacked:
             return self._X
@@ -152,12 +151,10 @@ class Raw:
         return self._adata.obs_names
 
     @overload
-    def __getitem__(self, index: AdRef) -> InMemoryArray: ...
+    def __getitem__(self, index: AdRef) -> Array: ...
     @overload
     def __getitem__(self, index: Index | tuple[AnnData, Index]) -> Raw: ...
-    def __getitem__(
-        self, index: Index | tuple[AnnData, Index] | AdRef
-    ) -> Raw | InMemoryArray:
+    def __getitem__(self, index: Index | tuple[AnnData, Index] | AdRef) -> Raw | Array:
         from ..acc import AdRef
         from .anndata import AnnData
 
@@ -246,11 +243,11 @@ class Raw:
         var = _normalize_index(var, self.var_names)
         return obs, var
 
-    def var_vector(self, k: str, /) -> InMemoryArray:
+    def var_vector(self, k: str, /) -> Array:
         # TODO decorator to copy AnnData.var_vector docstring
         return _get_vector_ambiguous(self, k, "var")
 
-    def obs_vector(self, k: str, /) -> InMemoryArray:
+    def obs_vector(self, k: str, /) -> Array:
         # TODO decorator to copy AnnData.obs_vector docstring
         if (X := self.X) is None:
             msg = f"Cannot get vector {k!r} from a `Raw` without `X`."

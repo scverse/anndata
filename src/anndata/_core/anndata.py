@@ -541,6 +541,19 @@ class AnnData:  # noqa: PLW1641
     def __sizeof__(
         self, *, show_stratified: bool = False, with_disk: bool = False
     ) -> int:
+        """Get the size of the object’s data in bytes.
+
+        :func:`sys.getsizeof` calls this with the default arguments.
+
+        Parameters
+        ----------
+        show_stratified
+            Print the size of each non-empty element (`X`, `obs`, `layers`, …).
+        with_disk
+            Count arrays backed on disk with their full size
+            instead of the size of their in-memory handles.
+        """
+
         def cs_to_bytes(X: CSArray | CSMatrix | BackedSparseMatrix) -> int:
             return int(X.data.nbytes + X.indptr.nbytes + X.indices.nbytes)
 
@@ -602,8 +615,7 @@ class AnnData:  # noqa: PLW1641
         else:
             return self._gen_repr(self.n_obs, self.n_vars)
 
-    def __eq__(self, other):
-        """Equality testing"""
+    def __eq__(self, other: object) -> bool:
         msg = (
             "Equality comparisons are not supported for AnnData objects, "
             "instead compare the desired attributes."
@@ -1100,7 +1112,22 @@ class AnnData:  # noqa: PLW1641
     def __getitem__(
         self, index: Index | AdRef | RefAcc | MapAcc
     ) -> AnnData | DataFrameLike | AlignedArray | Array:
-        """Slice AnnData object or retrieve an array using an :class:`~anndata.acc.AdRef`."""
+        """Slice AnnData object or retrieve an array using an accessor.
+
+        Parameters
+        ----------
+        index
+            One of
+
+            - an :type:`~anndata.typing.Index` along observations and variables,
+              returning a view of the sliced object, e.g. `adata[:, ["gene-1", "gene-2"]]`;
+            - an :class:`~anndata.acc.AdRef`, returning the referenced 1D or 2D array,
+              e.g. `adata[A.obs["cell-type"]]` or `adata[A.layers["counts"][:, "gene-1"]]`;
+            - a :term:`reference accessor`, returning the full element (see :meth:`~anndata.acc.RefAcc.get`),
+              e.g. `adata[A.obs]` or `adata[A.obsm["pca"]]`.
+
+            Mapping accessors like `A.obsm` raise an :class:`IndexError`, as they don’t refer to an array.
+        """
         from ..acc import AdRef, MapAcc, RefAcc
 
         if isinstance(index, AdRef):
@@ -1613,11 +1640,17 @@ class AnnData:  # noqa: PLW1641
             utils.warn_names_duplicates("var")
 
     def __contains__(self, key: AdRef | RefAcc | MapAcc) -> bool:
-        """Check if array is in AnnData.
+        """Check if array is in AnnData via its path as an accessor.
 
         When passed a :class:`~anndata.acc.MapAcc`,
         it will check if the referenced map has any entries,
         e.g. `A.obsm in adata` will return `True` if `adata.obsm` is not empty.
+
+        Parameters
+        ----------
+        key
+            An accessor pointing to an array that might or might not be in `self`.
+
         """
         from ..acc import AdRef, GraphMapAcc, LayerMapAcc, MapAcc, MultiMapAcc, RefAcc
 
@@ -1669,6 +1702,7 @@ class AnnData:  # noqa: PLW1641
         compression: Literal["gzip", "lzf"] | None = None,
         compression_opts: int | object = None,
         as_dense: Sequence[str] = (),
+        use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
     ):
         """\
         Write `.h5ad`-formatted hdf5 file.
@@ -1733,6 +1767,11 @@ class AnnData:  # noqa: PLW1641
         as_dense
             Sparse arrays in AnnData object to write as dense. Currently only
             supports `X` and `raw/X`.
+        use
+            Only write the element(s) referenced by this accessor (or list of accessors) into an existing AnnData store,
+            e.g. `A.obs["a"]` (a single column, updating the column order), `A.obs`, `A.X`,
+            `A.layers["counts"]`, `A.layers`, `A.obsm["pca"]`, or `A.obsp`.
+            Lists such as `[A.X, *A.obs[["a", "b"]]]` are written together after validating all entries.
         """
         from ..io import write_h5ad
 
@@ -1750,6 +1789,7 @@ class AnnData:  # noqa: PLW1641
             compression=compression,
             compression_opts=compression_opts,
             as_dense=as_dense,
+            use=use,
         )
         # Only reset the filename if the AnnData object now points to a complete new copy
         if self.isbacked and not self.is_view:
@@ -1811,6 +1851,7 @@ class AnnData:  # noqa: PLW1641
         chunks: tuple[int, ...] | None = None,
         convert_strings_to_categoricals: bool = True,
         consolidate_metadata: bool = True,
+        use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
     ):
         """\
         Write a hierarchical Zarr array store.
@@ -1825,6 +1866,11 @@ class AnnData:  # noqa: PLW1641
             Convert string columns to categorical.
         consolidate_metadata
             Whether to consolidate the metadata of the store after writing.
+        use
+            Only write the element(s) referenced by this accessor (or list of accessors) into an existing AnnData store,
+            e.g. `A.obs["a"]` (a single column, updating the column order), `A.obs`, `A.X`,
+            `A.layers["counts"]`, `A.layers`, `A.obsm["pca"]`, or `A.obsp`.
+            Lists such as `[A.X, *A.obs[["a", "b"]]]` are written together after validating all entries.
         """
         from ..io import write_zarr
 
@@ -1841,6 +1887,7 @@ class AnnData:  # noqa: PLW1641
             chunks=chunks,
             convert_strings_to_categoricals=convert_strings_to_categoricals,
             consolidate_metadata=consolidate_metadata,
+            use=use,
         )
 
     def chunked_X(self, chunk_size: int | None = None):

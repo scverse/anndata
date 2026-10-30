@@ -20,16 +20,22 @@ from ..compat import _clean_uns, _from_fixed_length_strings
 from ..experimental import read_dispatched, write_dispatched
 from ..utils import warn
 from .specs import read_elem
-from .utils import _read_legacy_raw, no_write_dataset_2d, report_read_key_on_error
+from .utils import (
+    _read_legacy_raw,
+    no_write_dataset_2d,
+    report_read_key_on_error,
+    write_use,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
     from contextlib import AbstractContextManager
     from typing import Any
 
     from zarr.storage import StoreLike
 
     from .._types import _GroupStorageType
+    from ..acc import AdRef, MapAcc, RefAcc
     from ..typing import RWAble
 
 from importlib.metadata import version
@@ -103,6 +109,7 @@ def write_zarr(
     chunks: tuple[int | None, ...] | None = None,
     convert_strings_to_categoricals: bool = True,
     consolidate_metadata: bool = True,
+    use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
     **ds_kwargs,
 ) -> None:
     """See :meth:`~anndata.AnnData.write_zarr`."""
@@ -124,11 +131,16 @@ def write_zarr(
 
     with fast_zarr_context():
         # TODO: Use spec writing system for this
-        f = zarr.open_group(store, mode="w")
-        f.attrs.setdefault("encoding-type", "anndata")
-        f.attrs.setdefault("encoding-version", "0.1.0")
-
-        write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
+        if use is not None:
+            # stale consolidated metadata would hide the newly written element
+            consolidate_metadata |= is_group_consolidated(zarr.open_group(store))
+            f = zarr.open_group(store, mode="r+", use_consolidated=False)
+            write_use(f, adata, use, dataset_kwargs=ds_kwargs)
+        else:
+            f = zarr.open_group(store, mode="w")
+            f.attrs.setdefault("encoding-type", "anndata")
+            f.attrs.setdefault("encoding-version", "0.1.0")
+            write_dispatched(f, "/", adata, callback=callback, dataset_kwargs=ds_kwargs)
         if consolidate_metadata:
             with warnings.catch_warnings():
                 # Consolidated metadata will soon be a zarr convention/spec and should be safe to write.

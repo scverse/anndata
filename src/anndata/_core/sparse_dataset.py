@@ -51,6 +51,7 @@ if TYPE_CHECKING:
     from typing import Any, Literal
 
     from .._types import _ArrayStorageType, _GroupStorageType
+    from ..compat import CupyCSMatrix
     from ..typing import Index, Index1D
     from .index import NumpySubsetIdx
 
@@ -82,7 +83,7 @@ class CompressedVectors[DenseT: DenseType](NamedTuple):
         cls,
         data: DenseT,
         indices: DenseT,
-        indptr: DenseType,
+        indptr: DenseType | Sequence[int],
     ) -> CompressedVectors[DenseT]:
         return cls(data, indices, get_np_module().array(indptr))
 
@@ -90,7 +91,8 @@ class CompressedVectors[DenseT: DenseType](NamedTuple):
 def _read_dense(
     arr: DenseType | _ArrayStorageType, idx: slice | np.ndarray | EllipsisType
 ) -> DenseType:
-    return arr[idx]
+    # array-like `idx` never yields scalars
+    return cast("DenseType", arr[idx])
 
 
 def _index_in_memory(
@@ -128,6 +130,15 @@ def slice_as_int(s: slice, l: int) -> int:
     return out[0]
 
 
+def _memory_format(fmt: Literal["csr", "csc"]) -> type[SparseMatrixType]:
+    """The in-memory type that sparse matrices of format `fmt` are read as."""
+    if is_gpu():
+        return CupyCSRMatrix if fmt == "csr" else CupyCSCMatrix
+    if settings.use_sparse_array_on_read:
+        return ss.csr_array if fmt == "csr" else ss.csc_array
+    return ss.csr_matrix if fmt == "csr" else ss.csc_matrix
+
+
 @dataclass
 class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
     """\
@@ -145,11 +156,19 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
 
     @property
     def memory_format(self) -> type[SparseMatrixType]:
-        if is_gpu():
-            return CupyCSRMatrix if self.format == "csr" else CupyCSCMatrix
-        if settings.use_sparse_array_on_read:
-            return ss.csr_array if self.format == "csr" else ss.csc_array
-        return ss.csr_matrix if self.format == "csr" else ss.csc_matrix
+        return _memory_format(self.format)
+
+    def _construct(
+        self,
+        arg1: tuple[DenseType, DenseType, DenseType] | tuple[int, int],
+        /,
+        *,
+        shape: tuple[int, int] | None = None,
+        dtype: np.dtype | None = None,
+    ) -> SparseMatrixType:
+        """Create an in-memory matrix of :attr:`memory_format` from buffers or a shape."""
+        # `memory_format` and the buffers’ backend both follow `is_gpu()`, which mypy can’t see
+        return self.memory_format(arg1, shape=shape, dtype=dtype)  # type: ignore[arg-type]
 
     @property
     def np_module(self) -> ModuleType:
@@ -267,7 +286,7 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
         s = slice(*_read_dense(self.indptr, slice(idx, idx + 2)))
         data = _read_dense(self.data, s)
         indices = _read_dense(self.indices, s)
-        indptr: DenseType = [0, len(data)]
+        indptr = [0, len(data)]
         return CompressedVectors.from_buffers(data, indices, indptr)
 
     def __getitem__(self, key) -> SparseMatrixType:
@@ -281,22 +300,20 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
         return (major, minor) if self.format == "csr" else (minor, major)
 
     @singledispatchmethod
-    def _get(
-        self, major_index: int | slice | Sequence | np.ndarray, minor_index: slice
-    ) -> SparseMatrixType:
+    def _get(self, major_index: object, minor_index: slice) -> SparseMatrixType:
+        # only reached by types the registered overloads below don’t cover
         vectors: CompressedVectors = CompressedVectors(
             _read_dense(self.data, ...),
             _read_dense(self.indices, ...),
             _read_dense(self.indptr, ...),
         )
         key = self._gen_maj_min_tuple(major_index, minor_index)
-        # scipy-stubs’ __getitem__ overloads only cover fixed index shapes,
-        # not this dispatch fallback’s generic major_index/minor_index union.
-        return self.memory_format(vectors, shape=self.shape)[key]  # type: ignore[index]
+        # The stubs can’t type an unknown index. `minor_index` is a slice, so this is a matrix.
+        return self._construct(vectors, shape=self.shape)[key]  # type: ignore[index,return-value]
 
     @_get.register
     def _get_intXslice(self, major_index: int, minor_index: slice) -> SparseMatrixType:
-        return self.memory_format(
+        return self._construct(
             self.get_compressed_vector(major_index),
             shape=self._gen_maj_min_tuple(1, self.minor_axis_size),
         )[self._gen_maj_min_tuple(slice(None), minor_index)]
@@ -322,7 +339,7 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
             slice(major_index.start, major_index.stop)
         )
         return self._minor_subset(
-            self.memory_format(
+            self._construct(
                 compressed_vectors,
                 shape=self._gen_maj_min_tuple(major_index_size, self.minor_axis_size),
             ),
@@ -334,7 +351,7 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
         self, major_index: Sequence | np.ndarray, minor_index: slice
     ) -> SparseMatrixType:
         if len(major_index) == 0:
-            return self.memory_format(
+            return self._construct(
                 (0, self.minor_axis_size)
                 if self.format == "csr"
                 else (self.minor_axis_size, 0)
@@ -343,9 +360,7 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
             major_index = np.flatnonzero(major_index)
         out_shape = self._gen_maj_min_tuple(len(major_index), self.minor_axis_size)
         return self._minor_subset(
-            self.memory_format(
-                self.get_compressed_vectors(major_index), shape=out_shape
-            ),
+            self._construct(self.get_compressed_vectors(major_index), shape=out_shape),
             minor_index,
         )
 
@@ -653,7 +668,7 @@ class BaseCompressedSparseDataset[GroupT: _GroupStorageType](
         # but scipy and cuSPARSE only operate on signed 32 or 64 bit indices.
         if (idx_dtype := np.result_type(indices.dtype, np.int32)) != indices.dtype:
             indices = indices.astype(idx_dtype)
-        return backed_class.memory_format(
+        return backed_class._construct(
             (
                 _read_dense(self._data, ...),
                 indices,
@@ -748,5 +763,5 @@ def sparse_dataset(
 @_ensure_numpy_idx
 def subset_sparsedataset(
     d: abc._AbstractCSDataset, subset_idx: NumpySubsetIdx
-) -> float | CSMatrix | CSArray:
+) -> float | CSMatrix | CSArray | CupyCSMatrix:
     return d[subset_idx]
