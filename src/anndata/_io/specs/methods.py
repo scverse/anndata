@@ -50,16 +50,11 @@ from anndata.compat import (
 from ..._settings import settings
 from ...compat import PANDAS_3, PANDAS_STRING_ARRAY_TYPES
 from ...utils import iter_outer, warn
-from ..utils import _get_display_path, add_key_note
-from .dataframe_columns import (
-    UnsupportedColumnTypeError,
-    add_column_note,
-    normalize_column,
-)
+from .dataframe_columns import add_column_note, normalize_column
 from .registry import _REGISTRY, IORegistryError, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Hashable, Iterator
+    from collections.abc import Generator, Iterator
     from os import PathLike
     from typing import Any, Literal
 
@@ -1120,70 +1115,51 @@ def write_dataframe(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
-    col_names = _check_dataframe_columns(df)
+    # Check arguments
+    for reserved in ("_index",):
+        if reserved in df.columns:
+            msg = f"{reserved!r} is a reserved name for dataframe columns."
+            raise ValueError(msg)
     group = _require_group_write_dataframe(f, key, df)
+    if not df.columns.is_unique:
+        duplicates = list(df.columns[df.columns.duplicated()])
+        msg = f"Found repeated column names: {duplicates}. Column names must be unique."
+        raise ValueError(msg)
+    col_names = [check_key(c) for c in df.columns]
     group.attrs["column-order"] = col_names
 
-    index_name = _dataframe_index_name(df)
-    if (
-        df.index.name is not None
-        and df.index.name in col_names
-        and not pd.Series(df.index, index=df.index).equals(df[df.index.name])
-    ):
-        msg = (
-            f"DataFrame.index.name ({df.index.name!r}) is also used by a column "
-            "whose values are different. This is not supported. Please make sure "
-            "the values are the same, or use a different name."
-        )
-        raise ValueError(msg)
+    if df.index.name is not None:
+        if df.index.name in col_names and not pd.Series(
+            df.index, index=df.index
+        ).equals(df[df.index.name]):
+            msg = (
+                f"DataFrame.index.name ({df.index.name!r}) is also used by a column "
+                "whose values are different. This is not supported. Please make sure "
+                "the values are the same, or use a different name."
+            )
+            raise ValueError(msg)
+        index_name = df.index.name
+    else:
+        index_name = "_index"
     group.attrs["_index"] = check_key(index_name)
 
-    index_values = _dataframe_index_values(df.index)
+    if TYPE_CHECKING:  # `pd.DataFrame.index` is `Index[Any]`
+        assert isinstance(df.index.array, pd.arrays.ExtensionArray)
+    # We support non-nullable numpy arrays and nullable pandas string/numeric extension arrays
+    index_values = (
+        df.index.to_numpy()
+        if isinstance(df.index.array, pd.arrays.NumpyExtensionArray)
+        else df.index.array
+    )
     _writer.write_elem(group, index_name, index_values, dataset_kwargs=dataset_kwargs)
     for colname, series in df.items():
         # TODO: this should write the "true" representation of the series (i.e. the underlying array or ndarray depending)
-        try:
-            values = normalize_column(series._values, path=str(colname))
-        except UnsupportedColumnTypeError as e:
-            # the note `write_elem` would have added
-            add_key_note(e, group, _get_display_path(group), str(colname), "writ")
-            raise
+        values = normalize_column(series._values, name=str(colname))
         try:
             _writer.write_elem(group, colname, values, dataset_kwargs=dataset_kwargs)
         except IORegistryError as e:
             add_column_note(e, values, str(colname))
             raise
-
-
-def _check_dataframe_columns(df: pd.DataFrame) -> list[str]:
-    """Return the column names `write_dataframe` stores, raising for invalid ones."""
-    for reserved in ("_index",):
-        if reserved in df.columns:
-            msg = f"{reserved!r} is a reserved name for dataframe columns."
-            raise ValueError(msg)
-    if not df.columns.is_unique:
-        duplicates = list(df.columns[df.columns.duplicated()])
-        msg = f"Found repeated column names: {duplicates}. Column names must be unique."
-        raise ValueError(msg)
-    return [check_key(c) for c in df.columns]
-
-
-def _dataframe_index_name(df: pd.DataFrame) -> Hashable:
-    return df.index.name if df.index.name is not None else "_index"
-
-
-def _dataframe_index_values(
-    index: pd.Index,
-) -> np.ndarray | pd.api.extensions.ExtensionArray:
-    """The array `write_dataframe` stores for `index`."""
-    if TYPE_CHECKING:  # `pd.DataFrame.index` is `Index[Any]`
-        assert isinstance(index.array, pd.arrays.ExtensionArray)
-    # We support non-nullable numpy arrays and nullable pandas string/numeric extension arrays
-    return (
-        index.to_numpy()
-        if isinstance(index.array, pd.arrays.NumpyExtensionArray)
-        else index.array
-    )
 
 
 @_REGISTRY.register_read(h5py.Group, IOSpec("dataframe", "0.2.0"))
@@ -1364,7 +1340,19 @@ def write_nullable(
             return
 
         # if implicitly set to `False`, we error out
-        _check_nullable_strings_opted_in()
+        if (
+            settings.allow_write_nullable_strings is None
+            and not PANDAS_3
+            and not pd.options.future.infer_string
+        ):
+            msg = (
+                "`anndata.settings.allow_write_nullable_strings` is None and "
+                "`pd.options.future.infer_string` is False. "
+                "Opt-in to writing these arrays by toggling either setting to True, "
+                "or make `anndata` attempt to write the non-nullable format supported by "
+                "anndata < 0.11 by setting `anndata.settings.allow_write_nullable_strings` to False."
+            )
+            raise RuntimeError(msg)
 
     g = f.require_group(k)
     if isinstance(v, pd.arrays.StringArray | pd.arrays.ArrowStringArray):
@@ -1382,23 +1370,6 @@ def write_nullable(
     )
     _writer.write_elem(g, "values", values, dataset_kwargs=dataset_kwargs)
     _writer.write_elem(g, "mask", v.isna(), dataset_kwargs=dataset_kwargs)
-
-
-def _check_nullable_strings_opted_in() -> None:
-    """Raise if writing nullable strings needs an explicit setting first."""
-    if (
-        settings.allow_write_nullable_strings is None
-        and not PANDAS_3
-        and not pd.options.future.infer_string
-    ):
-        msg = (
-            "`anndata.settings.allow_write_nullable_strings` is None and "
-            "`pd.options.future.infer_string` is False. "
-            "Opt-in to writing these arrays by toggling either setting to True, "
-            "or make `anndata` attempt to write the non-nullable format supported by "
-            "anndata < 0.11 by setting `anndata.settings.allow_write_nullable_strings` to False."
-        )
-        raise RuntimeError(msg)
 
 
 for store_type, array_type in product(_STORE_TYPES, PANDAS_STRING_ARRAY_TYPES):

@@ -27,9 +27,6 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, MutableMapping, Sequence
     from typing import ClassVar
 
-    import h5py
-
-    from ..abc import CSCDataset, CSRDataset
     from ..acc import AdRef, Array
     from ..compat import IndexManager
     from ..typing import Index, _Index, _Index1DNorm
@@ -105,25 +102,25 @@ class Raw:
         # TODO: Handle unsorted array of integer indices for h5py.Datasets
         if not self._adata.isbacked:
             return self._X
-        X = self._x_on_disk()
+        if not self._adata.file.is_open:
+            self._adata.file.open()
+        # Handle legacy file formats:
+        if "raw/X" in self._adata.file:
+            X = _on_disk_x(self._adata.file["raw/X"])
+        elif "raw.X" in self._adata.file:
+            X = _on_disk_x(self._adata.file["raw.X"])  # Backwards compat
+        else:
+            msg = (
+                f"Could not find dataset for raw X in file: "
+                f"{self._adata.file.filename}."
+            )
+            raise AttributeError(msg)
         # Check if we need to subset
         if (oidx := self._adata._oidx) is not None:  # i.e. `self._adata.is_view`
             # TODO: As noted above, implement views of raw
             #       so we can know if we need to subset by var
             return _subset(X, (oidx, slice(None)))
         return X
-
-    def _x_on_disk(self) -> h5py.Dataset | CSRDataset | CSCDataset:
-        """Backed raw X, not subset to a view's observations."""
-        if not self._adata.file.is_open:
-            self._adata.file.open()
-        # Handle legacy file formats:
-        if "raw/X" in self._adata.file:
-            return _on_disk_x(self._adata.file["raw/X"])
-        if "raw.X" in self._adata.file:
-            return _on_disk_x(self._adata.file["raw.X"])  # Backwards compat
-        msg = f"Could not find dataset for raw X in file: {self._adata.file.filename}."
-        raise AttributeError(msg)
 
     @property
     def shape(self) -> tuple[int, int]:

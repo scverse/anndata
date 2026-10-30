@@ -24,23 +24,7 @@ __all__ = [
 
 
 class UnsupportedColumnTypeError(TypeError):
-    """An object-dtype dataframe column cannot be converted for writing.
-
-    `path` names the column, `kind` is what :func:`~pandas.api.types.infer_dtype`
-    made of it, `reason` says why it cannot be written and `hint` what to do about it.
-    """
-
-    def __init__(
-        self, path: str, reason: str, hint: str = "", kind: str | None = None
-    ) -> None:
-        self.path, self.reason, self.hint, self.kind = path, reason, hint, kind
-        inferred = "" if kind is None else f", inferred as {kind!r}"
-        msg = f"Cannot write column {path!r} (dtype object{inferred}): {reason}."
-        super().__init__(f"{msg} {hint}" if hint else msg)
-
-    def __reduce__(self) -> tuple[type, tuple[str, str, str, str | None], dict]:
-        # for pickling and copying: the default passes only the message to `__init__`
-        return type(self), (self.path, self.reason, self.hint, self.kind), self.__dict__
+    """An object-dtype dataframe column cannot be converted for writing."""
 
 
 _CONVERT_HINT = (
@@ -54,8 +38,15 @@ _CONVERT_HINT = (
 )
 
 
+def _unsupported(name: str, kind: str, reason: str) -> UnsupportedColumnTypeError:
+    return UnsupportedColumnTypeError(
+        f"Cannot write column {name!r} (dtype object, inferred as {kind!r}): "
+        f"{reason}. {_CONVERT_HINT}"
+    )
+
+
 def normalize_column(
-    values: np.ndarray | ExtensionArray, *, path: str
+    values: np.ndarray | ExtensionArray, *, name: str
 ) -> np.ndarray | ExtensionArray:
     """\
     Return a writable version of a dataframe column's backing array (``series._values``).
@@ -63,10 +54,10 @@ def normalize_column(
     Only object-dtype columns are converted, see :func:`_object_column_to_writable`;
     everything else is returned unchanged for the IO registry to judge.
     Idempotent, and the input is never modified.
-    `path` names the column in error messages.
+    `name` names the column in error messages.
     """
     if isinstance(values, np.ndarray) and values.dtype == object:
-        return _object_column_to_writable(values, path=path)
+        return _object_column_to_writable(values, name=name)
     return values
 
 
@@ -103,11 +94,11 @@ def _column_hint(values: np.ndarray | ExtensionArray) -> str:
 
 
 def add_column_note(
-    e: BaseException, values: np.ndarray | ExtensionArray, path: str
+    e: BaseException, values: np.ndarray | ExtensionArray, name: str
 ) -> None:
     """Explain a registry miss for a dataframe column: which column, which dtype, what to do."""
     e.add_note(
-        f"Column {path!r} (dtype {values.dtype}) has no on-disk encoding. "
+        f"Column {name!r} (dtype {values.dtype}) has no on-disk encoding. "
         f"{_column_hint(values)}"
     )
 
@@ -141,7 +132,7 @@ def _with_mask(
 
 
 def _object_column_to_writable(
-    values: np.ndarray, *, path: str
+    values: np.ndarray, *, name: str
 ) -> np.ndarray | ExtensionArray:
     """\
     Convert an object-dtype column into something we can write.
@@ -162,24 +153,15 @@ def _object_column_to_writable(
             or (kind == "mixed" and all(isinstance(v, str | bytes) for v in values))
         ):
             return values
-        raise UnsupportedColumnTypeError(
-            path,
-            "it has no supported on-disk representation",
-            hint=_CONVERT_HINT,
-            kind=kind,
-        )
+        raise _unsupported(name, kind, "it has no supported on-disk representation")
     nullable_dtype, numpy_dtype = conversion
     try:
         if numpy_dtype is not None:
             return _with_mask(values, nullable_dtype, numpy_dtype)
         converted = pd.array(values, dtype=nullable_dtype)
     except (TypeError, ValueError, OverflowError) as e:
-        raise UnsupportedColumnTypeError(
-            path,
-            f"converting it to {nullable_dtype.name!r} failed",
-            hint=_CONVERT_HINT,
-            kind=kind,
-        ) from e
+        msg = f"converting it to {nullable_dtype.name!r} failed"
+        raise _unsupported(name, kind, msg) from e
     floats = converted.to_numpy(dtype=np.float64, na_value=np.nan)
     # only magnitudes >= 2**53 can lose precision in float64
     suspect = np.abs(floats) >= 2.0**53
@@ -194,10 +176,6 @@ def _object_column_to_writable(
             x.item() if isinstance(x, np.generic) else x for x in values[suspect]
         )
         if any(x != f for x, f in zip(original, floats[suspect].tolist(), strict=True)):
-            raise UnsupportedColumnTypeError(
-                path,
-                "its values cannot be represented exactly as float64",
-                hint=_CONVERT_HINT,
-                kind=kind,
-            )
+            msg = "its values cannot be represented exactly as float64"
+            raise _unsupported(name, kind, msg)
     return floats

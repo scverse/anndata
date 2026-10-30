@@ -4,7 +4,6 @@ import inspect
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import partial, singledispatch, wraps
-from pathlib import PurePosixPath
 from types import MappingProxyType
 from typing import TYPE_CHECKING, cast
 
@@ -365,6 +364,8 @@ class Writer:
         dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
         modifiers: frozenset[str] = frozenset(),
     ):
+        from pathlib import PurePosixPath
+
         import h5py
 
         from anndata._io.zarr import is_group_consolidated
@@ -387,8 +388,19 @@ class Writer:
             else:
                 store.clear()
         else:
-            k = _normalize_write_key(k, store.name, type(store))
+            # we allow stores to have a prefix like /uns which are then written to with keys like /uns/foo
+            if k.startswith("/"):
+                k = str(PurePosixPath(k).relative_to(store.name, walk_up=False))
+
+            # Apart from this code, we also ban keys containing slashes in `write_adata`/`write_h5ad`
+            # for AnnData elements other than `obs`, `var`, and `uns`.
             if "/" in k:
+                if (
+                    isinstance(store, zarr.Group)
+                    or settings.disallow_forward_slash_in_h5ad
+                ):
+                    msg = f"Forward slashes are not allowed in keys in {type(store)}"
+                    raise ValueError(msg)
                 msg = "Forward slashes will be written differently in a future anndata version"
                 warn(msg, FutureWarning)
 
@@ -406,22 +418,6 @@ class Writer:
             )
         write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
         _add_to_column_order(store, k)
-
-
-def _normalize_write_key(k: str, store_name: str, store_type: type) -> str:
-    """Return the key `Writer.write_elem` stores `k` under in group `store_name`, or raise like it."""
-    # we allow stores to have a prefix like /uns which are then written to with keys like /uns/foo
-    if k.startswith("/"):
-        k = str(PurePosixPath(k).relative_to(store_name, walk_up=False))
-
-    # Apart from this code, we also ban keys containing slashes in `write_adata`/`write_h5ad`
-    # for AnnData elements other than `obs`, `var`, and `uns`.
-    if "/" in k and (
-        issubclass(store_type, zarr.Group) or settings.disallow_forward_slash_in_h5ad
-    ):
-        msg = f"Forward slashes are not allowed in keys in {store_type}"
-        raise ValueError(msg)
-    return k
 
 
 def _add_to_column_order(store: _GroupStorageType, k: str) -> None:

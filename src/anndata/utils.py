@@ -530,11 +530,9 @@ def iter_outer(
     ]
     for attr_name in attr_names:
         was_closed = adata.isbacked and not adata.file.is_open
-        try:
-            yield (attr_name, getattr(adata, attr_name))
-        finally:  # also when the consumer stops early
-            if was_closed:
-                adata.file.close()
+        yield (attr_name, getattr(adata, attr_name))
+        if was_closed:
+            adata.file.close()
 
 
 @dataclass

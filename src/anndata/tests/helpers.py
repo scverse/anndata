@@ -25,7 +25,6 @@ from zarr.core.buffer import default_buffer_prototype
 from zarr.storage import MemoryStore, WrapperStore
 
 from anndata import AnnData, ExperimentalFeatureWarning, Raw
-from anndata import io as anndata_io
 from anndata._core.aligned_mapping import AlignedMappingBase
 from anndata._core.sparse_dataset import BaseCompressedSparseDataset
 from anndata._core.views import ArrayView
@@ -1260,50 +1259,6 @@ def open_store(
     if not isinstance(store, MemoryStore):
         return h5py.File(store, mode)
     return zarr.open_group(store, mode=mode)
-
-
-def write_and_read(
-    adata: AnnData,
-    diskfmt: Literal["h5ad", "zarr"],
-    store: Path | MemoryStore,
-    **kwargs,
-) -> AnnData:
-    """Write `adata` to a `diskfmt_store` without converting strings to categoricals, and read it back."""
-    getattr(adata, f"write_{diskfmt}")(
-        store, convert_strings_to_categoricals=False, **kwargs
-    )
-    return getattr(anndata_io, f"read_{diskfmt}")(store)
-
-
-def store_type_of(diskfmt: Literal["h5ad", "zarr"]) -> Literal["h5", "zarr"]:
-    """The `store_type` of :meth:`~anndata.AnnData.unwriteable` that `diskfmt` writes."""
-    return "h5" if diskfmt == "h5ad" else "zarr"
-
-
-def obs_index() -> pd.Index:
-    """A new three-label index for every frame: pandas < 3 shares the `Index` object between frames."""
-    return pd.Index([f"c{i}" for i in range(3)])
-
-
-def obs_column(values: object, dtype: str | None = None) -> pd.Series:
-    """A column of three values on :func:`obs_index`."""
-    return pd.Series(values, index=obs_index(), dtype=dtype)
-
-
-def adata_with_obs(**columns: pd.Series) -> AnnData:
-    """An :class:`~anndata.AnnData` without `X` whose `obs` holds `columns`."""
-    return AnnData(obs=pd.DataFrame(columns, index=obs_index()))
-
-
-def as_dataframe(elem: object) -> pd.DataFrame:
-    """Narrow an element (`adata.obs`, a read element, …) to a dataframe."""
-    assert isinstance(elem, pd.DataFrame)
-    return elem
-
-
-def exception_notes(e: BaseException) -> str:
-    """The notes added to `e`, one per line."""
-    return "\n".join(getattr(e, "__notes__", []))
 
 
 class AccessTrackingStore(WrapperStore[Store]):

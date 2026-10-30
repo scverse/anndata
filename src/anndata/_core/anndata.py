@@ -21,15 +21,18 @@ from pandas.api.types import infer_dtype
 from scverse_misc import Deprecation, deprecated
 
 from anndata._core.access import ElementRef
+from anndata.types import SupportsArrayApiBase
 
 from .. import utils
 from .._settings import settings
 from .._warnings import ImplicitModificationWarning
 from ..compat import (
+    AwkArray,
     CSArray,
     CSMatrix,
     Empty,
     IndexManager,
+    XDataset,
     _move_adj_mtx,
     has_xp,
     old_positionals,
@@ -76,7 +79,6 @@ if TYPE_CHECKING:
     from typing import Any, ClassVar, Literal
 
     from numpy.typing import NDArray
-    from pandas.api.extensions import ExtensionArray
     from zarr.storage import StoreLike
 
     from anndata._types import AnnDataElem
@@ -94,7 +96,6 @@ if TYPE_CHECKING:
         MultiAcc,
         RefAcc,
     )
-    from ..compat import XDataset
     from ..typing import AlignedArray, Index, Index1D, Storable, _Index, _Index1DNorm
     from .aligned_df import IntoAlignedDf
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
@@ -1261,8 +1262,16 @@ class AnnData:  # noqa: PLW1641
             if not isinstance(frame, pd.DataFrame):
                 # lazy frames dedup their categories on access
                 continue
-            for key in list(frame.columns):
-                if (c := _categorical_from_strings(frame[key])) is None:
+            string_cols = [
+                key for key in frame.columns if infer_dtype(frame[key]) == "string"
+            ]
+            for key in string_cols:
+                c = pd.Categorical(frame[key])
+                # TODO: We should only check if non-null values are unique, but
+                # this would break cases where string columns with nulls could
+                # be written as categorical, but not as string.
+                # Possible solution: https://github.com/scverse/anndata/issues/504
+                if len(c.categories) >= len(c):
                     continue
                 # Ideally this could be done inplace
                 sorted_categories = natsorted(c.categories)
@@ -1547,38 +1556,87 @@ class AnnData:  # noqa: PLW1641
             While the return type may change to include richer output about which elements cannot be written,
             this new type's evaluation as a boolean will not change from the current behavior i.e.,
             `bool(adata.unwriteable())` will always evaluate the same.
-
-        See Also
-        --------
-        anndata.settings.validate_before_write
-            Run this check before every write and raise naming the elements that cannot be written.
-
-        Notes
-        -----
-        The check judges types, dtypes, shapes and settings as the writers see them,
-        after :meth:`strings_to_categoricals`: elements and dataframe columns without a writer
-        (see :ref:`type-mapping`), object columns that cannot be converted, non-2-D `X`/layers,
-        invalid keys, reference cycles, and dataframe structure problems
-        (reserved, invalid or duplicate names, :class:`~pandas.MultiIndex`).
-        It reads no backed data, computes no lazy arrays and materialises no indexes;
-        only object-dtype columns are scanned (and converted, which allocates).
-        It cannot see what the writers only find out while writing:
-        backend, codec and IO failures, a column that shares its name with the index
-        but holds different values, and data a backend refuses although a writer is
-        registered for its type (h5py refuses `datetime64`/`timedelta64` data,
-        e.g. datetime categories on `h5ad`).
         """
 
-        from anndata._io.specs.validate import iter_unwriteable
+        if _non_2d_message(self.X, name="X") is not None:
+            return True
+        for value in self.layers.values():
+            if _non_2d_message(value, name="layer") is not None:
+                return True
 
-        # like the writers, which call `strings_to_categoricals` by default
-        problems = iter_unwriteable(
-            self, store_type=store_type, strings_to_categoricals=True
+        from anndata._io.specs.dataframe_columns import (
+            UnsupportedColumnTypeError,
+            normalize_column,
         )
-        try:
-            return next(problems, None) is not None
-        finally:
-            problems.close()  # lets `iter_outer` close a backed file it reopened
+        from anndata._io.specs.registry import _REGISTRY
+
+        writeable_elems = {
+            src_type
+            for (dest_type, src_type, __) in _REGISTRY.write
+            if store_type is None or store_type in dest_type.__module__
+        }
+
+        def predicate(  # noqa: PLR0911
+            elem: RWAble | Raw,
+            *,
+            accumulate: bool,
+            attr_name: AnnDataElem | None = None,
+        ):
+            if elem is None:
+                return accumulate
+            if isinstance(elem, AnnData):
+                return accumulate or elem.unwriteable(store_type=store_type)
+            if isinstance(elem, pd.Categorical):
+                return accumulate or predicate(elem.categories, accumulate=accumulate)
+            if isinstance(elem, pd.Series) and elem.dtype == object:
+                # converted like in `write_dataframe`
+                try:
+                    values = normalize_column(elem._values, name=str(elem.name))
+                except UnsupportedColumnTypeError:
+                    # the writers call `strings_to_categoricals` first
+                    return accumulate or not (
+                        infer_dtype(elem) == "string"
+                        and len(pd.Categorical(elem).categories) < len(elem)
+                    )
+                return accumulate or predicate(values, accumulate=accumulate)
+            if isinstance(elem, pd.Series | pd.Index):
+                # matches behavior in methods.py
+                return accumulate or predicate(elem.values, accumulate=accumulate)
+            if isinstance(elem, AwkArray):
+                import awkward as ak
+
+                container = ak.to_buffers(ak.to_packed(elem))
+                return accumulate or any(
+                    predicate(v, accumulate=accumulate) for v in container[2].values()
+                )
+            if isinstance(elem, Raw):
+                return (
+                    accumulate
+                    or any(
+                        predicate(elem.var[col], accumulate=accumulate)
+                        for col in elem.var.columns
+                    )
+                    or any(
+                        predicate(v, accumulate=accumulate) for v in elem.varm.values()
+                    )
+                    or predicate(elem.X, accumulate=accumulate)
+                )
+            if isinstance(elem, pd.DataFrame):
+                accumulate = accumulate or any(
+                    predicate(elem[col], accumulate=accumulate) for col in elem.columns
+                )
+                return accumulate or predicate(elem.index, accumulate=accumulate)
+            if isinstance(elem, XDataset | Mapping):
+                return accumulate or any(
+                    predicate(v, accumulate=accumulate) for v in elem.values()
+                )
+            return (
+                (accumulate or type(elem) not in writeable_elems)
+                if not isinstance(elem, SupportsArrayApiBase)
+                else accumulate
+            )
+
+        return self._reduce(predicate, init=False)
 
     def var_names_make_unique(self, join: str = "-") -> None:
         # Important to go through the setter so obsm dataframes are updated too
@@ -1982,22 +2040,6 @@ def _widen_layers_type[T](
 ) -> Mapping[str | None, T] | None:
     """Work around Mapping’s key type being invariant, unlike dict’s."""
     return cast("Any", m)
-
-
-def _categorical_from_strings(
-    values: pd.Series | np.ndarray | ExtensionArray,
-) -> pd.Categorical | None:
-    """The categorical :meth:`AnnData.strings_to_categoricals` makes of a column, or `None` if it keeps it."""
-    if infer_dtype(values) != "string":
-        return None
-    c = pd.Categorical(values)
-    # TODO: We should only check if non-null values are unique, but
-    # this would break cases where string columns with nulls could
-    # be written as categorical, but not as string.
-    # Possible solution: https://github.com/scverse/anndata/issues/504
-    if len(c.categories) >= len(c):
-        return None
-    return c
 
 
 def _check_2d_shape(X):

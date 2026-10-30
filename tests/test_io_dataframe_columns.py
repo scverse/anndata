@@ -6,8 +6,6 @@ See https://github.com/scverse/anndata/issues/1068
 from __future__ import annotations
 
 import contextlib
-import copy
-import pickle
 import re
 import warnings
 from typing import TYPE_CHECKING
@@ -25,20 +23,11 @@ from anndata._io.specs.dataframe_columns import (
     normalize_column,
 )
 from anndata._io.specs.registry import _REGISTRY, IORegistryError, IOSpec
-from anndata._io.specs.validate import iter_unwriteable
-from anndata.tests.helpers import (
-    adata_with_obs,
-    as_dataframe,
-    exception_notes,
-    obs_column,
-    obs_index,
-    open_store,
-    store_type_of,
-    write_and_read,
-)
+from anndata.acc import A
+from anndata.tests.helpers import open_store
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Mapping
+    from collections.abc import Generator, Mapping
     from pathlib import Path
     from typing import Any, Literal
 
@@ -48,139 +37,50 @@ if TYPE_CHECKING:
     from anndata._io.specs.registry import Writer
 
 
-# families with a writer and their on-disk dtype; factories give fresh input
-SUPPORTED: dict[str, tuple[Callable[[], pd.Series], str]] = {
-    "int64": (lambda: obs_column([1, 2, 3]), "int64"),
-    "float64-nan": (lambda: obs_column([1.5, np.nan, 2.0]), "float64"),
-    "bool": (lambda: obs_column([True, False, True]), "bool"),
-    "Int64": (lambda: obs_column([1, None, 3], "Int64"), "Int64"),
-    "boolean": (lambda: obs_column([True, None, False], "boolean"), "boolean"),
-    "string": (lambda: obs_column(["a", None, "a"], "string"), "string"),
-    "category": (lambda: obs_column(["a", "b", None]).astype("category"), "category"),
-    "category-ordered": (
-        lambda: pd.Series(
-            pd.Categorical(["lo", "hi", "lo"], categories=["lo", "hi"], ordered=True),
-            index=obs_index(),
+def _adata_with_obs(**columns: object) -> ad.AnnData:
+    """An :class:`~anndata.AnnData` without `X` whose three-row `obs` holds `columns`."""
+    return ad.AnnData(obs=pd.DataFrame(columns, index=[f"c{i}" for i in range(3)]))
+
+
+@pytest.mark.parametrize(
+    ("values", "hint"),
+    [
+        pytest.param(
+            pd.array([1.5, None, 2.0], dtype="Float64"),
+            r"no on-disk encoding for nullable floats.*na_value=np\.nan",
+            id="Float64",
         ),
-        "category",
-    ),
-}
-
-# families without a writer: error type and the hint in its notes
-UNSUPPORTED: dict[str, tuple[Callable[[], pd.Series], type[Exception], str]] = {
-    "Float64": (
-        lambda: obs_column([1.5, None, 2.0], "Float64"),
-        IORegistryError,
-        r"no on-disk encoding for nullable floats.*na_value=np\.nan",
-    ),
-    "Float32": (
-        lambda: obs_column([1.5, None, 2.0], "Float32"),
-        IORegistryError,
-        r"no on-disk encoding for nullable floats",
-    ),
-    "datetime64": (
-        lambda: obs_column(pd.to_datetime(["2020-01-01", "NaT", "2021-01-01"])),
-        IORegistryError,
-        r"datetime/timedelta columns are not supported yet, see scverse/anndata#2238",
-    ),
-    "datetime64-tz": (
-        lambda: obs_column(
-            pd.to_datetime(["2020-01-01", "NaT", "2021-01-01"]).tz_localize("UTC")
+        pytest.param(
+            pd.to_datetime(["2020-01-01", "NaT", "2021-01-01"]),
+            r"datetime/timedelta columns are not supported yet, see scverse/anndata#2238",
+            id="datetime64",
         ),
-        IORegistryError,
-        r"scverse/anndata#2238",
-    ),
-    "timedelta64": (
-        lambda: obs_column(pd.to_timedelta(["1h", None, "2h"])),
-        IORegistryError,
-        r"scverse/anndata#2238",
-    ),
-    "int64-pyarrow": (
-        lambda: obs_column([1, None, 3], "int64[pyarrow]"),
-        IORegistryError,
-        r"pyarrow-backed columns are not supported.*numpy_nullable",
-    ),
-    "period": (
-        lambda: obs_column(pd.period_range("2020-01", periods=3, freq="M")),
-        IORegistryError,
-        r"Convert the column to a numpy, nullable integer/boolean, string, or categorical",
-    ),
-    "interval": (
-        lambda: obs_column(pd.interval_range(0, 3)),
-        IORegistryError,
-        r"Convert the column to a numpy",
-    ),
-    "sparse": (
-        lambda: obs_column(pd.arrays.SparseArray([0.0, 1.0, 0.0])),
-        IORegistryError,
-        r"Convert the column to a numpy",
-    ),
-}
-
-
-@pytest.mark.parametrize("family", list(SUPPORTED))
-def test_supported_column_roundtrip(
+        pytest.param(
+            pd.array([1, None, 3], dtype="int64[pyarrow]"),
+            r"pyarrow-backed columns are not supported.*numpy_nullable",
+            id="int64-pyarrow",
+        ),
+        pytest.param(
+            pd.period_range("2020-01", periods=3, freq="M"),
+            r"Convert the column to a numpy, nullable integer/boolean, string, or categorical",
+            id="period",
+        ),
+    ],
+)
+def test_unsupported_column_note(
     *,
     diskfmt: Literal["h5ad", "zarr"],
     diskfmt_store: Path | MemoryStore,
-    family: str,
+    values: object,
+    hint: str,
 ) -> None:
-    """Preflight and write agree, and the column comes back with the expected dtype."""
-    make, expected_dtype = SUPPORTED[family]
-    col = make()
-    expected_na = col.isna().tolist()
-    expected_values = col.dropna().tolist()
-    adata = adata_with_obs(col=col)
-    with ad.settings.override(allow_write_nullable_strings=True):
-        assert list(iter_unwriteable(adata)) == []
-        assert not adata.unwriteable()
-        with ad.settings.override(validate_before_write=True):
-            read = as_dataframe(write_and_read(adata, diskfmt, diskfmt_store).obs)[
-                "col"
-            ]
-    assert read.dtype == expected_dtype
-    assert read.isna().tolist() == expected_na
-    assert read.dropna().tolist() == expected_values
-
-
-@pytest.mark.parametrize("family", list(UNSUPPORTED))
-def test_unsupported_column_errors(
-    *,
-    diskfmt: Literal["h5ad", "zarr"],
-    diskfmt_store: Path | MemoryStore,
-    family: str,
-) -> None:
-    """Preflight and write report the same error, naming the column and a way out."""
-    make, exc_type, hint = UNSUPPORTED[family]
-    store_type = store_type_of(diskfmt)
-
-    adata = adata_with_obs(col=make())
-    errors = list(iter_unwriteable(adata, store_type=store_type))
-    assert [path for path, _ in errors] == ["/obs/col"]
-    assert isinstance(errors[0][1], exc_type)
-    assert re.search(hint, exception_notes(errors[0][1]) + str(errors[0][1]), re.DOTALL)
-    assert adata.unwriteable(store_type=store_type)
-
-    # the writer raises the same type
-    adata = adata_with_obs(col=make())
-    with (
-        ad.settings.override(validate_before_write=False),
-        pytest.raises(exc_type) as exc_info,
-    ):
-        write_and_read(adata, diskfmt, diskfmt_store)
-    assert re.search(
-        hint, exception_notes(exc_info.value) + str(exc_info.value), re.DOTALL
-    )
-    assert re.search(r"'col'", str(exc_info.value) + exception_notes(exc_info.value))
-
-    # one problem is raised as is, not as a group
-    adata = adata_with_obs(col=make())
-    with (
-        ad.settings.override(validate_before_write=True),
-        pytest.raises(exc_type) as exc_info,
-    ):
-        write_and_read(adata, diskfmt, diskfmt_store)
-    assert "Element: /obs/col" in exception_notes(exc_info.value)
+    """Columns without a writer raise the registry error, noting the column and a way out."""
+    adata = _adata_with_obs(col=values)
+    with pytest.raises(IORegistryError) as exc_info:
+        getattr(adata, f"write_{diskfmt}")(diskfmt_store)
+    notes = "\n".join(exc_info.value.__notes__)
+    assert "Column 'col' (dtype " in notes
+    assert re.search(hint, notes, re.DOTALL)
 
 
 @pytest.mark.parametrize(
@@ -217,10 +117,9 @@ def test_write_object_column_converted(
     orig = ad.AnnData(obs=pd.DataFrame({"col": col}), var=pd.DataFrame(index=col.index))
     # `varm` dataframes go through the same code path
     orig.varm["df"] = pd.DataFrame({"col": col.to_numpy()}, index=orig.var_names)
-    assert list(iter_unwriteable(orig)) == []
+    assert not orig.unwriteable()
 
-    with ad.settings.override(validate_before_write=True):
-        getattr(orig, f"write_{diskfmt}")(diskfmt_store)
+    getattr(orig, f"write_{diskfmt}")(diskfmt_store)
     # The in-memory object is not modified by writing
     assert orig.obs["col"].dtype == object
     curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
@@ -286,10 +185,6 @@ def test_write_object_column_unconvertible(
     col = pd.Series(values, index=[f"c{i}" for i in range(len(values))], dtype=object)
     orig = ad.AnnData(obs=pd.DataFrame({"col": col}))
     assert orig.obs["col"].dtype == object
-    errors = list(iter_unwriteable(orig, store_type=store_type_of(diskfmt)))
-    assert [(p, type(e)) for p, e in errors] == [
-        ("/obs/col", UnsupportedColumnTypeError)
-    ]
     with pytest.raises(TypeError, match=rf"column 'col'.*{match}"):
         getattr(orig, f"write_{diskfmt}")(
             diskfmt_store, convert_strings_to_categoricals=False
@@ -473,10 +368,10 @@ def test_write_object_column_longdouble_lossy(
     tail = [None] if with_missing else []
     values = np.array([x, 0.5, *tail], dtype=object)
     with pytest.raises(TypeError, match=r"exactly as float64"):
-        _object_column_to_writable(values, path="col")
+        _object_column_to_writable(values, name="col")
     exact = np.array([cls(sign * 0.5), 2.0, *tail], dtype=object)
     np.testing.assert_array_equal(
-        _object_column_to_writable(exact, path="col"),
+        _object_column_to_writable(exact, name="col"),
         np.array([sign * 0.5, 2.0, *([np.nan] if with_missing else [])]),
     )
 
@@ -494,7 +389,7 @@ def test_write_object_column_int_keeps_exotic_missing(missing: object) -> None:
     assert pd.api.types.infer_dtype(values, skipna=True) == "integer"
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        converted = _object_column_to_writable(values, path="col")
+        converted = _object_column_to_writable(values, name="col")
     assert isinstance(converted, pd.arrays.IntegerArray)
     assert converted.isna().tolist() == [False, True, False]
     assert converted[[0, 2]].tolist() == [1, 3]
@@ -507,50 +402,9 @@ def test_write_object_column_nan_distinct_from_na() -> None:
     values = np.array([0.5, np.nan, None], dtype=object)
     with pd.option_context("future.distinguish_nan_and_na", True):  # noqa: FBT003
         np.testing.assert_array_equal(
-            _object_column_to_writable(values, path="col"),
+            _object_column_to_writable(values, name="col"),
             np.array([0.5, np.nan, np.nan]),
         )
-
-
-@pytest.mark.parametrize("dtype", ["Float64", "Float32"])
-@pytest.mark.parametrize("distinguish", [False, True], ids=["collapse", "distinguish"])
-def test_nullable_float_passthrough(
-    *,
-    diskfmt: Literal["h5ad", "zarr"],
-    diskfmt_store: Path | MemoryStore,
-    dtype: str,
-    distinguish: bool,
-) -> None:
-    """Nullable floats are never converted: a masked NA and an unmasked NaN stay distinct."""
-    if not hasattr(pd.options.future, "distinguish_nan_and_na"):
-        pytest.skip("pandas has no `future.distinguish_nan_and_na` option")
-    store_type = store_type_of(diskfmt)
-    with pd.option_context("future.distinguish_nan_and_na", distinguish):
-        values = pd.arrays.FloatingArray(
-            np.array([1.5, 0.0, np.nan], dtype=dtype.lower()),
-            np.array([False, True, False]),
-        )
-        before = values.copy()
-        assert normalize_column(values, path="col") is values
-        pd.testing.assert_extension_array_equal(values, before)
-        assert values.isna().tolist() == [False, True, False]
-
-        adata = adata_with_obs(col=pd.Series(values, index=obs_index()))
-        errors = list(iter_unwriteable(adata, store_type=store_type))
-        assert [path for path, _ in errors] == ["/obs/col"]
-        assert isinstance(errors[0][1], IORegistryError)
-        assert "no on-disk encoding for nullable floats" in exception_notes(
-            errors[0][1]
-        )
-        pd.testing.assert_extension_array_equal(
-            as_dataframe(adata.obs)["col"].array, before
-        )
-        with (
-            ad.settings.override(validate_before_write=False),
-            pytest.raises(IORegistryError) as exc_info,
-        ):
-            write_and_read(adata, diskfmt, diskfmt_store)
-        assert "na_value=np.nan" in exception_notes(exc_info.value)
 
 
 @pytest.mark.parametrize(
@@ -569,73 +423,10 @@ def test_normalize_column_idempotent_and_non_mutating(
     values: np.ndarray | ExtensionArray,
 ) -> None:
     original = pd.Series(values, copy=True)
-    once = normalize_column(values, path="col")
+    once = normalize_column(values, name="col")
     # already writable: returned as is
-    assert normalize_column(once, path="col") is once
+    assert normalize_column(once, name="col") is once
     pd.testing.assert_series_equal(pd.Series(values), original)
-
-
-@pytest.mark.parametrize("copier", ["pickle", "copy"])
-def test_unsupported_object_column_error_roundtrips(copier: str) -> None:
-    """Errors from worker processes arrive pickled, so they must survive it."""
-    with pytest.raises(UnsupportedColumnTypeError) as exc_info:
-        normalize_column(np.array([1, "a", None], dtype=object), path="/obs/col")
-    e = exc_info.value
-    e.add_note("Element: /obs/col")
-    restored = pickle.loads(pickle.dumps(e)) if copier == "pickle" else copy.copy(e)
-    assert type(restored) is UnsupportedColumnTypeError
-    assert str(restored) == str(e)
-    assert str(e).startswith(
-        "Cannot write column '/obs/col' (dtype object, inferred as 'mixed-integer'): "
-    )
-    assert exception_notes(restored) == "Element: /obs/col"
-    assert (restored.path, restored.kind) == ("/obs/col", "mixed-integer")
-
-
-@pytest.mark.parametrize("storage", ["python", "pyarrow"])
-@pytest.mark.parametrize(
-    "allow", [False, None, True], ids=["allow=F", "allow=N", "allow=T"]
-)
-@pytest.mark.parametrize("categorize", [True, False], ids=["s2c", "no-s2c"])
-def test_nullable_string_columns(
-    *,
-    diskfmt: Literal["h5ad", "zarr"],
-    diskfmt_store: Path | MemoryStore,
-    storage: str,
-    allow: bool | None,
-    categorize: bool,
-) -> None:
-    """Nullable string columns with missing values write and read back.
-
-    With `allow_write_nullable_strings=False` the writer refuses missing values,
-    unless the column was converted to categorical first. With `None`, the writer
-    follows `pd.options.future.infer_string` (always on in pandas >= 3).
-    """
-    col = obs_column(["a", None, "a"], f"string[{storage}]")
-    adata = adata_with_obs(col=col)
-    with ad.settings.override(
-        validate_before_write=True, allow_write_nullable_strings=allow
-    ):
-        if allow is False and not categorize:
-            with pytest.raises(ValueError, match=r"with missing values"):
-                getattr(adata, f"write_{diskfmt}")(
-                    diskfmt_store, convert_strings_to_categoricals=categorize
-                )
-            return
-        if allow is None and not categorize and not pd.options.future.infer_string:
-            # pandas < 3 without `infer_string`: the writer wants a choice
-            with pytest.raises(RuntimeError, match=r"allow_write_nullable_strings"):
-                getattr(adata, f"write_{diskfmt}")(
-                    diskfmt_store, convert_strings_to_categoricals=categorize
-                )
-            return
-        getattr(adata, f"write_{diskfmt}")(
-            diskfmt_store, convert_strings_to_categoricals=categorize
-        )
-    read = as_dataframe(getattr(ad, f"read_{diskfmt}")(diskfmt_store).obs)["col"]
-    assert read.dtype == ("category" if categorize else "string")
-    assert read.isna().tolist() == [False, True, False]
-    assert read.dropna().tolist() == ["a", "a"]
 
 
 @pytest.mark.parametrize("categorize", [True, False], ids=["s2c", "no-s2c"])
@@ -649,11 +440,11 @@ def test_categorical_column_set_unchanged(
 
     See https://github.com/scverse/anndata/issues/2610
     """
-    adata = adata_with_obs(
-        repeated=obs_column(["a", "a", "b"]),
-        unique=obs_column(["a", "b", "c"]),
-        obj=obs_column(np.array([1, None, 3], dtype=object)),
-        cat=obs_column(["x", "y", "x"]).astype("category"),
+    adata = _adata_with_obs(
+        repeated=["a", "a", "b"],
+        unique=["a", "b", "c"],
+        obj=np.array([1, None, 3], dtype=object),
+        cat=pd.Categorical(["x", "y", "x"]),
     )
     expected = {"repeated", "cat"} if categorize else {"cat"}
     getattr(adata, f"write_{diskfmt}")(
@@ -703,101 +494,105 @@ def test_custom_registered_writer_is_honoured(
     *, diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore
 ) -> None:
     """Unknown extension arrays are passed to the registry, not rejected up front."""
-    adata = adata_with_obs(
-        period=obs_column(pd.period_range("2020-01", periods=3, freq="M"))
-    )
-    assert list(iter_unwriteable(adata)) == []
-    with ad.settings.override(validate_before_write=True):
+    adata = _adata_with_obs(period=pd.period_range("2020-01", periods=3, freq="M"))
+    assert not adata.unwriteable()
+    getattr(adata, f"write_{diskfmt}")(diskfmt_store)
+
+
+def test_use_object_column_converted_like_full_write(
+    *, diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore
+) -> None:
+    """`use=A.obs[col]` writes an object column the way a full write does."""
+    adata = _adata_with_obs(col=[1, 2, 3])
+    getattr(adata, f"write_{diskfmt}")(diskfmt_store)
+    adata.obs["o"] = np.array([1, None, 3], dtype=object)
+    getattr(adata, f"write_{diskfmt}")(diskfmt_store, use=A.obs["o"])
+    read: ad.AnnData = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
+    assert isinstance(read.obs, pd.DataFrame)
+    assert read.obs["o"].dtype == "Int64"
+    assert read.obs["o"].isna().tolist() == [False, True, False]
+    assert adata.obs["o"].dtype == object
+
+
+def test_use_unconvertible_object_column_writes_nothing(
+    *, diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore
+) -> None:
+    """All parts of `use=` are converted before the first one is written."""
+    adata = _adata_with_obs(col=[1, 2, 3])
+    getattr(adata, f"write_{diskfmt}")(diskfmt_store)
+    adata.obsm["good"] = np.ones((3, 2))
+    adata.obs["mixed"] = np.array([1, "a", None], dtype=object)
+    with pytest.raises(UnsupportedColumnTypeError, match=r"column 'mixed'"):
         getattr(adata, f"write_{diskfmt}")(
-            diskfmt_store, convert_strings_to_categoricals=False
+            diskfmt_store, use=[A.obsm["good"], A.obs["mixed"]]
         )
+    read: ad.AnnData = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
+    assert "good" not in read.obsm
+    assert "mixed" not in read.obs
 
 
-_BOTH = frozenset({"h5ad", "zarr"})
-CATEGORY_FAMILIES: dict[
-    str, tuple[Callable[[], pd.Categorical[Any]], frozenset[str]]
-] = {
-    # name: (factory, formats the preflight accepts them for)
-    "str": (lambda: pd.Categorical(["a", "b", "a"]), _BOTH),
-    "Int64": (lambda: pd.Categorical(pd.array([1, None, 2], dtype="Int64")), _BOTH),
-    "Float64": (
-        lambda: pd.Categorical(pd.array([1.5, 2.0, 1.5], dtype="Float64")),
-        _BOTH,
-    ),
-    "arrow-int": (
-        lambda: pd.Categorical(pd.array([1, 2, 1], dtype="int64[pyarrow]")),
-        _BOTH,
-    ),
-    "datetime": (
-        lambda: pd.Categorical(
-            pd.to_datetime(["2020-01-01", "2021-01-01", "2020-01-01"])
-        ),
-        _BOTH,
-    ),
-    "timedelta": (lambda: pd.Categorical(pd.to_timedelta(["1h", "2h", "1h"])), _BOTH),
-    "interval": (
-        lambda: pd.Categorical.from_codes(
-            [0, 1, 0],
-            dtype=pd.CategoricalDtype(pd.IntervalIndex.from_tuples([(0, 1), (1, 2)])),
-        ),
-        frozenset(),
-    ),
-    "period": (
-        lambda: pd.Categorical(pd.period_range("2020-01", periods=3, freq="M")),
-        frozenset({"zarr"}),
-    ),
-    "arrow-str": (
-        lambda: pd.Categorical(
-            pd.Series(
-                ["a", "b", "a"],
-                dtype=pd.ArrowDtype(pytest.importorskip("pyarrow").string()),
-            ).array
-        ),
-        _BOTH,
-    ),
-    "datetime-tz": (
-        lambda: pd.Categorical(
-            pd.to_datetime(["2020-01-01", "2021-01-01", "2020-01-01"]).tz_localize(
-                "UTC"
-            )
-        ),
-        frozenset({"zarr"}),
-    ),
-}
-
-
-@pytest.mark.parametrize("family", list(CATEGORY_FAMILIES))
-def test_categorical_categories_agreement(
+@pytest.mark.parametrize(
+    ("values", "unwriteable"),
+    [
+        pytest.param([1, None, 3], False, id="int-none"),
+        pytest.param([True, None, False], False, id="bool-none"),
+        # written as categorical: the writers call `strings_to_categoricals`
+        pytest.param(["a", None, "b"], False, id="str-none"),
+        pytest.param([1, "a", None], True, id="mixed"),
+        pytest.param([b"a", None, b"b"], True, id="bytes-none"),
+        pytest.param([None, None, None], True, id="all-missing"),
+    ],
+)
+@pytest.mark.parametrize("where", ["obs", "raw.var"])
+def test_unwriteable_object_column(
     *,
     diskfmt: Literal["h5ad", "zarr"],
     diskfmt_store: Path | MemoryStore,
-    family: str,
+    values: list[object],
+    unwriteable: bool,
+    where: str,
 ) -> None:
-    """The walker judges categories on what the writer stores (`to_numpy()`).
-
-    For object arrays of non-strings (intervals, periods, tz-aware datetimes) h5py
-    fails and zarr stores strings; intervals are refused on zarr too, as
-    `unwriteable` always did.
-    """
-    make, accepted_for = CATEGORY_FAMILIES[family]
-    accepted = diskfmt in accepted_for
-    store_type = store_type_of(diskfmt)
-    adata = adata_with_obs(cat=pd.Series(make(), index=obs_index()))
-    errors = list(iter_unwriteable(adata, store_type=store_type))
-    assert [p for p, _ in errors] == ([] if accepted else ["/obs/cat/categories"])
-    assert adata.unwriteable(store_type=store_type) is not accepted
-    if not accepted:
-        assert isinstance(errors[0][1], TypeError)
-        assert "Cannot write categories" in str(errors[0][1])
-        with ad.settings.override(validate_before_write=True), pytest.raises(TypeError):
-            write_and_read(adata, diskfmt, diskfmt_store)
-    if diskfmt == "h5ad" and (not accepted or family in {"datetime", "timedelta"}):
-        # h5py refuses object and datetime64/timedelta64 data
-        with pytest.raises(TypeError, match=r"convert|conversion path"):
-            write_and_read(adata, diskfmt, diskfmt_store)
+    """`unwriteable()` is true exactly when a default write raises for an object column."""
+    col = np.array(values, dtype=object)
+    if where == "obs":
+        adata = _adata_with_obs(col=col)
+    else:
+        var = pd.DataFrame({"col": col}, index=[f"g{i}" for i in range(3)])
+        adata = ad.AnnData(np.zeros((2, 3)), var=var)
+        adata.raw = adata
+        adata.var = pd.DataFrame(index=adata.var_names)
+    assert adata.unwriteable() is unwriteable
+    write = getattr(adata, f"write_{diskfmt}")
+    if unwriteable:
+        with pytest.raises(UnsupportedColumnTypeError, match=r"column 'col'"):
+            write(diskfmt_store)
         return
-    read = as_dataframe(write_and_read(adata, diskfmt, diskfmt_store).obs)["cat"]
-    assert read.dtype == "category"
-    assert read.isna().tolist() == adata.obs["cat"].isna().tolist()
-    if family in {"interval", "period", "datetime-tz"}:  # zarr stores them as strings
-        assert pd.api.types.is_string_dtype(read.cat.categories.dtype)
+    write(diskfmt_store)
+    read: ad.AnnData = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
+    if where == "obs":
+        frame = read.obs
+    else:
+        assert read.raw is not None
+        frame = read.raw.var
+    assert isinstance(frame, pd.DataFrame)
+    assert frame["col"].isna().tolist() == pd.isna(col).tolist()
+
+
+def test_unwriteable_outer_concat_strings(
+    *, diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore
+) -> None:
+    """Strings with missing values from an outer join (object on pandas < 3) are writable."""
+    adata = ad.concat(
+        [
+            ad.AnnData(obs=pd.DataFrame({"s": ["x", "y"]}, index=["a0", "a1"])),
+            ad.AnnData(obs=pd.DataFrame({"t": ["z", "z"]}, index=["b0", "b1"])),
+        ],
+        join="outer",
+    )
+    assert isinstance(adata.obs, pd.DataFrame)
+    assert adata.obs["s"].isna().tolist() == [False, False, True, True]
+    assert not adata.unwriteable()
+    getattr(adata, f"write_{diskfmt}")(diskfmt_store)
+    read: ad.AnnData = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
+    assert isinstance(read.obs, pd.DataFrame)
+    assert read.obs["s"].dtype == "category"

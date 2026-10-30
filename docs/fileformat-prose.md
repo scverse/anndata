@@ -606,7 +606,7 @@ with an error naming the column, its dtype, and what to convert it to.
 | In-memory column | On disk |
 |---|---|
 | numpy numeric, boolean, or complex array | `array` |
-| {class}`~pandas.Categorical` | `categorical`, with the categories stored as `categories.to_numpy()`: string, numeric and boolean categories work on both formats, datetime and timedelta categories only on `zarr`. Interval, period and tz-aware datetime categories become arbitrary objects, which `h5ad` cannot store and `zarr` stores as strings ({meth}`~anndata.AnnData.unwriteable` refuses interval categories on `zarr` too). Object-dtype categories are assumed to hold strings and are not checked value by value |
+| {class}`~pandas.Categorical` | `categorical`, with the categories stored as `categories.to_numpy()` (not converted) |
 | nullable integer (`Int8` … `UInt64`) | `nullable-integer` |
 | nullable boolean (`boolean`) | `nullable-boolean` |
 | nullable string (`string`, `string[pyarrow]`, `str`) | `nullable-string-array`; see {attr}`anndata.settings.allow_write_nullable_strings` |
@@ -619,7 +619,11 @@ with an error naming the column, its dtype, and what to convert it to.
 | datetime / timedelta (naive or tz-aware) | not supported yet, see {issue}`2238`: convert e.g. with `.astype(str)` or `.astype("int64")` |
 | pyarrow-backed numeric, boolean, timestamp, list, … (`int64[pyarrow]`, …) | not supported: `.convert_dtypes(dtype_backend="numpy_nullable")` or `.astype(...)` |
 | `Period`, `Interval`, `Sparse`, any other extension array | not supported, unless a writer has been registered for it |
-| object-dtype index | neither converted nor checked: strings are written as `string-array`, other objects fail on `h5ad` and are stored as strings on `zarr` |
+| object-dtype index | not converted: strings are written as `string-array`, other objects fail on `h5ad` and are stored as strings on `zarr` |
+
+Unless `convert_strings_to_categoricals=False`, the writers first call
+{meth}`~anndata.AnnData.strings_to_categoricals` on `obs`, `var` and `raw.var`,
+so string columns with repeated or missing values there are written as `categorical`.
 
 The object-dtype conversions are a canonicalisation, not a lossless round trip:
 the different missing markers (`None`, `pd.NA`, `NaN`) collapse into one,

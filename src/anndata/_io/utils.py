@@ -10,7 +10,6 @@ import numpy as np
 import pandas as pd
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
-from .._settings import settings
 from ..utils import warn
 
 if TYPE_CHECKING:
@@ -189,12 +188,7 @@ def write_use(
 
     # resolve everything first so an invalid accessor fails before anything is written
     uses = use if isinstance(use, Sequence) else [use]
-    parts = [_resolve_use(f, adata, u) for u in uses]
-    if settings.validate_before_write:
-        from .specs.validate import raise_if_unwriteable_parts
-
-        raise_if_unwriteable_parts(parts, store=f)
-    for parent, key, elem in parts:
+    for parent, key, elem in [_resolve_use(f, adata, u) for u in uses]:
         if parent is not None and parent not in f:
             write_elem(f, parent, {})
         write_elem(
@@ -227,8 +221,7 @@ def _resolve_use(  # noqa: PLR0911
                 msg = f"Cannot write column {col!r}: it is the name of the {dim} index."
                 raise ValueError(msg)
             # what `write_dataframe` writes for each column
-            values = acc.get(adata)[col]._values
-            return dim, col, normalize_column(values, path=col)
+            return dim, col, normalize_column(acc.get(adata)[col]._values, name=col)
         case AdRef():
             msg = f"Cannot write {use}: only `obs`/`var` columns can be written as single vectors."
             raise ValueError(msg)

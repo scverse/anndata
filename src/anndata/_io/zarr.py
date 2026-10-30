@@ -15,13 +15,11 @@ from scipy import sparse
 from zarr.errors import GroupNotFoundError
 
 from .._core.anndata import AnnData
-from .._settings import settings
 from .._warnings import OldFormatWarning
 from ..compat import _clean_uns, _from_fixed_length_strings
 from ..experimental import read_dispatched, write_dispatched
 from ..utils import warn
 from .specs import read_elem
-from .specs.validate import raise_if_unwriteable
 from .utils import (
     _read_legacy_raw,
     no_write_dataset_2d,
@@ -108,8 +106,6 @@ def write_zarr(
         adata.strings_to_categoricals()
         if adata.raw is not None:
             adata.strings_to_categoricals(adata.raw.var)
-    if settings.validate_before_write and use is None:  # `write_use` checks its parts
-        raise_if_unwriteable(adata, store_type="zarr")
 
     def callback(
         write_func, store, elem_name: str, elem, *, dataset_kwargs, iospec
