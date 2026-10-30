@@ -445,9 +445,8 @@ def _subset_dask(a: DaskArray, subset_idx: NumpySubsetIdx) -> DaskArray:
     if len(subset_idx) == 1:
         return _subset_dask_axis(a, subset_idx[0], axis=0)
     rows, cols = subset_idx
-    # Subset the axis split into more chunks first: that can drop whole chunks, and for
-    # sparse chunks (split along their major axis) it is a cheap slice of `indptr`,
-    # which leaves fewer stored values for the subset along the other axis.
+    # Subset along the axis with more chunks first: that drops the chunks without selected
+    # items and shrinks the others, so the subset along the other axis has less to go through.
     if a.numblocks[1] > a.numblocks[0]:
         return _subset_dask_axis(_subset_dask_axis(a, cols, axis=1), rows, axis=0)
     return _subset_dask_axis(_subset_dask_axis(a, rows, axis=0), cols, axis=1)
