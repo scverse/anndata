@@ -9,11 +9,10 @@ import h5py
 import numpy as np
 import pandas as pd
 import zarr
-from scipy import sparse
 
 import anndata as ad
 from anndata._core.file_backing import filename, get_elem_name
-from anndata._core.sparse_dataset import is_gpu
+from anndata._core.sparse_dataset import _memory_format
 from anndata._core.xarray import Dataset2D, requires_xarray
 from anndata.compat import DaskArray, XDataset, XVariable, pandas_as_str
 
@@ -136,7 +135,6 @@ def read_sparse_as_dask(
     _reader: LazyReader,
     # the reader registry fixes this signature; only `tuple[int, int]` is accepted
     chunks: tuple[int | None, ...] | None = None,
-    meta: CSMatrix | CSArray | CupyCSMatrix | None = None,
 ) -> DaskArray:
     import dask.array as da
 
@@ -182,31 +180,10 @@ def read_sparse_as_dask(
         make_chunk,
         dtype=dtype,
         chunks=chunk_layout,
-        meta=_sparse_meta(meta, is_csc=is_csc, dtype=dtype),
+        # the type the chunks are read as, e.g. CuPy matrices if zarr reads into GPU memory
+        meta=_memory_format("csc" if is_csc else "csr")((0, 0), dtype=dtype),
     )
     return da_mtx
-
-
-def _sparse_meta(
-    meta: CSMatrix | CSArray | CupyCSMatrix | None, *, is_csc: bool, dtype: np.dtype
-) -> CSMatrix | CSArray | CupyCSMatrix:
-    """An empty matrix of the type the blocks will have.
-
-    Defaults to a :mod:`cupyx` matrix if :mod:`zarr` reads into GPU memory (:func:`zarr.config.enable_gpu`),
-    and to a :mod:`scipy` matrix otherwise.
-    """
-    fmt = "csc" if is_csc else "csr"
-    if meta is None:
-        if is_gpu():
-            import cupyx.scipy.sparse as cpx
-
-            return getattr(cpx, f"{fmt}_matrix")((0, 0), dtype=dtype)
-        return getattr(sparse, f"{fmt}_matrix")((0, 0), dtype=dtype)
-    if getattr(meta, "format", None) != fmt:
-        msg = f"`meta` must be a {fmt.upper()} matrix like the stored one, got {type(meta).__name__}."
-        raise ValueError(msg)
-    # only the type matters: the dtype is the stored one
-    return type(meta)((0, 0), dtype=dtype)
 
 
 def resolve_chunks(
