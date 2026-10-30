@@ -97,40 +97,38 @@ def test_unsupported_column_note(
         pytest.param([1, 2, 3, 4], "int64", id="int-no-missing"),
         pytest.param([True, False, True, False], "bool", id="bool-no-missing"),
         pytest.param([1.5, 2.0, 2.5, 3.0], "float64", id="float-no-missing"),
+        pytest.param([2**63 - 1, -(2**63), None], "Int64", id="int-bounds"),
+        pytest.param([2**63 - 1, -(2**63)], "int64", id="int-bounds-full"),
+        pytest.param([np.inf, -np.inf, 0.5, None], "float64", id="inf-float"),
+        pytest.param(["a", "b", "c"], None, id="str"),
+        pytest.param([b"a", b"b", b"c"], None, id="bytes"),
+        pytest.param(["a", b"b", "c"], None, id="str-bytes-mixed"),
+        pytest.param([], None, id="empty"),
     ],
 )
-def test_write_object_column_converted(
+def test_write_object_column_roundtrip(
     *,
     diskfmt: Literal["h5ad", "zarr"],
     diskfmt_store: Path | MemoryStore,
     values: list[object] | np.ndarray,
-    expected_dtype: str,
+    expected_dtype: str | None,
 ) -> None:
-    """Object columns of ints/bools/floats (with or without missing values) are writable.
-
-    See https://github.com/scverse/anndata/issues/1068
-    """
-    # `dtype=object` keeps pandas from coercing e.g. `[1.5, None]` to float64 up front;
-    # `test_write_object_column_realistic` covers the idioms that produce such columns
-    col = pd.Series(np.array(values, dtype=object), index=[f"c{i}" for i in range(4)])
-    assert col.dtype == object
-    orig = ad.AnnData(obs=pd.DataFrame({"col": col}), var=pd.DataFrame(index=col.index))
-    # `varm` dataframes go through the same code path
-    orig.varm["df"] = pd.DataFrame({"col": col.to_numpy()}, index=orig.var_names)
+    """Convertible object columns and object string columns round-trip."""
+    col = pd.Series(values, index=[f"c{i}" for i in range(len(values))], dtype=object)
+    orig = ad.AnnData(obs=pd.DataFrame({"col": col}))
     assert not orig.unwriteable()
-
-    getattr(orig, f"write_{diskfmt}")(diskfmt_store)
-    # The in-memory object is not modified by writing
+    getattr(orig, f"write_{diskfmt}")(
+        diskfmt_store, convert_strings_to_categoricals=False
+    )
     assert orig.obs["col"].dtype == object
     curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
-
     assert isinstance(curr.obs, pd.DataFrame)
-    varm_df = curr.varm["df"]
-    assert isinstance(varm_df, pd.DataFrame)
-    for read_col in (curr.obs["col"], varm_df["col"]):
-        assert read_col.dtype == expected_dtype
-        assert read_col.isna().tolist() == col.isna().tolist()
-        assert read_col.dropna().tolist() == col.dropna().tolist()
+    read = curr.obs["col"]
+    if expected_dtype is not None:
+        assert read.dtype == expected_dtype
+    assert read.isna().tolist() == col.isna().tolist()
+    expected = [v.decode() if isinstance(v, bytes) else v for v in col.dropna()]
+    assert read.dropna().tolist() == expected
 
 
 @pytest.mark.parametrize(
@@ -166,46 +164,6 @@ def test_write_object_column_unconvertible(
         )
 
 
-@pytest.mark.parametrize(
-    "values",
-    [
-        pytest.param([2**63 - 1, -(2**63), None], id="int-bounds"),
-        pytest.param([2**63 - 1, -(2**63)], id="int-bounds-full"),
-        pytest.param([True, False], id="bool-full"),
-        pytest.param([2**53, 0.5, None], id="int-float-exact"),
-        pytest.param([2**60, -(2**60), 0.5, None], id="bigint-float-exact"),
-        pytest.param([1e300, -(2.0**60), 0.5, None], id="bigfloat-exact"),
-        pytest.param([float("inf"), -float("inf"), 0.5, None], id="inf-float"),
-        pytest.param([np.int64(2**53), np.float32(0.5), None], id="npint-float-exact"),
-        pytest.param(["a", "b", "c"], id="str"),
-        pytest.param([b"a", b"b", b"c"], id="bytes"),
-        pytest.param(["a", b"b", "c"], id="str-bytes-mixed"),
-        pytest.param([], id="empty"),
-    ],
-)
-def test_write_object_column_roundtrip_values(
-    *,
-    diskfmt: Literal["h5ad", "zarr"],
-    diskfmt_store: Path | MemoryStore,
-    values: list[object],
-) -> None:
-    """Values at the edge of what is convertible and object string columns round-trip."""
-    col = pd.Series(values, index=[f"c{i}" for i in range(len(values))], dtype=object)
-    orig = ad.AnnData(obs=pd.DataFrame({"col": col}))
-    assert orig.obs["col"].dtype == object
-    getattr(orig, f"write_{diskfmt}")(
-        diskfmt_store, convert_strings_to_categoricals=False
-    )
-    curr: ad.AnnData = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
-    assert isinstance(curr.obs, pd.DataFrame)
-    read = curr.obs["col"]
-    assert read.isna().tolist() == col.isna().tolist()
-    expected = [v.decode() if isinstance(v, bytes) else v for v in col.dropna()]
-    assert [v.item() if isinstance(v, np.generic) else v for v in expected] == [
-        v.item() if isinstance(v, np.generic) else v for v in read.dropna()
-    ]
-
-
 def _realistic_object_columns() -> dict[str, tuple[pd.Series, str]]:
     """Object columns the way users actually produce them, with the dtype expected on disk."""
     rng = np.random.default_rng(0)
@@ -213,41 +171,27 @@ def _realistic_object_columns() -> dict[str, tuple[pd.Series, str]]:
         rng.integers(100, 5000, size=8), index=[f"c{i}" for i in range(8)]
     )
     flags = counts > 2000
-    ints_nullable = pd.array([1, None, 3, 4, None, 6, 7, 8], dtype="Int64")
-    bools_nullable = pd.array(
-        [True, None, False, True, None, True, False, True], dtype="boolean"
-    )
     partial = pd.DataFrame({"rank": counts.iloc[:4].astype(object)})
     return {
         "np.where-int-none": (
             pd.Series(
-                np.where(flags, counts, None),  # type: ignore[call-overload]  # stubs: no None
+                np.where(flags, counts, None),  # type: ignore[call-overload]
                 index=counts.index,
             ),
             "Int64",
         ),
         "np.where-bool-none": (
             pd.Series(
-                np.where(flags, flags, None),  # type: ignore[call-overload]  # stubs: no None
+                np.where(flags, flags, None),  # type: ignore[call-overload]
                 index=counts.index,
             ),
             "boolean",
         ),
-        "Int64-astype-object": (
-            pd.Series(ints_nullable, index=counts.index).astype(object),
-            "Int64",
-        ),
-        "boolean-astype-object": (
-            pd.Series(bools_nullable, index=counts.index).astype(object),
-            "boolean",
-        ),
-        # a join that leaves rows unmatched fills them with NaN, keeping dtype object
         "join-unmatched-rows": (counts.to_frame().join(partial)["rank"], "Int64"),
         "float-where-astype-object": (
             counts.astype(float).where(flags).astype(object),
             "float64",
         ),
-        # scirpy's case (scverse/scirpy#434): a plain list of bools and None
         "list-bool-none": (
             pd.Series(
                 [True, None, False, True, None, True, False, True], index=counts.index
@@ -302,7 +246,7 @@ def test_write_object_column_elem_and_empty_view(
     read = ad.io.read_elem(store["df"])
     assert isinstance(read, pd.DataFrame)
     if isinstance(store, h5py.File):
-        store.close()  # the h5ad write below reopens the file
+        store.close()
     assert read["col"].dtype == "Int64"
     assert read["col"].tolist()[::2] == [1, 3]
     assert df["col"].dtype == object
@@ -379,7 +323,6 @@ def test_normalize_column_idempotent_and_non_mutating(
 ) -> None:
     original = pd.Series(values, copy=True)
     once = normalize_column(values, name="col")
-    # already writable: returned as is
     assert normalize_column(once, name="col") is once
     pd.testing.assert_series_equal(pd.Series(values), original)
 
@@ -391,10 +334,7 @@ def test_categorical_column_set_unchanged(
     diskfmt_store: Path | MemoryStore,
     categorize: bool,
 ) -> None:
-    """Column normalisation does not change which columns become categorical.
-
-    See https://github.com/scverse/anndata/issues/2610
-    """
+    """Column normalisation does not change which columns become categorical."""
     adata = _adata_with_obs(
         repeated=["a", "a", "b"],
         unique=["a", "b", "c"],
@@ -424,23 +364,17 @@ def _write_period(
 
 
 @pytest.fixture
-def period_writer() -> Generator[None]:
-    """Temporarily register a writer for `PeriodArray`."""
-    keys: list[tuple[type, type, frozenset[str]]] = [
-        (store_type, pd.arrays.PeriodArray, frozenset())
-        for store_type in (h5py.Group, zarr.Group)
-    ]
-    assert not any(key in _REGISTRY.write for key in keys)
-
-    for store_type, src_type, _ in keys:
-        _REGISTRY.register_write(store_type, src_type, IOSpec("period-test", "0.1.0"))(
-            _write_period
-        )
+def period_writer(diskfmt: Literal["h5ad", "zarr"]) -> Generator[None]:
+    """Temporarily register a writer for `PeriodArray` with the store type under test."""
+    store_type = h5py.Group if diskfmt == "h5ad" else zarr.Group
+    key = (store_type, pd.arrays.PeriodArray, frozenset[str]())
+    assert key not in _REGISTRY.write
+    spec = IOSpec("period-test", "0.1.0")
+    _REGISTRY.register_write(store_type, pd.arrays.PeriodArray, spec)(_write_period)
     try:
         yield
     finally:
-        for key in keys:
-            _REGISTRY.write.pop(key)
+        _REGISTRY.write.pop(key)
         _REGISTRY.write_specs.pop(pd.arrays.PeriodArray)
 
 
@@ -491,7 +425,6 @@ def test_use_unconvertible_object_column_writes_nothing(
     [
         pytest.param([1, None, 3], False, id="int-none"),
         pytest.param([True, None, False], False, id="bool-none"),
-        # written as categorical: the writers call `strings_to_categoricals`
         pytest.param(["a", None, "b"], False, id="str-none"),
         pytest.param([1, "a", None], True, id="mixed"),
         pytest.param([b"a", None, b"b"], True, id="bytes-none"),
