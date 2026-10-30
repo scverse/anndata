@@ -9,10 +9,10 @@ import h5py
 import numpy as np
 import pandas as pd
 import zarr
-from scipy import sparse
 
 import anndata as ad
 from anndata._core.file_backing import filename, get_elem_name
+from anndata._core.sparse_dataset import _memory_format
 from anndata._core.xarray import Dataset2D, requires_xarray
 from anndata.compat import DaskArray, XDataset, XVariable, pandas_as_str
 
@@ -144,6 +144,10 @@ def read_sparse_as_dask(
         dtype = elem["data"].dtype
     else:
         path_or_sparse_dataset = ad.io.sparse_dataset(elem, should_cache_indptr=False)
+        # Open the arrays once here so they are shipped to the tasks with their (fast) codec pipeline
+        # instead of being reopened in every task (where the pipeline choice would race across threads).
+        for attr in ("_data", "_indices", "_indptr"):
+            getattr(path_or_sparse_dataset, attr)
         dtype = path_or_sparse_dataset.dtype
     elem_name = get_elem_name(elem)
     attrs: Mapping[str, Any] = elem.attrs
@@ -171,13 +175,13 @@ def read_sparse_as_dask(
     chunk_layout = (
         (chunks_minor, chunks_major) if is_csc else (chunks_major, chunks_minor)
     )
-    memory_format = sparse.csc_matrix if is_csc else sparse.csr_matrix
     make_chunk = partial(make_dask_chunk, path_or_sparse_dataset, elem_name)
     da_mtx = da.map_blocks(
         make_chunk,
         dtype=dtype,
         chunks=chunk_layout,
-        meta=memory_format((0, 0), dtype=dtype),
+        # the type the chunks are read as, e.g. CuPy matrices if zarr reads into GPU memory
+        meta=_memory_format("csc" if is_csc else "csr")((0, 0), dtype=dtype),
     )
     return da_mtx
 
