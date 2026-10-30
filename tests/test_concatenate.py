@@ -1922,3 +1922,408 @@ def test_concat_sparse_non_numeric_fill_value() -> None:
     b = AnnData(sparse.random(3, 2, format="csr"), var=pd.DataFrame(index=["b", "c"]))
     with pytest.raises(TypeError, match=r"only be filled with numbers"):
         concat([a, b], join="outer", fill_value="x")
+
+
+# ------------------------------------------------------------------
+# aligned_axis_key_join (issue #2374)
+# ------------------------------------------------------------------
+
+
+def _adatas_with_partial_overlap_along_axis(axis_name):
+    """Two AnnData with different on-axis annotation columns and aligned-mapping keys."""
+    if axis_name == "var":
+        obs_a = pd.DataFrame(index=["row1", "row2"])
+        obs_b = pd.DataFrame(index=["row1", "row2"])
+        var_a = pd.DataFrame(
+            {"shared": ["a", "b"], "only_a": [1, 2]}, index=["v1", "v2"]
+        )
+        var_b = pd.DataFrame(
+            {"shared": ["c", "d"], "only_b": [3, 4]}, index=["v3", "v4"]
+        )
+    else:
+        obs_a = pd.DataFrame(
+            {"shared": ["a", "b"], "only_a": [1, 2]}, index=["s1", "s2"]
+        )
+        obs_b = pd.DataFrame(
+            {"shared": ["c", "d"], "only_b": [3, 4]}, index=["s3", "s4"]
+        )
+        var_a = pd.DataFrame(index=["v1", "v2"])
+        var_b = pd.DataFrame(index=["v1", "v2"])
+
+    a = AnnData(
+        X=sparse.csr_matrix(np.eye(2, dtype=np.float64)),
+        obs=obs_a,
+        var=var_a,
+        **{
+            f"{axis_name}m": {
+                "shared_m": np.ones((2, 3)),
+                "only_a_m": np.zeros((2, 3)),
+            }
+        },
+    )
+    b = AnnData(
+        X=sparse.csr_matrix(np.eye(2, dtype=np.float64)),
+        obs=obs_b,
+        var=var_b,
+        **{
+            f"{axis_name}m": {
+                "shared_m": 2 * np.ones((2, 3)),
+                "only_b_m": np.ones((2, 3)),
+            }
+        },
+    )
+    return a, b
+
+
+@pytest.mark.parametrize("axis_name", ["obs", "var"])
+def test_aligned_axis_key_join_default_falls_back_to_join(axis_name):
+    """When `aligned_axis_key_join=None`, the on-axis behaviour matches `join`."""
+    a, b = _adatas_with_partial_overlap_along_axis(axis_name)
+    axis = 0 if axis_name == "obs" else 1
+
+    inner = concat([a, b], axis=axis)
+    inner_explicit = concat([a, b], axis=axis, aligned_axis_key_join=None)
+    assert list(getattr(inner, axis_name).columns) == list(
+        getattr(inner_explicit, axis_name).columns
+    )
+    assert list(getattr(inner, f"{axis_name}m").keys()) == list(
+        getattr(inner_explicit, f"{axis_name}m").keys()
+    )
+    # Inner is the historical default, only "shared" should remain.
+    assert list(getattr(inner, axis_name).columns) == ["shared"]
+    assert list(getattr(inner, f"{axis_name}m").keys()) == ["shared_m"]
+
+
+@pytest.mark.parametrize(
+    ("join", "aligned_axis_key_join", "expected_columns", "expected_keys"),
+    [
+        (
+            "inner",
+            "outer",
+            {"shared", "only_a", "only_b"},
+            {"shared_m", "only_a_m", "only_b_m"},
+        ),
+        ("outer", "inner", {"shared"}, {"shared_m"}),
+    ],
+)
+@pytest.mark.parametrize("axis_name", ["obs", "var"])
+def test_aligned_axis_key_join_controls_on_axis_keys(
+    axis_name, join, aligned_axis_key_join, expected_columns, expected_keys
+):
+    """The key join controls on-axis keys independently of the off-axis join."""
+    a, b = _adatas_with_partial_overlap_along_axis(axis_name)
+    axis = 0 if axis_name == "obs" else 1
+
+    res = concat(
+        [a, b], axis=axis, join=join, aligned_axis_key_join=aligned_axis_key_join
+    )
+    cols = list(getattr(res, axis_name).columns)
+    keys = list(getattr(res, f"{axis_name}m").keys())
+    assert set(cols) == expected_columns
+    assert set(keys) == expected_keys
+
+
+@pytest.mark.parametrize(
+    (
+        "join",
+        "aligned_axis_key_join",
+        "expected_layer_keys",
+        "expected_n_vars",
+        "expected_shared_layer",
+        "expected_only_a_layer",
+        "expected_only_b_layer",
+    ),
+    [
+        (
+            "inner",
+            "outer",
+            {None, "only_a_layer", "only_b_layer", "shared_layer"},
+            2,
+            [[1, 1], [1, 1], [2, 2], [2, 2]],
+            [[7, 7], [7, 7], [0, 0], [0, 0]],
+            [[0, 0], [0, 0], [9, 9], [9, 9]],
+        ),
+        (
+            "outer",
+            "inner",
+            {None, "shared_layer"},
+            3,
+            [[1, 1, 1], [1, 1, 1], [2, 2, np.nan], [2, 2, np.nan]],
+            None,
+            None,
+        ),
+    ],
+)
+def test_aligned_axis_key_join_layer_keys(
+    join,
+    aligned_axis_key_join,
+    expected_layer_keys,
+    expected_n_vars,
+    expected_shared_layer,
+    expected_only_a_layer,
+    expected_only_b_layer,
+):
+    """Layer keys follow the key join; each layer's content follows `join`."""
+    a = AnnData(
+        X=np.ones((2, 3), dtype=np.float64),
+        obs=pd.DataFrame(index=["s1", "s2"]),
+        var=pd.DataFrame(index=["v1", "v2", "v3"]),
+        layers={
+            "shared_layer": np.full((2, 3), 1.0),
+            "only_a_layer": np.full((2, 3), 7.0),
+        },
+    )
+    b = AnnData(
+        X=np.ones((2, 2), dtype=np.float64),
+        obs=pd.DataFrame(index=["s3", "s4"]),
+        var=pd.DataFrame(index=["v1", "v2"]),
+        layers={
+            "shared_layer": np.full((2, 2), 2.0),
+            "only_b_layer": np.full((2, 2), 9.0),
+        },
+    )
+
+    res = concat([a, b], join=join, aligned_axis_key_join=aligned_axis_key_join)
+
+    # Outer key join: every layer name appears. Post #1707, X is stored
+    # under the `None` layer key, so it shows up here too.
+    assert set(res.layers.keys()) == expected_layer_keys
+
+    n_total_cells = 4
+    assert res.shape == (n_total_cells, expected_n_vars)
+    for k in expected_layer_keys - {None}:
+        assert res.layers[k].shape == (n_total_cells, expected_n_vars), (
+            f"layer {k!r} should be aligned to the joined alt-axis, "
+            f"got shape {res.layers[k].shape}"
+        )
+
+    np.testing.assert_array_equal(
+        np.asarray(res.layers["shared_layer"]), expected_shared_layer
+    )
+    if expected_only_a_layer is not None:
+        np.testing.assert_array_equal(
+            np.asarray(res.layers["only_a_layer"]), expected_only_a_layer
+        )
+        np.testing.assert_array_equal(
+            np.asarray(res.layers["only_b_layer"]), expected_only_b_layer
+        )
+
+
+def test_aligned_axis_key_join_does_not_affect_alt_axis_mappings():
+    """When concatenating along obs, varm/varp follow `merge`, not `aligned_axis_key_join`."""
+    a = AnnData(
+        X=sparse.csr_matrix(np.eye(2, dtype=np.float64)),
+        obs=pd.DataFrame(index=["s1", "s2"]),
+        var=pd.DataFrame(index=["v1", "v2"]),
+        varm={
+            "shared_varm": np.ones((2, 3)),
+            "only_a_varm": np.zeros((2, 3)),
+        },
+    )
+    b = AnnData(
+        X=sparse.csr_matrix(np.eye(2, dtype=np.float64)),
+        obs=pd.DataFrame(index=["s3", "s4"]),
+        var=pd.DataFrame(index=["v1", "v2"]),
+        varm={
+            "shared_varm": 2 * np.ones((2, 3)),
+            "only_b_varm": np.ones((2, 3)),
+        },
+    )
+
+    # The contract: aligned_axis_key_join only governs the on-axis (obs here).
+    # varm is alt-axis, controlled entirely by `merge`. Compare results
+    # produced with and without aligned_axis_key_join for several merge
+    # strategies — varm contents must be identical.
+    for merge_strategy in (None, "same", "first", "unique", "only"):
+        kwargs = {"axis": "obs", "merge": merge_strategy}
+        baseline = concat([a, b], **kwargs)
+        with_inner = concat([a, b], aligned_axis_key_join="inner", **kwargs)
+        with_outer = concat([a, b], aligned_axis_key_join="outer", **kwargs)
+        assert sorted(baseline.varm.keys()) == sorted(with_inner.varm.keys()), (
+            f"varm keys diverged under merge={merge_strategy!r}"
+        )
+        assert sorted(baseline.varm.keys()) == sorted(with_outer.varm.keys()), (
+            f"varm keys diverged under merge={merge_strategy!r}"
+        )
+
+
+def test_aligned_axis_key_join_awkward_inner_missing_key_raises():
+    """Awkward arrays with inner content-join + missing keys raises NotImplementedError."""
+    import awkward as ak
+
+    a = AnnData(
+        X=np.eye(2, dtype=np.float64),
+        obs=pd.DataFrame(index=["s1", "s2"]),
+        var=pd.DataFrame(index=["v1", "v2"]),
+        obsm={
+            "shared_awk": ak.Array([[1, 2], [3]]),
+            "only_a_awk": ak.Array([[4], [5, 6]]),
+        },
+    )
+    b = AnnData(
+        X=np.eye(2, dtype=np.float64),
+        obs=pd.DataFrame(index=["s3", "s4"]),
+        var=pd.DataFrame(index=["v1", "v2"]),
+        obsm={"shared_awk": ak.Array([[7, 8], [9]])},
+    )
+    # join="inner" forces inner content-join; aligned_axis_key_join="outer"
+    # forces outer key set, so `only_a_awk` is missing from `b`. The combo of
+    # awkward + missing + inner content is the unimplemented branch.
+    with pytest.raises(NotImplementedError, match="awkward"):
+        concat([a, b], join="inner", aligned_axis_key_join="outer")
+
+
+def test_aligned_axis_key_join_obsp_pairwise():
+    """Pairwise on-axis (obsp) key joining responds to `aligned_axis_key_join`."""
+    a = AnnData(
+        X=sparse.csr_matrix(np.eye(3, dtype=np.float64)),
+        obs=pd.DataFrame(index=["s1", "s2", "s3"]),
+        obsp={
+            "shared_obsp": sparse.csr_matrix(np.eye(3, dtype=np.float64)),
+            "only_a_obsp": sparse.csr_matrix(np.eye(3, dtype=np.float64)),
+        },
+    )
+    b = AnnData(
+        X=sparse.csr_matrix(np.eye(2, dtype=np.float64)),
+        obs=pd.DataFrame(index=["s4", "s5"]),
+        obsp={
+            "shared_obsp": sparse.csr_matrix(np.eye(2, dtype=np.float64)),
+            "only_b_obsp": sparse.csr_matrix(np.eye(2, dtype=np.float64)),
+        },
+    )
+    outer = concat([a, b], pairwise=True, aligned_axis_key_join="outer")
+    inner = concat([a, b], pairwise=True, aligned_axis_key_join="inner")
+    assert sorted(outer.obsp.keys()) == ["only_a_obsp", "only_b_obsp", "shared_obsp"]
+    assert sorted(inner.obsp.keys()) == ["shared_obsp"]
+
+
+def test_aligned_axis_key_join_invalid_value():
+    """Invalid `aligned_axis_key_join` raises a clear error."""
+    a = AnnData(
+        X=sparse.csr_matrix(np.eye(2, dtype=np.float64)),
+        obs=pd.DataFrame(index=["s1", "s2"]),
+        var=pd.DataFrame(index=["v1", "v2"]),
+    )
+    with pytest.raises(ValueError, match="aligned_axis_key_join"):
+        concat([a, a], aligned_axis_key_join="banana")
+
+
+def test_aligned_axis_key_join_obsm_dataframe_content_follows_join():
+    """When `aligned_axis_key_join` differs from `join`, the on-axis key set
+    follows `aligned_axis_key_join` but the per-key content alignment (e.g.
+    DataFrame columns inside a shared `obsm[k]`) follows `join`.
+    """
+    a = AnnData(
+        X=sparse.csr_matrix(np.eye(2, dtype=np.float64)),
+        obs=pd.DataFrame(index=["s1", "s2"]),
+        var=pd.DataFrame(index=["v1", "v2"]),
+        obsm={
+            "df": pd.DataFrame({"x": [1, 2], "a_only": [10, 20]}, index=["s1", "s2"])
+        },
+    )
+    b = AnnData(
+        X=sparse.csr_matrix(np.eye(2, dtype=np.float64)),
+        obs=pd.DataFrame(index=["s3", "s4"]),
+        var=pd.DataFrame(index=["v1", "v2"]),
+        obsm={
+            "df": pd.DataFrame({"x": [3, 4], "b_only": [30, 40]}, index=["s3", "s4"])
+        },
+    )
+
+    # join="inner" + aligned="outer": obsm key set unioned (still just "df"),
+    # but the columns inside df should stay intersected.
+    res = concat([a, b], join="inner", aligned_axis_key_join="outer")
+    assert list(res.obsm["df"].columns) == ["x"]
+
+    # join="outer" + aligned="inner": obsm key set intersected (still "df"),
+    # df columns should be unioned per join="outer".
+    res = concat([a, b], join="outer", aligned_axis_key_join="inner")
+    assert sorted(res.obsm["df"].columns) == ["a_only", "b_only", "x"]
+
+
+def test_aligned_axis_key_join_inner_content_with_missing_key():
+    """When `join="inner"` and `aligned_axis_key_join="outer"` with 3+
+    inputs and a key present in only some, content alignment intersects
+    among the present values rather than unioning them.
+    """
+    a = AnnData(
+        X=sparse.csr_matrix(np.eye(2, dtype=np.float64)),
+        obs=pd.DataFrame(index=["s1", "s2"]),
+        var=pd.DataFrame(index=["v1", "v2"]),
+        obsm={
+            "df": pd.DataFrame({"x": [1, 2], "a_only": [10, 20]}, index=["s1", "s2"])
+        },
+    )
+    b = AnnData(
+        X=sparse.csr_matrix(np.eye(2, dtype=np.float64)),
+        obs=pd.DataFrame(index=["s3", "s4"]),
+        var=pd.DataFrame(index=["v1", "v2"]),
+        obsm={
+            "df": pd.DataFrame({"x": [3, 4], "b_only": [30, 40]}, index=["s3", "s4"])
+        },
+    )
+    c = AnnData(
+        X=sparse.csr_matrix(np.eye(2, dtype=np.float64)),
+        obs=pd.DataFrame(index=["s5", "s6"]),
+        var=pd.DataFrame(index=["v1", "v2"]),
+    )
+
+    # DataFrame obsm: inner intersection among present DataFrames is just "x"
+    res = concat([a, b, c], aligned_axis_key_join="outer")
+    assert list(res.obsm["df"].columns) == ["x"]
+
+    # ndarray obsm with mismatched widths: inner = min width
+    a_arr = AnnData(
+        X=sparse.csr_matrix(np.eye(2, dtype=np.float64)),
+        obs=pd.DataFrame(index=["s1", "s2"]),
+        var=pd.DataFrame(index=["v1", "v2"]),
+        obsm={"arr": np.ones((2, 3))},
+    )
+    b_arr = AnnData(
+        X=sparse.csr_matrix(np.eye(2, dtype=np.float64)),
+        obs=pd.DataFrame(index=["s3", "s4"]),
+        var=pd.DataFrame(index=["v1", "v2"]),
+        obsm={"arr": np.ones((2, 5))},
+    )
+    c_empty = AnnData(
+        X=sparse.csr_matrix(np.eye(2, dtype=np.float64)),
+        obs=pd.DataFrame(index=["s5", "s6"]),
+        var=pd.DataFrame(index=["v1", "v2"]),
+    )
+    res_arr = concat([a_arr, b_arr, c_empty], aligned_axis_key_join="outer")
+    assert res_arr.obsm["arr"].shape == (6, 3)
+
+
+@pytest.mark.parametrize(
+    ("join", "aligned_join", "expected_columns", "expected_var_names"),
+    [
+        ("inner", None, ["1"], ["1"]),
+        ("outer", None, ["1", "2", "3"], ["1", "2", "3"]),
+        ("inner", "outer", ["1", "2", "3"], ["1"]),
+        ("outer", "inner", ["1"], ["1", "2", "3"]),
+    ],
+)
+def test_aligned_axis_key_join_reproduces_issue_2374_example(
+    join, aligned_join, expected_columns, expected_var_names
+):
+    """Direct reproduction of the example from issue #2374. Verifies that
+    `aligned_axis_key_join` controls on-axis annotation columns (obs/var)
+    independently from `join`, which keeps controlling the off-axis index
+    (var_names when axis=0, obs_names when axis=1).
+    """
+    adatas = [
+        AnnData(
+            X=np.ones((1, 2)),
+            obs=pd.DataFrame({"1": ["a"], "2": ["b"]}),
+            var=pd.DataFrame(index=["1", "2"]),
+        ),
+        AnnData(
+            X=np.ones((1, 2)),
+            obs=pd.DataFrame({"1": ["a"], "3": ["b"]}),
+            var=pd.DataFrame(index=["1", "3"]),
+        ),
+    ]
+
+    result = concat(adatas, join=join, aligned_axis_key_join=aligned_join)
+    assert sorted(result.obs.columns) == expected_columns
+    assert sorted(result.var_names) == expected_var_names
