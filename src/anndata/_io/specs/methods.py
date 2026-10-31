@@ -50,7 +50,8 @@ from anndata.compat import (
 from ..._settings import settings
 from ...compat import PANDAS_3, PANDAS_STRING_ARRAY_TYPES
 from ...utils import iter_outer, warn
-from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
+from .dataframe_columns import add_column_note, normalize_column
+from .registry import _REGISTRY, IORegistryError, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterator
@@ -1153,9 +1154,12 @@ def write_dataframe(
     _writer.write_elem(group, index_name, index_values, dataset_kwargs=dataset_kwargs)
     for colname, series in df.items():
         # TODO: this should write the "true" representation of the series (i.e. the underlying array or ndarray depending)
-        _writer.write_elem(
-            group, colname, series._values, dataset_kwargs=dataset_kwargs
-        )
+        values = normalize_column(series._values, name=str(colname))
+        try:
+            _writer.write_elem(group, colname, values, dataset_kwargs=dataset_kwargs)
+        except IORegistryError as e:
+            add_column_note(e, values, str(colname))
+            raise
 
 
 @_REGISTRY.register_read(h5py.Group, IOSpec("dataframe", "0.2.0"))
