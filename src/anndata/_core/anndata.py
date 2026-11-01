@@ -1586,7 +1586,7 @@ class AnnData:  # noqa: PLW1641
         store_type
             Which backing store - `None` indicates that it can be writeable to either.
         compat
-            Which anndata version’s write behavior to check against,
+            Which anndata python package version’s write behavior to check against,
             see :class:`~anndata.WriteCompat`.
 
         Returns

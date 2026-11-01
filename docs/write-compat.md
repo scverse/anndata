@@ -10,9 +10,9 @@ as a {class}`~anndata.WriteCompat` member or its string value ({data}`~anndata.t
 adata.write_h5ad("old.h5ad", compat="0.13")
 ```
 
-A profile is the oldest anndata version whose I/O behavior we promise to be compatible with,
+A profile is the oldest anndata python-package version whose I/O behavior we promise to be compatible with,
 i.e. encodings that version can’t read are disallowed.
-New encodings only land in minor releases, so e.g. `"0.13"` files are readable by every 0.13.x release.
+New encodings only land in minor releases until major releases start, so e.g. `"0.13"` files are readable by every 0.13.x release.
 
 This is different from an element’s `encoding-version` attribute (see {doc}`fileformat-prose`):
 that versions the on-disk format of a single element type,
