@@ -32,7 +32,6 @@ from anndata._io.utils import (
     _check_has_no_slash_key,
     check_key,
     escape_key,
-    key_needs_escaping,
     unescape_key,
     zero_dim_array_as_scalar,
 )
@@ -80,13 +79,16 @@ _STORE_TYPES: tuple[type[zarr.Group | h5py.Group], ...] = (
 )
 
 
-def escaping_keys(keys: Iterable[str], *, compat: WriteConfig) -> bool:
-    """Whether a group’s child keys must be percent-escaped to be file-system safe.
+def escaping_keys(keys: Iterable[str], *, compat: WriteConfig) -> dict[str, str]:
+    """Map the child keys of a group that must be percent-escaped to their escaped form.
 
     All of a group’s keys are escaped as soon as one of them needs it,
     so that an escape sequence can never be mistaken for a literal key.
+    Keys missing from the result are unchanged by escaping.
     """
-    return compat.escape_keys and any(key_needs_escaping(k) for k in keys)
+    if not compat.escape_keys:
+        return {}
+    return {k: e for k in keys if (e := escape_key(k)) != k}
 
 
 ####################
@@ -522,7 +524,7 @@ def write_mapping(
     for sub_k, sub_v in v.items():
         _writer.write_elem(
             g,
-            escape_key(sub_k) if escape else sub_k,
+            escape.get(sub_k, sub_k),
             sub_v,
             dataset_kwargs=dataset_kwargs,
         )

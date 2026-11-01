@@ -168,6 +168,7 @@ def write_use(
     use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc],
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    compat: WriteConfig,
 ) -> None:
     """Write only the parts of `adata` referenced by `use` into the existing anndata group `f`."""
     from .specs import read_elem, write_elem
@@ -191,21 +192,41 @@ def write_use(
 
     # resolve everything first so an invalid accessor fails before anything is written
     uses = use if isinstance(use, Sequence) else [use]
-    for parent, key, elem in [_resolve_use(f, adata, u) for u in uses]:
+    for parent, map_acc, key, elem in [_resolve_use(f, adata, u) for u in uses]:
         if parent is not None and parent not in f:
             write_elem(f, parent, {})
-        write_elem(
-            f if parent is None else cast("_GroupStorageType", f[parent]),
-            key,
-            elem,
-            dataset_kwargs=dataset_kwargs,
+        group = f if parent is None else cast("_GroupStorageType", f[parent])
+        if map_acc is not None:
+            key = _key_in_mapping(group, map_acc, key, compat=compat)
+        write_elem(group, key, elem, dataset_kwargs=dataset_kwargs, compat=compat)
+
+
+def _key_in_mapping(
+    group: _GroupStorageType, map_acc: MapAcc, key: str, *, compat: WriteConfig
+) -> str:
+    """Get the on-disk name of `key` in the mapping `group`, escaping the group if needed."""
+    if group.attrs.get("encoding-version") == "0.2.0":
+        # already escaped: escape regardless of `compat`, else it would read back wrong
+        return escape_key(key)
+    from .specs.methods import escaping_keys
+
+    if not (escaped := escaping_keys([key], compat=compat)):
+        return key
+    if renamed := list(escaping_keys(group, compat=compat)):
+        # zarr can’t move nodes, so we can’t escape the existing keys in place
+        msg = (
+            f"Cannot write {map_acc[key]!r} without escaping the existing keys {renamed!r}. "
+            f"Write the whole mapping instead: `use={map_acc!r}`."
         )
+        raise ValueError(msg)
+    group.attrs["encoding-version"] = "0.2.0"
+    return escaped[key]
 
 
 def _resolve_use(  # noqa: PLR0911
     f: _GroupStorageType, adata: AnnData, use: AdRef | RefAcc | MapAcc
-) -> tuple[str | None, str, RWAble]:
-    """Get the parent group, key, and element to write for `use`."""
+) -> tuple[str | None, MapAcc | None, str, RWAble]:
+    """Get the parent group, its accessor if it’s a mapping, key, and element to write for `use`."""
     from ..acc import (
         AdRef,
         GraphAcc,
@@ -223,32 +244,36 @@ def _resolve_use(  # noqa: PLR0911
                 msg = f"Cannot write column {col!r}: it is the name of the {dim} index."
                 raise ValueError(msg)
             # `._values` is what `write_dataframe` writes for each column
-            return dim, col, acc.get(adata)[col]._values
+            return dim, None, col, acc.get(adata)[col]._values
         case AdRef():
             msg = f"Cannot write {use}: only `obs`/`var` columns can be written as single vectors."
             raise ValueError(msg)
-        case LayerAcc(k=k):
-            return (
-                None if k is None else "layers",
-                "X" if k is None else k,
-                use.get(adata),
+        case LayerAcc(k=None):
+            return None, None, "X", use.get(adata)
+        case LayerAcc(k=str() as k):
+            map_acc: MapAcc = LayerMapAcc(
+                ref_class=use.ref_class, ref_acc_cls=type(use)
             )
+            return "layers", map_acc, k, use.get(adata)
         case MetaAcc(dim=dim):
-            return None, dim, use.get(adata)
+            return None, None, dim, use.get(adata)
         case MultiAcc(dim=dim, k=k):
-            return f"{dim}m", k, use.get(adata)
+            map_acc = MultiMapAcc(dim, ref_class=use.ref_class, ref_acc_cls=type(use))
+            return f"{dim}m", map_acc, k, use.get(adata)
         case GraphAcc(dim=dim, k=k):
-            return f"{dim}p", k, use.get(adata)
+            map_acc = GraphMapAcc(dim, ref_class=use.ref_class, ref_acc_cls=type(use))
+            return f"{dim}p", map_acc, k, use.get(adata)
         case LayerMapAcc():  # `adata.layers` contains `X` as `None`
             return (
+                None,
                 None,
                 "layers",
                 {k: v for k, v in use.get(adata).items() if k is not None},
             )
         case MultiMapAcc(dim=dim):
-            return None, f"{dim}m", dict(use.get(adata))
+            return None, None, f"{dim}m", dict(use.get(adata))
         case GraphMapAcc(dim=dim):
-            return None, f"{dim}p", dict(use.get(adata))
+            return None, None, f"{dim}p", dict(use.get(adata))
         case _:
             msg = f"Cannot write {use!r}."
             raise TypeError(msg)
@@ -416,11 +441,6 @@ def _is_reserved_key(key: str) -> bool:
         or key == "zarr.json"
         or _is_reserved_win(key)
     )
-
-
-def key_needs_escaping(key: str) -> bool:
-    """Whether `key` is unusable as a child key as-is."""
-    return not UNSAFE_KEY_CHARS.isdisjoint(key) or _is_reserved_key(key)
 
 
 def escape_key(key: str) -> str:
