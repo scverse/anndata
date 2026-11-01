@@ -14,9 +14,9 @@ A profile is the oldest anndata python-package version whose I/O behavior we pro
 i.e. encodings that version can’t read are disallowed.
 New encodings only land in minor releases until major releases start, so e.g. `"0.13"` files are readable by every 0.13.x release.
 
-This is different from an element’s `encoding-version` attribute (see {doc}`fileformat-prose`):
-that versions the on-disk format of a single element type,
-while a profile is a promise about the whole file: which `anndata` version can read it.
+This is different from the `encoding-version` attribute (see {doc}`fileformat-prose`):
+each element (including the root `anndata` group), uses it to version only its own layout, not its children’s,
+while a profile is a promise about every element in the file: which `anndata` version can read them all.
 
 Profiles are named after versions of the python package,
 but they describe sets of encodings, so they apply to other implementations too:
