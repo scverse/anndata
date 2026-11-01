@@ -342,3 +342,21 @@ def test_escape_key(key: str, escaped: str) -> None:
     """A reserved key is wrapped rather than mangled, so it stays legible."""
     assert escape_key(key) == escaped
     assert unescape_key(escaped) == key
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        pytest.param("%41", id="needless-escape"),
+        pytest.param("%2f", id="lower-case-hex"),
+        pytest.param("a%", id="stray-trailing-percent"),
+        pytest.param("%", id="lone-percent"),
+        pytest.param("a%2", id="truncated-escape"),
+        pytest.param("a/b", id="unescaped-unsafe-char"),
+        pytest.param("%%41%", id="needless-escape-wrapped"),
+    ],
+)
+def test_unescape_key_rejects_invalid(key: str) -> None:
+    """Keys no writer produces could collide with valid ones, so they are rejected."""
+    with pytest.raises(ValueError, match=r"Invalid escaped key"):
+        unescape_key(key)

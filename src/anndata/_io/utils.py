@@ -15,7 +15,7 @@ from .._core.sparse_dataset import BaseCompressedSparseDataset
 from ..utils import warn
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
     from typing import Any, Literal
 
     import h5py
@@ -462,7 +462,7 @@ def escape_key(key: str) -> str:
     >>> [unescape_key(escape_key(k)) for k in ["100%/day", "CON", "..", "__x", ""]]
     ['100%/day', 'CON', '..', '__x', '']
     """
-    escaped = "".join(f"%{ord(c):02X}" if c in UNSAFE_KEY_CHARS else c for c in key)
+    escaped = _escape_chars(key)
     # escaping can neither create nor remove a reserved key, so this is stable.
     # Wrapping breaks every rule at once: the result is non-empty, is not all periods,
     # starts with neither `__` nor a device name, ends in neither a period nor a space,
@@ -470,11 +470,34 @@ def escape_key(key: str) -> str:
     return f"%{escaped}%" if _is_reserved_key(escaped) else escaped
 
 
+def _escape_chars(key: str) -> str:
+    return "".join(f"%{ord(c):02X}" if c in UNSAFE_KEY_CHARS else c for c in key)
+
+
 def unescape_key(key: str) -> str:
-    """Invert :func:`escape_key`."""
-    if key.endswith("%"):  # a `%` can never be the 2nd or 3rd character of an escape
-        key = key[1:-1]
-    return _ESCAPE_RE.sub(lambda m: chr(int(m[1], 16)), key)
+    """Invert :func:`escape_key`, rejecting keys no conforming writer produces.
+
+    >>> unescape_key("%41")  # `A` needs no escaping, so this would collide with it
+    Traceback (most recent call last):
+      ...
+    ValueError: Invalid escaped key '%41'.
+    """
+    # a `%` can never be the 2nd or 3rd character of an escape
+    wrapped = len(key) >= 2 and key[0] == key[-1] == "%"
+    inner = key[1:-1] if wrapped else key
+    unescaped = _ESCAPE_RE.sub(lambda m: chr(int(m[1], 16)), inner)
+    # catches stray `%`s, lower-case hex digits, and needlessly escaped characters
+    if _escape_chars(unescaped) != inner:
+        msg = f"Invalid escaped key {key!r}."
+        raise ValueError(msg)
+    return unescaped
+
+
+def mapping_items(group: _GroupStorageType) -> Iterator[tuple[str, StorageType]]:
+    """Iterate over the keys and children of a `dict` encoded group, unescaping keys if needed."""
+    escaped = group.attrs.get("encoding-version") == "0.2.0"
+    for k, v in dict(group).items():
+        yield (unescape_key(k) if escaped else k), v
 
 
 # -------------------------------------------------------------------------------

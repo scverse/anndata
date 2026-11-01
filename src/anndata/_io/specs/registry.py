@@ -409,21 +409,7 @@ class Writer:
             if k.startswith("/"):
                 k = str(PurePosixPath(k).relative_to(store.name, walk_up=False))
 
-            # Apart from this code, we also ban keys containing slashes in `write_adata`/`write_h5ad`
-            # for AnnData elements other than `obs`, `var`, and `uns`.
-            if "/" in k:
-                if (
-                    isinstance(store, zarr.Group)
-                    or settings.disallow_forward_slash_in_h5ad
-                ):
-                    msg = (
-                        f"Forward slashes are not allowed in keys in {type(store)}. "
-                        'Pass `compat="0.14"` to the write function to escape them in `uns` and other mapping keys'
-                    )
-                    raise ValueError(msg)
-                msg = "Forward slashes will be written differently in a future anndata version"
-                warn(msg, FutureWarning)
-
+            _check_child_key(store, k)
             if k in store:
                 del store[k]
 
@@ -438,6 +424,22 @@ class Writer:
             )
         write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
         _add_to_column_order(store, k)
+
+
+def _check_child_key(store: _GroupStorageType, k: str) -> None:
+    hint = 'Pass `compat="0.14"` to the write function to escape them in `uns` and other mapping keys'
+    if not k:  # would refer to `store` itself
+        msg = f"Empty keys are not allowed in {type(store)}. {hint}"
+        raise ValueError(msg)
+
+    # Apart from this code, we also ban keys containing slashes in `write_adata`/`write_h5ad`
+    # for AnnData elements other than `obs`, `var`, and `uns`.
+    if "/" in k:
+        if isinstance(store, zarr.Group) or settings.disallow_forward_slash_in_h5ad:
+            msg = f"Forward slashes are not allowed in keys in {type(store)}. {hint}"
+            raise ValueError(msg)
+        msg = "Forward slashes will be written differently in a future anndata version"
+        warn(msg, FutureWarning)
 
 
 def _add_to_column_order(store: _GroupStorageType, k: str) -> None:

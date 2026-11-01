@@ -161,3 +161,63 @@ def test_no_escaping_before_0_14(tmp_path: Path) -> None:
     adata = ad.AnnData(np.zeros((2, 3)), uns={"a/b": 1})
     with pytest.raises(ValueError, match=r'Pass `compat="0.14"`'):
         adata.write_h5ad(tmp_path / "slash.h5ad")
+
+
+@pytest.mark.parametrize("attr", ["uns", "obsm"])
+def test_empty_key(
+    diskfmt_store: Path | MemoryStore,
+    diskfmt: Literal["h5ad", "zarr"],
+    attr: Literal["uns", "obsm"],
+) -> None:
+    """`""` names the parent group itself, so it needs escaping."""
+    adata = ad.AnnData(np.zeros((2, 3)))
+    getattr(adata, attr)[""] = np.zeros((2, 1))
+    write = getattr(adata, f"write_{diskfmt}")
+    with pytest.raises(ValueError, match=r"Empty keys are not allowed"):
+        write(diskfmt_store)
+
+    write(diskfmt_store, compat="0.14")
+    back = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
+    assert list(getattr(back, attr)) == [""]
+
+
+def test_key_escaping_read_lazy(
+    diskfmt_store: Path | MemoryStore, diskfmt: Literal["h5ad", "zarr"]
+) -> None:
+    pytest.importorskip("xarray")
+    adata = ad.AnnData(np.zeros((2, 3)), uns={"a/b": 1}, obsm={"c:d": np.zeros((2, 2))})
+    getattr(adata, f"write_{diskfmt}")(diskfmt_store, compat="0.14")
+    lazy = ad.experimental.read_lazy(diskfmt_store)
+    assert list(lazy.uns) == ["a/b"]
+    assert list(lazy.obsm) == ["c:d"]
+
+
+@pytest.mark.parametrize("axis", ["obs", "var"])
+def test_key_escaping_concat_on_disk(
+    tmp_path: Path, diskfmt: Literal["h5ad", "zarr"], axis: Literal["obs", "var"]
+) -> None:
+    """Escaped keys survive on-disk concatenation, both along and across the axis."""
+    paths: list[Path] = []
+    for i in range(2):
+        adata = ad.AnnData(
+            np.ones((2, 2)),
+            obsm={"a/b": np.ones((2, 1))},
+            varm={"c:d": np.ones((2, 1))},
+            layers={"e/f": np.ones((2, 2))},
+        )
+        setattr(adata, f"{axis}_names", [f"{i}-{j}" for j in range(2)])
+        paths.append(tmp_path / f"{i}.{diskfmt}")
+        getattr(adata, f"write_{diskfmt}")(paths[-1], compat="0.14")
+    out = tmp_path / f"out.{diskfmt}"
+    ad.experimental.concat_on_disk(paths, out, axis=axis, merge="same")
+    back = getattr(ad, f"read_{diskfmt}")(out)
+    assert list(back.obsm) == ["a/b"]
+    assert list(back.varm) == ["c:d"]
+    assert set(back.layers) == {None, "e/f"}
+
+
+@pytest.mark.parametrize("compat", ["0.13", "0.14"])
+def test_non_str_key(tmp_path: Path, compat: Literal["0.13", "0.14"]) -> None:
+    adata = ad.AnnData(np.zeros((2, 3)), uns={1: 1})  # type: ignore[dict-item]
+    with pytest.raises(TypeError, match=r"invalid key\. Should be str"):
+        adata.write_h5ad(tmp_path / "t.h5ad", compat=compat)

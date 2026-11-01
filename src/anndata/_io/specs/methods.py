@@ -32,7 +32,7 @@ from anndata._io.utils import (
     _check_has_no_slash_key,
     check_key,
     escape_key,
-    unescape_key,
+    mapping_items,
     zero_dim_array_as_scalar,
 )
 from anndata._types import StorageType
@@ -494,16 +494,10 @@ def write_null_zarr(f, k, _v, _writer, dataset_kwargs=MappingProxyType({})):
 
 @_REGISTRY.register_read(h5py.Group, IOSpec("dict", "0.1.0"))
 @_REGISTRY.register_read(zarr.Group, IOSpec("dict", "0.1.0"))
-def read_mapping(elem: _GroupStorageType, *, _reader: Reader) -> dict[str, Storable]:
-    return {k: _reader.read_elem(v) for k, v in dict(elem).items()}
-
-
 @_REGISTRY.register_read(h5py.Group, IOSpec("dict", "0.2.0"))
 @_REGISTRY.register_read(zarr.Group, IOSpec("dict", "0.2.0"))
-def read_mapping_escaped(
-    elem: _GroupStorageType, *, _reader: Reader
-) -> dict[str, Storable]:
-    return {unescape_key(k): _reader.read_elem(v) for k, v in dict(elem).items()}
+def read_mapping(elem: _GroupStorageType, *, _reader: Reader) -> dict[str, Storable]:
+    return {k: _reader.read_elem(v) for k, v in mapping_items(elem)}
 
 
 @_REGISTRY.register_write(h5py.Group, dict, IOSpec("dict", "0.1.0"))
@@ -517,6 +511,7 @@ def write_mapping(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
+    v = {check_key(sub_k): sub_v for sub_k, sub_v in v.items()}
     g = f.require_group(k)
     if escape := escaping_keys(v, compat=_writer.compat):
         # `write_spec` only sets this if absent, so this wins

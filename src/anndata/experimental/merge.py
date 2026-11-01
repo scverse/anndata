@@ -31,6 +31,9 @@ from .._core.merge import (
 )
 from .._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .._io.specs import read_elem, write_elem
+from .._io.specs.methods import escaping_keys
+from .._io.utils import mapping_items
+from .._write_compat import WriteConfig
 from . import read_dispatched, read_elem_lazy
 
 if TYPE_CHECKING:
@@ -187,11 +190,17 @@ def read_as_backed(group: StorageType):
         elif iospec.encoding_type == "array":
             return elem
         elif iospec.encoding_type == "dict":
-            return {k: read_as_backed(v) for k, v in dict(elem).items()}
+            return {k: read_as_backed(v) for k, v in mapping_items(elem)}
         else:
             return func(elem)
 
     return read_dispatched(group, callback=callback)
+
+
+def _keep_escaping(groups: Collection[zarr.Group | h5py.Group]) -> WriteConfig:
+    """Escape the output mapping’s keys if any input’s were, as they might need it."""
+    escaped = any(g.attrs.get("encoding-version") == "0.2.0" for g in groups)
+    return WriteConfig(escape_keys=escaped)
 
 
 def _df_index(group: zarr.Group | h5py.Group, key: str) -> pd.Index:
@@ -300,21 +309,24 @@ def _write_concat_mappings(  # noqa: PLR0913, PLR0917
     index: pd.Index | None = None,
     reindexers: Sequence[AnyReindexer] | None = None,
     fill_value: Scalar | None = None,
+    *,
+    compat: WriteConfig,
 ):
     """
     Write a list of mappings to a zarr/h5 group.
     """
+    escape = escaping_keys(keys, compat=compat)
     mapping_group = output_group.create_group(output_path)
     mapping_group.attrs.update({
         "encoding-type": "dict",
-        "encoding-version": "0.1.0",
+        "encoding-version": "0.2.0" if escape else "0.1.0",
     })
     for k in keys:
         elems = [m[k] for m in mappings]
         _write_concat_sequence(
             elems,
             output_group=mapping_group,
-            output_path=k,
+            output_path=escape.get(k, k),
             axis=axis,
             index=index,
             reindexers=reindexers,
@@ -433,14 +445,17 @@ def _write_alt_mapping(
     merge: Callable,
     reindexers: Sequence[AnyReindexer],
 ):
+    subgroups = [_subgroup(g, f"{alt_axis_name}m") for g in groups]
     alt_mapping = merge([
-        {
-            k: r(read_elem(v), axis=0)
-            for k, v in dict(_subgroup(g, f"{alt_axis_name}m")).items()
-        }
-        for r, g in zip(reindexers, groups, strict=True)
+        {k: r(read_elem(v), axis=0) for k, v in mapping_items(sg)}
+        for r, sg in zip(reindexers, subgroups, strict=True)
     ])
-    write_elem(output_group, f"{alt_axis_name}m", alt_mapping)
+    write_elem(
+        output_group,
+        f"{alt_axis_name}m",
+        alt_mapping,
+        compat=_keep_escaping(subgroups),
+    )
 
 
 def _write_alt_annot(
@@ -482,14 +497,17 @@ def _write_alt_pairwise(
     merge: Callable,
     reindexers: Sequence[AnyReindexer],
 ):
+    subgroups = [_subgroup(g, f"{alt_axis_name}p") for g in groups]
     alt_pairwise = merge([
-        {
-            k: r(r(read_elem_lazy(v), axis=0), axis=1)
-            for k, v in dict(_subgroup(g, f"{alt_axis_name}p")).items()
-        }
-        for r, g in zip(reindexers, groups, strict=True)
+        {k: r(r(read_elem_lazy(v), axis=0), axis=1) for k, v in mapping_items(sg)}
+        for r, sg in zip(reindexers, subgroups, strict=True)
     ])
-    write_elem(output_group, f"{alt_axis_name}p", alt_pairwise)
+    write_elem(
+        output_group,
+        f"{alt_axis_name}p",
+        alt_pairwise,
+        compat=_keep_escaping(subgroups),
+    )
 
 
 def concat_on_disk(  # noqa: PLR0913
@@ -804,4 +822,5 @@ def _concat_on_disk_inner(  # noqa: PLR0913
             index=m_index,
             reindexers=m_reindexers,
             fill_value=fill_value,
+            compat=_keep_escaping([_subgroup(g, m) for g in groups]),
         )

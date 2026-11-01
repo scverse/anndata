@@ -89,7 +89,10 @@ so `a/b` is stored as `a%2Fb`.
 
 The escaped characters are the ones [Windows forbids in file names][win-naming],
 a superset of what `POSIX` and `macOS` forbid,
-so an escaped key is usable as a path segment anywhere.
+so no file system rejects an escaped key as a path segment.
+Like `zarr`, anndata does not work around [other limits of the store][zarr-names] though:
+e.g. `Foo` and `foo` are the same file on case-insensitive file systems
+(the default on Windows and macOS), and Windows limits path lengths.
 They are all ASCII and nothing else is ever escaped,
 which is what keeps an escape sequence exactly three characters long.
 
@@ -149,8 +152,11 @@ while these rules apply:
 
 Consequently, a reader of escaped keys MUST, in this order:
 
-1. remove the first *and* last character of key that ends in a `%`, then
-2. replace each `%XX` with the character of code point `0xXX`
+1. remove the first *and* last character of a key that is at least two characters long
+   and both starts and ends with a `%`, then
+2. replace each `%XX` with the character of code point `0xXX`, and
+3. reject the key if escaping that result’s characters again does not yield the key from step 1,
+   since no writer can have produced it (e.g. `%41`, `%2f`, or `a%`)
 
 [win-naming]: https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file#naming-conventions
 [zarr-names]: https://zarr-specs.readthedocs.io/en/latest/v3/core/index.html#node-names
