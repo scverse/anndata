@@ -7,7 +7,6 @@ For working with the experimental data loaders also see {ref}`experimental-api`.
 ```{toctree}
 :maxdepth: 1
 
-notebooks/getting-started
 notebooks/annbatch
 notebooks/anncollection
 notebooks/anndata_dask_array
