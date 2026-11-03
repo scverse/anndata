@@ -292,10 +292,14 @@ def test_set_unsettable(adata: AnnData, tmp_path: Path) -> None:
 def test_subclass_without_set_warns() -> None:
     from anndata.acc import RefAcc
 
-    with pytest.warns(FutureWarning, match=r"does not implement `set`"):
+    with pytest.warns(FutureWarning, match=r"doesn’t implement RefAcc\.set"):
 
         class _NoSet(RefAcc):  # pyright: ignore[reportUnusedClass]
-            pass
+            def dims(self, idx, /): ...
+            def __repr__(self): ...
+            def idx_repr(self, idx, /): ...
+            def isin(self, data, idx=None, /): ...
+            def get(self, data, idx=None, /): ...
 
 
 def test_set_multi_out_of_range(adata: AnnData) -> None:

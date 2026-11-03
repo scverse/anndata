@@ -14,6 +14,7 @@ if sys.version_info < (3, 15):
 
 import numpy as np
 import pandas as pd
+from scverse_misc import Deprecation, future_abstractmethod
 
 from .. import AnnData
 from .._core.views import ArrayView
@@ -26,7 +27,6 @@ from ..compat import (
     SupportsArrayApiBase,
 )
 from ..typing import _is_in_memory
-from ..utils import warn
 
 if TYPE_CHECKING:
     from mudata import MuData
@@ -189,17 +189,6 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
     _: KW_ONLY
     ref_class: type[R]
 
-    def __init_subclass__(cls, **kwargs: object) -> None:
-        super().__init_subclass__(**kwargs)
-        # TODO: make `set` abstract instead
-        if cls.set is RefAcc.set:
-            msg = (
-                f"{cls.__module__}.{cls.__qualname__} does not implement `set`. "
-                "This will be required in a future version of anndata."
-            )
-            # skip `ABCMeta.__new__`’s frame
-            warn(msg, FutureWarning, more_file_prefixes=("<frozen abc>", abc.__file__))
-
     def process_idx(self, idx: Any, /) -> I:  # noqa: ANN401  # subclasses may override `idx` however they want
         self.dims(idx)
         return idx
@@ -250,6 +239,7 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
         The first two both have defined `shape`-like properties (or :class:`awkward.Array`), but :attr:`~anndata.AnnData.layers` or similar do not.
         """
 
+    @future_abstractmethod(Deprecation("0.14.0"))
     def set(self, data: D, idx: I | NO_IDX, value: object, /) -> None:
         """Set the indexed array or element in the AnnData object at `idx`.
 
