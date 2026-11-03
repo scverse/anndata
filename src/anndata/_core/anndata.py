@@ -1732,7 +1732,9 @@ class AnnData:  # noqa: PLW1641
         filename
             Filename of data file. Defaults to backing file.
         convert_strings_to_categoricals
-            Convert string columns to categorical.
+            Convert string columns to categorical before writing. This conversion
+            modifies :attr:`obs`, :attr:`var`, and ``raw.var`` in place. Set to
+            `False` to preserve their in-memory dtypes.
         compression
             For [`lzf`, `gzip`], see the h5py :ref:`dataset_compression`.
 
@@ -1871,7 +1873,9 @@ class AnnData:  # noqa: PLW1641
         chunks
             Chunk shape.
         convert_strings_to_categoricals
-            Convert string columns to categorical.
+            Convert string columns to categorical before writing. This conversion
+            modifies :attr:`obs`, :attr:`var`, and ``raw.var`` in place. Set to
+            `False` to preserve their in-memory dtypes.
         consolidate_metadata
             Whether to consolidate the metadata of the store after writing.
         use
