@@ -399,6 +399,20 @@ def write_anndata(
         )
 
 
+ANNDATA_ELEMS = (
+    "X",
+    "obs",
+    "var",
+    "obsm",
+    "varm",
+    "obsp",
+    "varp",
+    "layers",
+    "uns",
+    "raw",
+)
+
+
 @_REGISTRY.register_read(h5py.Group, IOSpec("anndata", "0.1.0"))
 @_REGISTRY.register_read(h5py.Group, IOSpec("raw", "0.1.0"))
 @_REGISTRY.register_read(h5py.File, IOSpec("anndata", "0.1.0"))
@@ -407,18 +421,7 @@ def write_anndata(
 @_REGISTRY.register_read(zarr.Group, IOSpec("raw", "0.1.0"))
 def read_anndata(elem: _GroupStorageType | h5py.File, *, _reader: Reader) -> AnnData:
     d = {}
-    for k in [
-        "X",
-        "obs",
-        "var",
-        "obsm",
-        "varm",
-        "obsp",
-        "varp",
-        "layers",
-        "uns",
-        "raw",
-    ]:
+    for k in ANNDATA_ELEMS:
         if k in elem:
             d[k] = _reader.read_elem(elem[k])
     # Older / non-conforming files may contain higher-dimensional `X` or
@@ -1164,14 +1167,26 @@ def write_dataframe(
 @_REGISTRY.register_read(h5py.Group, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_read(zarr.Group, IOSpec("dataframe", "0.2.0"))
 def read_dataframe(elem: _GroupStorageType, *, _reader: Reader) -> pd.DataFrame:
-    attrs: Mapping[str, Any] = elem.attrs
-    columns = list(_read_attr(attrs, "column-order"))
-    idx_key = _read_attr(attrs, "_index")
-    df = pd.DataFrame(
+    columns, idx_key = _dataframe_keys(elem.attrs)
+    return _dataframe_from_parts(
         {k: _reader.read_elem(elem[k]) for k in columns},
-        index=_reader.read_elem(elem[idx_key]),
-        columns=columns if columns else None,
+        _reader.read_elem(elem[idx_key]),
+        columns,
+        idx_key,
     )
+
+
+def _dataframe_keys(attrs: Mapping[str, Any]) -> tuple[list[str], str]:
+    return list(_read_attr(attrs, "column-order")), _read_attr(attrs, "_index")
+
+
+def _dataframe_from_parts(
+    data: Mapping[str, Any],
+    index: pd.Index | np.ndarray | pd.api.extensions.ExtensionArray,
+    columns: list[str],
+    idx_key: str,
+) -> pd.DataFrame:
+    df = pd.DataFrame(data, index=index, columns=columns if columns else None)
     if idx_key != "_index":
         df.index.name = idx_key
     return df
@@ -1415,9 +1430,15 @@ def _read_nullable_string(
 ) -> pd.api.extensions.ExtensionArray:
     values = _reader.read_elem(elem["values"])
     mask = _reader.read_elem(elem["mask"])
+    return _nullable_string_from_parts(values, mask, elem.attrs)
+
+
+def _nullable_string_from_parts(
+    values: np.ndarray, mask: np.ndarray, attrs: Mapping[str, Any]
+) -> pd.api.extensions.ExtensionArray:
     dtype = pd.StringDtype(
         na_value=np.nan
-        if _read_attr(elem.attrs, "na-value", default="NA") == "NaN"
+        if _read_attr(attrs, "na-value", default="NA") == "NaN"
         else pd.NA
     )
 

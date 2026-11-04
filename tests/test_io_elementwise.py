@@ -4,6 +4,7 @@ Tests that each element in an anndata is written correctly
 
 from __future__ import annotations
 
+import asyncio
 import re
 from contextlib import ExitStack, nullcontext
 from dataclasses import dataclass
@@ -26,7 +27,7 @@ from anndata._io.specs import _REGISTRY, IOSpec, get_spec
 from anndata._io.specs.registry import IORegistryError
 from anndata.acc import A, AdAcc, MetaAcc
 from anndata.compat import CSArray, CSMatrix, DaskArray, _read_attr
-from anndata.experimental import read_elem_lazy
+from anndata.experimental import read_elem_async, read_elem_lazy
 from anndata.io import read_elem, write_elem
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
@@ -239,6 +240,11 @@ def test_io_spec(store: _GroupStorageType, value, encoding_type) -> None:
     from_disk = read_elem(store[key])
     assert_equal(value, from_disk)
     assert get_spec(store[key]) == _REGISTRY.get_spec(value)
+
+    if isinstance(store, zarr.Group):
+        from_disk_async = asyncio.run(read_elem_async(store[key]))
+        assert type(from_disk_async) is type(from_disk)
+        assert_equal(from_disk, from_disk_async)
 
 
 @pytest.mark.parametrize(

@@ -13,13 +13,14 @@ from . import typing
 from .utils import set_module
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Awaitable, Mapping
     from typing import Any, TypeAlias
 
     from anndata._core.xarray import Dataset2D
     from anndata.typing import Storable
 
     from ._io.specs.registry import (
+        AsyncReader,
         IOSpec,
         LazyDataStructures,
         LazyReader,
@@ -44,6 +45,8 @@ __all__ = [
     "WriteCallback",
     "_ArrayStorageType",
     "_GroupStorageType",
+    "_ReadAsync",
+    "_ReadAsyncInternal",
     "_ReadInternal",
     "_ReadLazyInternal",
     "_WriteInternal",
@@ -63,6 +66,14 @@ class Dataset2DIlocIndexer(Protocol):
 
 class _ReadInternal[S: StorageType, RWAble: typing.RWAble](Protocol):
     def __call__(self, elem: S, /, *, _reader: Reader) -> RWAble: ...
+
+
+class _ReadAsyncInternal[S, RWAble: typing.RWAble](Protocol):
+    def __call__(self, elem: S, /, *, _reader: AsyncReader) -> Awaitable[RWAble]: ...
+
+
+class _ReadAsync[S, RWAble: typing.RWAble](Protocol):
+    def __call__(self, elem: S, /) -> Awaitable[RWAble]: ...
 
 
 class _ReadLazyInternal[S: StorageType](Protocol):

@@ -31,7 +31,9 @@ if TYPE_CHECKING:
     from ..typing import RWAble
     from .specs.registry import Writer
 
-    Storage = StorageType | BaseCompressedSparseDataset
+    Storage = (
+        StorageType | BaseCompressedSparseDataset | zarr.AsyncGroup | zarr.AsyncArray
+    )
 
 
 # -------------------------------------------------------------------------------

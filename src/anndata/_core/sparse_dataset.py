@@ -121,6 +121,15 @@ def slice_as_int(s: slice, l: int) -> int:
     return out[0]
 
 
+def _memory_format(format: Literal["csr", "csc"]) -> type[SparseMatrixType]:
+    """The in-memory class a sparse matrix of `format` is read into."""
+    if is_gpu():
+        return CupyCSRMatrix if format == "csr" else CupyCSCMatrix
+    if settings.use_sparse_array_on_read:
+        return ss.csr_array if format == "csr" else ss.csc_array
+    return ss.csr_matrix if format == "csr" else ss.csc_matrix
+
+
 @dataclass
 class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
     """\
@@ -138,11 +147,7 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
 
     @property
     def memory_format(self) -> type[SparseMatrixType]:
-        if is_gpu():
-            return CupyCSRMatrix if self.format == "csr" else CupyCSCMatrix
-        if settings.use_sparse_array_on_read:
-            return ss.csr_array if self.format == "csr" else ss.csc_array
-        return ss.csr_matrix if self.format == "csr" else ss.csc_matrix
+        return _memory_format(self.format)
 
     def _construct(
         self,

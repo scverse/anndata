@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
-from .._io.specs import IOSpec, read_elem_lazy
+from .._io.specs import IOSpec, read_elem_async, read_elem_lazy
 from .._types import (
     Dataset2DIlocIndexer,
     Read,
@@ -61,6 +61,7 @@ __all__ = [
     "WriteCallback",
     "concat_on_disk",
     "read_dispatched",
+    "read_elem_async",
     "read_elem_lazy",
     "read_lazy",
     "write_dispatched",
