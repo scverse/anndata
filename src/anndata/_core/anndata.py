@@ -1604,9 +1604,7 @@ class AnnData:  # noqa: PLW1641
                 return True
 
         from anndata._io.specs.registry import _REGISTRY
-        from anndata.acc import AdRef, GraphAcc, LayerAcc, MultiAcc
-
-        acc_types = (AdRef, LayerAcc, MultiAcc, GraphAcc)
+        from anndata.acc._entry_points import WritableAcc
 
         writeable_elems = {
             src_type
@@ -1659,9 +1657,17 @@ class AnnData:  # noqa: PLW1641
                 return accumulate or any(
                     predicate(v, accumulate=accumulate) for v in elem.values()
                 )
-            if type(elem) in acc_types:  # IO registry dispatches on exact type
-                # writeable, but only with the `accessor` flag
-                return accumulate or not compat.accessor
+            if isinstance(elem, WritableAcc):
+                # writeable, but only with the `accessor` flag and a known project
+                if accumulate or not compat.accessor:
+                    return True
+                from anndata.acc._entry_points import to_json
+
+                try:
+                    to_json(elem)
+                except (TypeError, ValueError, LookupError):
+                    return True
+                return False
             return (
                 (accumulate or type(elem) not in writeable_elems)
                 if not isinstance(elem, SupportsArrayApiBase)

@@ -10,7 +10,7 @@ from functools import partial, wraps
 from importlib.metadata import version
 from itertools import product
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, get_args
 
 import h5py
 import numpy as np
@@ -22,7 +22,7 @@ from scipy import sparse
 from zarr.core.dtype import VariableLengthUTF8
 
 import anndata as ad
-from anndata import AnnData, Raw, acc
+from anndata import AnnData, Raw
 from anndata._core import views
 from anndata._core.index import _normalize_indices
 from anndata._core.merge import intersect_keys
@@ -49,6 +49,7 @@ from anndata.compat import (
 )
 
 from ..._settings import settings
+from ...acc._entry_points import WritableAcc
 from ...compat import PANDAS_3, PANDAS_STRING_ARRAY_TYPES
 from ...utils import iter_outer, warn
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
@@ -61,6 +62,7 @@ if TYPE_CHECKING:
     from numpy import typing as npt
     from numpy.typing import NDArray
 
+    from anndata import acc
     from anndata._core.sparse_dataset import BackedSparseMatrix
     from anndata._types import _ArrayStorageType, _GroupStorageType, _WriteInternal
     from anndata.compat import CSArray, CSMatrix, CupyCSMatrix
@@ -1573,7 +1575,10 @@ def write_accessor(
     """Write an :mod:`anndata.acc` accessor as a JSON-encoded string scalar.
 
     Byte-compatible with the zarr v3 `json` data type (encoded via `vlen-utf8`).
+    The project defining the accessor (see `anndata.acc` entry points) is stored as `accessor-project`.
     """
+    from anndata.acc._entry_points import to_json
+
     if not _writer.compat.accessor:
         msg = (
             f"Cannot write {type(elem).__name__}. "
@@ -1581,17 +1586,17 @@ def write_accessor(
             "as an `accessor` encoded element."
         )
         raise ValueError(msg)
-    data = json.dumps(acc.A.to_json(elem), separators=(",", ":"))
+    project, json_data = to_json(elem)
+    data = json.dumps(json_data, separators=(",", ":"))
     if isinstance(f, h5py.Group):
         write_string(f, k, data, _writer=_writer, dataset_kwargs=dataset_kwargs)
     else:
         write_scalar_zarr(f, k, data, _writer=_writer, dataset_kwargs=dataset_kwargs)
+    f[k].attrs["accessor-project"] = project
 
 
-# `MetaAcc` (e.g. `A.obs`) is missing on purpose: `to_json` cannot serialize it
-for store_type, acc_type in product(
-    _STORE_TYPES, [acc.AdRef, acc.LayerAcc, acc.MultiAcc, acc.GraphAcc]
-):
+# Subclasses dispatch to these via `_iter_patterns`.
+for store_type, acc_type in product(_STORE_TYPES, get_args(WritableAcc)):
     _REGISTRY.register_write(store_type, acc_type, IOSpec("accessor", "0.1.0"))(
         write_accessor
     )
@@ -1603,8 +1608,11 @@ del store_type, acc_type
 def read_accessor(
     elem: _ArrayStorageType, *, _reader: Reader
 ) -> acc.AdRef | acc.LayerAcc | acc.MultiAcc | acc.GraphAcc:
+    from anndata.acc._entry_points import load_acc
+
     read = read_hdf5_string if isinstance(elem, h5py.Dataset) else read_zarr_string
-    return acc.A.from_json(json.loads(read(elem, _reader=_reader)))
+    adacc = load_acc(str(_read_attr(elem.attrs, "accessor-project")))
+    return adacc.from_json(json.loads(read(elem, _reader=_reader)))
 
 
 # @_REGISTRY.register_write(np.bytes_, IOSpec("bytes", "0.2.0"))

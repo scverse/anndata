@@ -64,7 +64,7 @@ def test_accessor_needs_0_14(
 
 
 def test_accessor_subclass_unwriteable() -> None:
-    """Writers are registered for exact types, so subclasses can’t be written."""
+    """Subclasses from packages without an `anndata.acc` entry point can’t be written."""
 
     class MyRef(AdRef): ...
 
