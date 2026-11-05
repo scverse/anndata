@@ -227,43 +227,51 @@ def test_write_list(
     assert_equal(_read(diskfmt_store, diskfmt), adata)
 
 
-@pytest.mark.parametrize(
-    "existing", ["x", "x/y"], ids=["unescaped-group", "escaped-group"]
-)
-@pytest.mark.parametrize("key", ["a/b", "100%"])
+@pytest.mark.parametrize("key", ["x", "a/b", "item_0"])
 @pytest.mark.parametrize(
     "use", [lambda k: A.obsm[k], lambda _: A.obsm], ids=["single-key", "mapping"]
 )
-def test_write_escapes_keys(
+def test_write_indexed_mapping(
     diskfmt: Literal["h5ad", "zarr"],
     diskfmt_store: Path | MemoryStore,
-    existing: str,
     key: str,
     use: Callable[[str], RefAcc | MapAcc],
 ) -> None:
-    """`use=` escapes keys like a full write with the same `compat` does.
-
-    `100%` into an already escaped group would otherwise fail silently:
-    written literally, it would read back as `00` (unwrapped like a reserved key).
-    """
-    adata = ad.AnnData(np.zeros((2, 3)), obsm={existing: np.zeros((2, 2))})
+    """`use=` adds keys to a mapping that stores them in an array."""
+    adata = ad.AnnData(np.zeros((2, 3)), obsm={"x": np.zeros((2, 2))})
     _write(adata, diskfmt_store, diskfmt, compat="0.14")
 
     adata.obsm[key] = np.ones((2, 2))
     _write(adata, diskfmt_store, diskfmt, use=use(key), compat="0.14")
     read = _read(diskfmt_store, diskfmt)
 
-    assert set(read.obsm) == {existing, key}
+    assert set(read.obsm) == {"x", key}
     np.testing.assert_array_equal(read.obsm[key], np.ones((2, 2)))
 
 
-def test_write_key_cannot_escape_existing(
+@pytest.mark.parametrize("col", ["a", "new/col"], ids=["existing", "new"])
+def test_write_indexed_df_column(
+    diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore, col: str
+) -> None:
+    """`use=` adds a column to a dataframe that stores its names in an array."""
+    adata = ad.AnnData(np.zeros((2, 3)), obs=pd.DataFrame({"a": [1, 2]}))
+    _write(adata, diskfmt_store, diskfmt, compat="0.14")
+
+    adata.obs[col] = [5, 6]
+    _write(adata, diskfmt_store, diskfmt, use=A.obs[col], compat="0.14")
+    read = _read(diskfmt_store, diskfmt)
+
+    assert_equal(read.obs, adata.obs)
+
+
+def test_write_key_into_non_indexed(
     diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore
 ) -> None:
-    adata = ad.AnnData(np.zeros((2, 3)), obsm={"5%": np.zeros((2, 2))})
-    _write(adata, diskfmt_store, diskfmt)  # unescaped, so `5%` is stored literally
+    """A mapping written without `compat="0.14"` can only be fixed by rewriting it."""
+    adata = ad.AnnData(np.zeros((2, 3)), obsm={"x": np.zeros((2, 2))})
+    _write(adata, diskfmt_store, diskfmt)
     adata.obsm["a/b"] = np.ones((2, 2))
-    with pytest.raises(ValueError, match=r"A\.obsm\['a/b'\].*`use=A\.obsm`"):
+    with pytest.raises(ValueError, match=r'whole mapping.*compat="0.14"'):
         _write(adata, diskfmt_store, diskfmt, use=A.obsm["a/b"], compat="0.14")
 
     # the suggested workaround works

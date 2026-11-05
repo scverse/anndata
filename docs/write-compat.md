@@ -37,7 +37,8 @@ can read all files written with profile `"X.Y"`.
 * - `"0.14"`
   - unreleased
   - Enables the {ref}`accessor <accessor>` encoding for {mod}`anndata.acc` accessors,
-    and {ref}`escapes keys <escaped-keys>` that a file system may choke on, e.g. `/` and `:`.
+    and stores mapping keys and dataframe column names {ref}`in an array <indexed-keys>`,
+    so any string works as one, e.g. `a/b` or `a:b`.
     Older versions can’t read either.
 ```
 

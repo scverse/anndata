@@ -29,10 +29,14 @@ from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_dataset
 from anndata._core.storage import _check_x_and_layers_are_2d_on_write
 from anndata._io.utils import (
+    DF_CONVENTION,
+    IndexedLayout,
     _check_has_no_slash_key,
     check_key,
-    escape_key,
+    df_children,
     mapping_items,
+    read_df_index,
+    write_indexed,
     zero_dim_array_as_scalar,
 )
 from anndata._types import StorageType
@@ -57,7 +61,7 @@ from ...utils import iter_outer, warn
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable, Iterator
+    from collections.abc import Generator, Iterator
     from os import PathLike
     from typing import Any, Literal
 
@@ -67,7 +71,6 @@ if TYPE_CHECKING:
     from anndata import acc
     from anndata._core.sparse_dataset import BackedSparseMatrix
     from anndata._types import _ArrayStorageType, _GroupStorageType, _WriteInternal
-    from anndata._write_compat import WriteConfig
     from anndata.compat import CSArray, CSMatrix, CupyCSMatrix
     from anndata.typing import RWAble, Storable, _StorableArrayOrScalar
 
@@ -77,18 +80,6 @@ _STORE_TYPES: tuple[type[zarr.Group | h5py.Group], ...] = (
     h5py.Group,
     zarr.Group,
 )
-
-
-def escaping_keys(keys: Iterable[str], *, compat: WriteConfig) -> dict[str, str]:
-    """Map the child keys of a group that must be percent-escaped to their escaped form.
-
-    All of a group’s keys are escaped as soon as one of them needs it,
-    so that an escape sequence can never be mistaken for a literal key.
-    Keys missing from the result are unchanged by escaping.
-    """
-    if not compat.escape_keys:
-        return {}
-    return {k: e for k in keys if (e := escape_key(k)) != k}
 
 
 ####################
@@ -309,13 +300,7 @@ def read_basic_zarr(
 
 
 def read_indices(group):
-    obs_group = group["obs"]
-    obs_idx_elem = obs_group[_read_attr(obs_group.attrs, "_index")]
-    obs_idx = read_elem(obs_idx_elem)
-    var_group = group["var"]
-    var_idx_elem = var_group[_read_attr(var_group.attrs, "_index")]
-    var_idx = read_elem(var_idx_elem)
-    return obs_idx, var_idx
+    return read_df_index(group["obs"]), read_df_index(group["var"])
 
 
 def read_partial(  # noqa: PLR0913
@@ -513,16 +498,19 @@ def write_mapping(
 ):
     v = {check_key(sub_k): sub_v for sub_k, sub_v in v.items()}
     g = f.require_group(k)
-    if escape := escaping_keys(v, compat=_writer.compat):
-        # `write_spec` only sets this if absent, so this wins
-        g.attrs["encoding-version"] = "0.2.0"
-    for sub_k, sub_v in v.items():
-        _writer.write_elem(
-            g,
-            escape.get(sub_k, sub_k),
-            sub_v,
-            dataset_kwargs=dataset_kwargs,
-        )
+    if not _writer.compat.indexed_keys:
+        for sub_k, sub_v in v.items():
+            _writer.write_elem(g, sub_k, sub_v, dataset_kwargs=dataset_kwargs)
+        return
+    write_indexed(
+        g,
+        IndexedLayout.DICT,
+        v.items(),
+        _writer=_writer,
+        dataset_kwargs=dataset_kwargs,
+    )
+    # `write_spec` only sets this if absent, so this wins
+    g.attrs["encoding-version"] = IndexedLayout.DICT.encoding_version
 
 
 ##############
@@ -1143,18 +1131,17 @@ def write_dataframe(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ):
-    # Check arguments
-    for reserved in ("_index",):
-        if reserved in df.columns:
-            msg = f"{reserved!r} is a reserved name for dataframe columns."
-            raise ValueError(msg)
+    indexed = _writer.compat.indexed_keys
+    # in the 0.2.0 layout, `_index` is the child key of an unnamed index
+    if not indexed and "_index" in df.columns:
+        msg = "'_index' is a reserved name for dataframe columns."
+        raise ValueError(msg)
     group = _require_group_write_dataframe(f, key, df)
     if not df.columns.is_unique:
         duplicates = list(df.columns[df.columns.duplicated()])
         msg = f"Found repeated column names: {duplicates}. Column names must be unique."
         raise ValueError(msg)
     col_names = [check_key(c) for c in df.columns]
-    group.attrs["column-order"] = col_names
 
     if df.index.name is not None:
         if df.index.name in col_names and not pd.Series(
@@ -1168,8 +1155,8 @@ def write_dataframe(
             raise ValueError(msg)
         index_name = df.index.name
     else:
-        index_name = "_index"
-    group.attrs["_index"] = check_key(index_name)
+        index_name = "" if indexed else "_index"
+    index_name = check_key(index_name)
 
     if TYPE_CHECKING:  # `pd.DataFrame.index` is `Index[Any]`
         assert isinstance(df.index.array, pd.arrays.ExtensionArray)
@@ -1179,50 +1166,72 @@ def write_dataframe(
         if isinstance(df.index.array, pd.arrays.NumpyExtensionArray)
         else df.index.array
     )
-    _writer.write_elem(group, index_name, index_values, dataset_kwargs=dataset_kwargs)
-    for colname, series in df.items():
-        # TODO: this should write the "true" representation of the series (i.e. the underlying array or ndarray depending)
-        _writer.write_elem(
-            group, colname, series._values, dataset_kwargs=dataset_kwargs
-        )
+    # TODO: this should write the "true" representation of the series (i.e. the underlying array or ndarray depending)
+    columns = [(c, s._values) for c, (_, s) in zip(col_names, df.items(), strict=True)]
+
+    if not indexed:
+        group.attrs["column-order"] = col_names
+        group.attrs["_index"] = index_name
+        for colname, values in [(index_name, index_values), *columns]:
+            _writer.write_elem(group, colname, values, dataset_kwargs=dataset_kwargs)
+        return
+
+    # https://github.com/scverse/zarr-convention-dataframe, with the index first
+    n_cols = write_indexed(
+        group,
+        IndexedLayout.DATAFRAME,
+        [(index_name, index_values), *columns],
+        _writer=_writer,
+        dataset_kwargs=dataset_kwargs,
+    )
+    # `write_spec` only sets `encoding-version` if absent, so this wins
+    group.attrs.update({
+        "encoding-version": IndexedLayout.DATAFRAME.encoding_version,
+        "df:shape": [len(df), n_cols],
+        "df:index": 0,
+    })
+    if isinstance(group, zarr.Group):  # `zarr_conventions` is a zarr mechanism
+        group.attrs["zarr_conventions"] = [dict(DF_CONVENTION)]
 
 
 @_REGISTRY.register_read(h5py.Group, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_read(zarr.Group, IOSpec("dataframe", "0.2.0"))
+@_REGISTRY.register_read(h5py.Group, IOSpec("dataframe", "0.3.0"))
+@_REGISTRY.register_read(zarr.Group, IOSpec("dataframe", "0.3.0"))
 def read_dataframe(elem: _GroupStorageType, *, _reader: Reader) -> pd.DataFrame:
-    attrs: Mapping[str, Any] = elem.attrs
-    columns = list(_read_attr(attrs, "column-order"))
-    idx_key = _read_attr(attrs, "_index")
+    children = df_children(elem)
+    idx, columns = children.index, children.columns
     df = pd.DataFrame(
-        {k: _reader.read_elem(elem[k]) for k in columns},
-        index=_reader.read_elem(elem[idx_key]),
-        columns=columns if columns else None,
+        {name: _reader.read_elem(elem[k]) for name, k in columns},
+        index=read_df_index(elem) if idx is None else _reader.read_elem(elem[idx.key]),
+        columns=[name for name, _ in columns] or None,
     )
-    if idx_key != "_index":
-        df.index.name = idx_key
+    if idx is not None:
+        df.index.name = idx.name
     return df
 
 
 # TODO: Figure out what indices is allowed to be at each element
 @_REGISTRY.register_read_partial(h5py.Group, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_read_partial(zarr.Group, IOSpec("dataframe", "0.2.0"))
+@_REGISTRY.register_read_partial(h5py.Group, IOSpec("dataframe", "0.3.0"))
+@_REGISTRY.register_read_partial(zarr.Group, IOSpec("dataframe", "0.3.0"))
 def read_dataframe_partial(
     elem, *, items=None, indices=(slice(None, None), slice(None, None))
 ):
+    children = df_children(elem)
+    idx, columns = children.index, children.columns
     if items is not None:
-        columns = [
-            col for col in _read_attr(elem.attrs, "column-order") if col in items
-        ]
-    else:
-        columns = list(_read_attr(elem.attrs, "column-order"))
-    idx_key = _read_attr(elem.attrs, "_index")
+        columns = [c for c in columns if c.name in items]
     df = pd.DataFrame(
-        {k: read_elem_partial(elem[k], indices=indices[0]) for k in columns},
-        index=read_elem_partial(elem[idx_key], indices=indices[0]),
-        columns=columns if columns else None,
+        {name: read_elem_partial(elem[k], indices=indices[0]) for name, k in columns},
+        index=read_df_index(elem)[indices[0]]
+        if idx is None
+        else read_elem_partial(elem[idx.key], indices=indices[0]),
+        columns=[name for name, _ in columns] or None,
     )
-    if idx_key != "_index":
-        df.index.name = idx_key
+    if idx is not None:
+        df.index.name = idx.name
     return df
 
 

@@ -31,8 +31,7 @@ from .._core.merge import (
 )
 from .._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .._io.specs import read_elem, write_elem
-from .._io.specs.methods import escaping_keys
-from .._io.utils import mapping_items
+from .._io.utils import IndexedLayout, mapping_items, read_df_index
 from .._write_compat import WriteConfig
 from . import read_dispatched, read_elem_lazy
 
@@ -197,22 +196,16 @@ def read_as_backed(group: StorageType):
     return read_dispatched(group, callback=callback)
 
 
-def _keep_escaping(groups: Collection[zarr.Group | h5py.Group]) -> WriteConfig:
-    """Escape the output mapping’s keys if any input’s were, as they might need it."""
-    escaped = any(g.attrs.get("encoding-version") == "0.2.0" for g in groups)
-    return WriteConfig(escape_keys=escaped)
+def _keep_indexed(groups: Collection[zarr.Group | h5py.Group]) -> WriteConfig:
+    """Store the output’s keys/column names in an array if any input did, as they might need it."""
+    indexed = any(IndexedLayout.of(g) is not None for g in groups)
+    return WriteConfig(indexed_keys=indexed)
 
 
 def _df_index(group: zarr.Group | h5py.Group, key: str) -> pd.Index:
-    df = _subgroup(group, key)
-    if not isinstance(index_key := df.attrs["_index"], str):
-        msg = f"Expected `_index` of {key!r} to be a string, got {index_key!r}."
-        raise TypeError(msg)
-    index = read_elem(df[index_key])
-    if not isinstance(index, np.ndarray | pd.api.extensions.ExtensionArray):
-        msg = f"Expected index of {key!r} to be an array, got {type(index)}."
-        raise TypeError(msg)
-    return pd.Index(index)
+    index = read_df_index(_subgroup(group, key))
+    # AnnData turns these into strings
+    return index.astype(str) if isinstance(index, pd.RangeIndex) else index
 
 
 ###################
@@ -315,18 +308,20 @@ def _write_concat_mappings(  # noqa: PLR0913, PLR0917
     """
     Write a list of mappings to a zarr/h5 group.
     """
-    escape = escaping_keys(keys, compat=compat)
+    layout = IndexedLayout.DICT if compat.indexed_keys else None
     mapping_group = output_group.create_group(output_path)
     mapping_group.attrs.update({
         "encoding-type": "dict",
-        "encoding-version": "0.2.0" if escape else "0.1.0",
+        "encoding-version": layout.encoding_version if layout else "0.1.0",
     })
-    for k in keys:
+    if layout:
+        write_elem(mapping_group, layout.names_key, np.array(list(keys), dtype=object))
+    for i, k in enumerate(keys):
         elems = [m[k] for m in mappings]
         _write_concat_sequence(
             elems,
             output_group=mapping_group,
-            output_path=escape.get(k, k),
+            output_path=layout.child_key(i) if layout else k,
             axis=axis,
             index=index,
             reindexers=reindexers,
@@ -454,7 +449,7 @@ def _write_alt_mapping(
         output_group,
         f"{alt_axis_name}m",
         alt_mapping,
-        compat=_keep_escaping(subgroups),
+        compat=_keep_indexed(subgroups),
     )
 
 
@@ -469,7 +464,12 @@ def _write_alt_annot(
     alt_annot = merge_dataframes(
         [_read_df(g, alt_axis_name) for g in groups], alt_indices, merge
     )
-    write_elem(output_group, alt_axis_name, alt_annot)
+    write_elem(
+        output_group,
+        alt_axis_name,
+        alt_annot,
+        compat=_keep_indexed([_subgroup(g, alt_axis_name) for g in groups]),
+    )
 
 
 def _write_axis_annot(  # noqa: PLR0917
@@ -487,7 +487,12 @@ def _write_axis_annot(  # noqa: PLR0917
     concat_annot.index = concat_indices
     if label is not None:
         concat_annot[label] = label_col
-    write_elem(output_group, axis_name, concat_annot)
+    write_elem(
+        output_group,
+        axis_name,
+        concat_annot,
+        compat=_keep_indexed([_subgroup(g, axis_name) for g in groups]),
+    )
 
 
 def _write_alt_pairwise(
@@ -506,7 +511,7 @@ def _write_alt_pairwise(
         output_group,
         f"{alt_axis_name}p",
         alt_pairwise,
-        compat=_keep_escaping(subgroups),
+        compat=_keep_indexed(subgroups),
     )
 
 
@@ -822,5 +827,5 @@ def _concat_on_disk_inner(  # noqa: PLR0913
             index=m_index,
             reindexers=m_reindexers,
             fill_value=fill_value,
-            compat=_keep_escaping([_subgroup(g, m) for g in groups]),
+            compat=_keep_indexed([_subgroup(g, m) for g in groups]),
         )

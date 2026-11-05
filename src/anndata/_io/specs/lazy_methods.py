@@ -14,6 +14,7 @@ from scipy import sparse
 import anndata as ad
 from anndata._core.file_backing import filename, get_elem_name
 from anndata._core.xarray import Dataset2D, requires_xarray
+from anndata._io.utils import DfChild, df_children, read_df_index
 from anndata.compat import DaskArray, XDataset, XVariable, pandas_as_str
 
 from .registry import _LAZY_REGISTRY, IOSpec, read_elem
@@ -302,6 +303,8 @@ def _read_index(elem: StorageType) -> pd.Index:
 
 @_LAZY_REGISTRY.register_read(zarr.Group, IOSpec("dataframe", "0.2.0"))
 @_LAZY_REGISTRY.register_read(h5py.Group, IOSpec("dataframe", "0.2.0"))
+@_LAZY_REGISTRY.register_read(zarr.Group, IOSpec("dataframe", "0.3.0"))
+@_LAZY_REGISTRY.register_read(h5py.Group, IOSpec("dataframe", "0.3.0"))
 @requires_xarray
 def read_dataframe(
     elem: h5py.Group | zarr.Group,
@@ -310,25 +313,42 @@ def read_dataframe(
     use_range_index: bool = False,
     chunks: tuple[int | None, ...] | None = None,
 ) -> Dataset2D:
-    attrs: Mapping[str, Any] = elem.attrs
+    children = df_children(elem)
+    idx, columns = children.index, children.columns
+    idx_name: str | None = None
+    idx_key: str | None = None
+    if idx is None:  # optional from v0.3.0 on
+        use_range_index = True
+    else:
+        if idx.name is None and "_index" in {c.name for c in columns}:
+            msg = "Cannot lazily read a dataframe with an unnamed index and a column named '_index'."
+            raise NotImplementedError(msg)
+        # `to_memory` turns an index named `_index` back into an unnamed one
+        idx_name, idx_key = idx.name or "_index", idx.key
+        columns = [*columns, DfChild(idx_name, idx_key)]
     # going through dask for reading into memory the index doesn't make sense, hence the ternary.
     elem_dict = {
-        k: _reader.read_elem(elem[k], chunks=chunks)
-        if (use_range_index and k == attrs["_index"]) or k != attrs["_index"]
+        name: _reader.read_elem(elem[k], chunks=chunks)
+        if use_range_index or k != idx_key
         else _read_index(elem[k])
-        for k in [*attrs["column-order"], attrs["_index"]]
+        for name, k in columns
     }
-    if pd.api.types.is_string_dtype(elem_dict[attrs["_index"]]) and not use_range_index:
-        elem_dict[attrs["_index"]] = pandas_as_str(elem_dict[attrs["_index"]])
+    if (
+        idx_name is not None
+        and pd.api.types.is_string_dtype(elem_dict[idx_name])
+        and not use_range_index
+    ):
+        elem_dict[idx_name] = pandas_as_str(elem_dict[idx_name])
     # If we use a range index, the coord axis needs to have the special dim name
     # which is used below as well.
-    if not use_range_index:
-        dim_name = attrs["_index"]
+    if idx_name is not None and not use_range_index:
+        dim_name = idx_name
         # no sense in reading this in multiple times since xarray requires an in-memory index
         index = elem_dict[dim_name]
     else:
         dim_name = DUMMY_RANGE_INDEX_KEY
-        index = pd.RangeIndex(len(elem_dict[attrs["_index"]])).astype("str")
+        index = read_df_index(elem) if idx_name is None else elem_dict[idx_name]
+        index = pd.RangeIndex(len(index)).astype("str")
     elem_xarray_dict = dict(
         _gen_xarray_dict_iterator_from_elems(elem_dict, dim_name, index)
     )
@@ -341,7 +361,8 @@ def read_dataframe(
     ds.is_backed = True
     # We ensure the indexing_key attr always points to the true index
     # so that the roundtrip works even for the `use_range_index` `True` case
-    ds.true_index_dim = attrs["_index"]
+    if idx_name is not None:
+        ds.true_index_dim = idx_name
     return ds
 
 

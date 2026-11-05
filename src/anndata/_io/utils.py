@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import re
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
+from enum import Enum
 from functools import WRAPPER_ASSIGNMENTS, cache, wraps
 from itertools import pairwise
-from ntpath import isreserved as _is_reserved_win
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Literal, NamedTuple, cast
 
 import numpy as np
 import pandas as pd
@@ -15,7 +15,7 @@ from .._core.sparse_dataset import BaseCompressedSparseDataset
 from ..utils import warn
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Iterable, Iterator
     from typing import Any, Literal
 
     import h5py
@@ -171,7 +171,7 @@ def write_use(
     compat: WriteConfig,
 ) -> None:
     """Write only the parts of `adata` referenced by `use` into the existing anndata group `f`."""
-    from .specs import read_elem, write_elem
+    from .specs import write_elem
 
     if (
         f.attrs.get("encoding-type"),
@@ -180,53 +180,43 @@ def write_use(
         msg = "Cannot write a subelement of an AnnData object to a store that is not an AnnData store."
         raise ValueError(msg)
     for dim in ("obs", "var"):
-        group = cast("_GroupStorageType", f[dim])
-        on_disk = read_elem(
-            cast("StorageType", group[cast("str", group.attrs["_index"])])
-        )
-        if not pd.Index(cast("np.ndarray", on_disk)).equals(
-            getattr(adata, f"{dim}_names")
-        ):
+        on_disk = read_df_index(cast("_GroupStorageType", f[dim]))
+        if isinstance(on_disk, pd.RangeIndex):  # AnnData turns these into strings
+            on_disk = on_disk.astype(str)
+        if not on_disk.equals(getattr(adata, f"{dim}_names")):
             msg = f"Cannot write {use}: {dim}_names in the store do not match the AnnData object."
             raise ValueError(msg)
 
     # resolve everything first so an invalid accessor fails before anything is written
     uses = use if isinstance(use, Sequence) else [use]
-    for parent, map_acc, key, elem in [_resolve_use(f, adata, u) for u in uses]:
+    for parent, key, elem in [_resolve_use(f, adata, u) for u in uses]:
         if parent is not None and parent not in f:
-            write_elem(f, parent, {})
+            write_elem(f, parent, {}, compat=compat)
         group = f if parent is None else cast("_GroupStorageType", f[parent])
-        if map_acc is not None:
-            key = _key_in_mapping(group, map_acc, key, compat=compat)
-        write_elem(group, key, elem, dataset_kwargs=dataset_kwargs, compat=compat)
-
-
-def _key_in_mapping(
-    group: _GroupStorageType, map_acc: MapAcc, key: str, *, compat: WriteConfig
-) -> str:
-    """Get the on-disk name of `key` in the mapping `group`, escaping the group if needed."""
-    if group.attrs.get("encoding-version") == "0.2.0":
-        # already escaped: escape regardless of `compat`, else it would read back wrong
-        return escape_key(key)
-    from .specs.methods import escaping_keys
-
-    if not (escaped := escaping_keys([key], compat=compat)):
-        return key
-    if renamed := list(escaping_keys(group, compat=compat)):
-        # zarr can’t move nodes, so we can’t escape the existing keys in place
-        msg = (
-            f"Cannot write {map_acc[key]!r} without escaping the existing keys {renamed!r}. "
-            f"Write the whole mapping instead: `use={map_acc!r}`."
+        if (layout := IndexedLayout.of(group)) is None:
+            write_elem(group, key, elem, dataset_kwargs=dataset_kwargs, compat=compat)
+            continue
+        # the group stores names in an array, so add `key` there if it’s new
+        names = layout.read_names(group)
+        i = names.index(key) if key in names else len(names)
+        write_elem(
+            group,
+            layout.child_key(i),
+            elem,
+            dataset_kwargs=dataset_kwargs,
+            compat=compat,
         )
-        raise ValueError(msg)
-    group.attrs["encoding-version"] = "0.2.0"
-    return escaped[key]
+        if i == len(names):
+            write_elem(group, layout.names_key, np.array([*names, key], dtype=object))
+            if "df:shape" in group.attrs:
+                n_rows, _ = cast("Sequence[int]", group.attrs["df:shape"])
+                group.attrs["df:shape"] = [n_rows, i + 1]
 
 
 def _resolve_use(  # noqa: PLR0911
     f: _GroupStorageType, adata: AnnData, use: AdRef | RefAcc | MapAcc
-) -> tuple[str | None, MapAcc | None, str, RWAble]:
-    """Get the parent group, its accessor if it’s a mapping, key, and element to write for `use`."""
+) -> tuple[str | None, str, RWAble]:
+    """Get the parent group, key, and element to write for `use`."""
     from ..acc import (
         AdRef,
         GraphAcc,
@@ -240,40 +230,41 @@ def _resolve_use(  # noqa: PLR0911
 
     match use:
         case AdRef(acc=MetaAcc(dim=dim) as acc, idx=str() as col):
-            if col in {"_index", cast("_GroupStorageType", f[dim]).attrs["_index"]}:
+            group = cast("_GroupStorageType", f[dim])
+            idx = df_children(group).index
+            # in the 0.2.0 layout, `_index` is the child key of an unnamed index
+            if (idx is not None and col == idx.name) or (
+                col == "_index" and IndexedLayout.of(group) is None
+            ):
                 msg = f"Cannot write column {col!r}: it is the name of the {dim} index."
                 raise ValueError(msg)
             # `._values` is what `write_dataframe` writes for each column
-            return dim, None, col, acc.get(adata)[col]._values
+            return dim, col, acc.get(adata)[col]._values
         case AdRef():
             msg = f"Cannot write {use}: only `obs`/`var` columns can be written as single vectors."
             raise ValueError(msg)
-        case LayerAcc(k=None):
-            return None, None, "X", use.get(adata)
-        case LayerAcc(k=str() as k):
-            map_acc: MapAcc = LayerMapAcc(
-                ref_class=use.ref_class, ref_acc_cls=type(use)
+        case LayerAcc(k=k):
+            return (
+                None if k is None else "layers",
+                "X" if k is None else k,
+                use.get(adata),
             )
-            return "layers", map_acc, k, use.get(adata)
         case MetaAcc(dim=dim):
-            return None, None, dim, use.get(adata)
+            return None, dim, use.get(adata)
         case MultiAcc(dim=dim, k=k):
-            map_acc = MultiMapAcc(dim, ref_class=use.ref_class, ref_acc_cls=type(use))
-            return f"{dim}m", map_acc, k, use.get(adata)
+            return f"{dim}m", k, use.get(adata)
         case GraphAcc(dim=dim, k=k):
-            map_acc = GraphMapAcc(dim, ref_class=use.ref_class, ref_acc_cls=type(use))
-            return f"{dim}p", map_acc, k, use.get(adata)
+            return f"{dim}p", k, use.get(adata)
         case LayerMapAcc():  # `adata.layers` contains `X` as `None`
             return (
-                None,
                 None,
                 "layers",
                 {k: v for k, v in use.get(adata).items() if k is not None},
             )
         case MultiMapAcc(dim=dim):
-            return None, None, f"{dim}m", dict(use.get(adata))
+            return None, f"{dim}m", dict(use.get(adata))
         case GraphMapAcc(dim=dim):
-            return None, None, f"{dim}p", dict(use.get(adata))
+            return None, f"{dim}p", dict(use.get(adata))
         case _:
             msg = f"Cannot write {use!r}."
             raise TypeError(msg)
@@ -409,95 +400,131 @@ def _check_has_no_slash_key(attr: str, elem: object, *, compat: WriteConfig) -> 
 
     if attr in {"obs", "var", "uns", "raw"}:
         return  # `write_elem` checks these against `settings.disallow_forward_slash_in_h5ad`
-    if compat.escape_keys:
-        return  # keys get escaped, see `escape_key`
+    if compat.indexed_keys:
+        return  # keys are stored in an array, not as child names
     assert isinstance(elem, Mapping)
     if any("/" in k for k in elem if k not in {"/", None}):
         msg = f"Forward slashes are not allowed in keys in {attr}"
         raise ValueError(msg)
 
 
-# The characters Windows forbids in file names, per “Naming Files, Paths, and Namespaces”:
-# https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file#naming-conventions
-# That is a superset of what POSIX (`/` and NUL) and macOS (those plus `:`, the classic
-# HFS separator) forbid, so escaping these makes a key safe as a path segment on any of
-# them – which matters for zarr stores that map keys to real files.
-# `%` is in there because it introduces an escape sequence.
-UNSAFE_KEY_CHARS = frozenset('%/\\:*?"<>|') | frozenset(map(chr, range(32)))
-_ESCAPE_RE = re.compile("%([0-9A-F]{2})")
+# https://github.com/scverse/zarr-convention-dataframe
+DF_CONVENTION = MappingProxyType({
+    "uuid": "1f1b36d2-3185-6da8-91f6-9a0823af2d33",
+    "schema_url": "https://raw.githubusercontent.com/scverse/zarr-convention-dataframe/refs/tags/v1/schema.json",
+    "spec_url": "https://github.com/scverse/zarr-convention-dataframe/blob/v1/README.md",
+    "name": "df:",
+    "description": "A collection of 1d-interpreted arrays to be used as a dataframe",
+})
 
 
-def _is_reserved_key(key: str) -> bool:
-    """Whether `key` is unusable as a child key even though its characters are safe.
+@dataclass(frozen=True)
+class _IndexedLayout:
+    encoding_type: str
+    encoding_version: str
+    names_key: str
+    """Child key of the names array."""
+    prefix: str
+    """Child keys are `{prefix}_{i}`."""
 
-    The first four are reserved by the `zarr` v3 spec
-    (https://zarr-specs.readthedocs.io/en/latest/v3/core/index.html#node-names),
-    the last one catches Windows device names like `CON` and trailing dots/spaces.
+
+class IndexedLayout(_IndexedLayout, Enum):
+    """A layout storing child names in an array and naming children by position."""
+
+    DATAFRAME = ("dataframe", "0.3.0", "columns", "column")
+    DICT = ("dict", "0.2.0", "keys", "item")
+
+    @classmethod
+    def of(cls, group: _GroupStorageType) -> IndexedLayout | None:
+        """Get the layout `group` uses, if any."""
+        spec = (group.attrs.get("encoding-type"), group.attrs.get("encoding-version"))
+        return next(
+            (l for l in cls if (l.encoding_type, l.encoding_version) == spec), None
+        )
+
+    def child_key(self, i: int) -> str:
+        return f"{self.prefix}_{i}"
+
+    def read_names(self, group: _GroupStorageType) -> list[str]:
+        from .specs import read_elem
+
+        names = read_elem(group[self.names_key])
+        return [str(n) for n in cast("Iterable[str]", names)]
+
+
+def write_indexed(
+    group: _GroupStorageType,
+    layout: IndexedLayout,
+    items: Iterable[tuple[str, RWAble]],
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any],
+) -> int:
+    """Write `items` as numbered children and their names into an array.
+
+    Returns the number of items written.
     """
-    return (
-        not key
-        or set(key) == {"."}  # `.`, `..`, `...`, …
-        or key.startswith("__")
-        or key == "zarr.json"
-        or _is_reserved_win(key)
-    )
-
-
-def escape_key(key: str) -> str:
-    """Make `key` usable as a child key.
-
-    Characters a file system may choke on are percent-escaped,
-    and a key that is reserved even without them is wrapped in a `%` on either end.
-    That `%` cannot be mistaken for an escape sequence,
-    as those are always a `%` followed by two hexadecimal digits.
-    Wrapping unconditionally would be just as readable back,
-    but we only do it where needed, so that keys stay legible on disk.
-
-    >>> escape_key("foo/bar")
-    'foo%2Fbar'
-    >>> escape_key("CON")  # a Windows device name
-    '%CON%'
-    >>> escape_key("NUL.txt")  # `NUL` stays the device whatever follows the period
-    '%NUL.txt%'
-    >>> [unescape_key(escape_key(k)) for k in ["100%/day", "CON", "..", "__x", ""]]
-    ['100%/day', 'CON', '..', '__x', '']
-    """
-    escaped = _escape_chars(key)
-    # escaping can neither create nor remove a reserved key, so this is stable.
-    # Wrapping breaks every rule at once: the result is non-empty, is not all periods,
-    # starts with neither `__` nor a device name, ends in neither a period nor a space,
-    # and is not `zarr.json` – so it is never reserved itself, whatever `key` was.
-    return f"%{escaped}%" if _is_reserved_key(escaped) else escaped
-
-
-def _escape_chars(key: str) -> str:
-    return "".join(f"%{ord(c):02X}" if c in UNSAFE_KEY_CHARS else c for c in key)
-
-
-def unescape_key(key: str) -> str:
-    """Invert :func:`escape_key`, rejecting keys no conforming writer produces.
-
-    >>> unescape_key("%41")  # `A` needs no escaping, so this would collide with it
-    Traceback (most recent call last):
-      ...
-    ValueError: Invalid escaped key '%41'.
-    """
-    # a `%` can never be the 2nd or 3rd character of an escape
-    wrapped = len(key) >= 2 and key[0] == key[-1] == "%"
-    inner = key[1:-1] if wrapped else key
-    unescaped = _ESCAPE_RE.sub(lambda m: chr(int(m[1], 16)), inner)
-    # catches stray `%`s, lower-case hex digits, and needlessly escaped characters
-    if _escape_chars(unescaped) != inner:
-        msg = f"Invalid escaped key {key!r}."
-        raise ValueError(msg)
-    return unescaped
+    names: list[str] = []
+    for i, (name, value) in enumerate(items):
+        _writer.write_elem(
+            group, layout.child_key(i), value, dataset_kwargs=dataset_kwargs
+        )
+        names.append(name)
+    _writer.write_elem(group, layout.names_key, np.array(names, dtype=object))
+    return len(names)
 
 
 def mapping_items(group: _GroupStorageType) -> Iterator[tuple[str, StorageType]]:
-    """Iterate over the keys and children of a `dict` encoded group, unescaping keys if needed."""
-    escaped = group.attrs.get("encoding-version") == "0.2.0"
-    for k, v in dict(group).items():
-        yield (unescape_key(k) if escaped else k), v
+    """Iterate over the keys and children of a `dict` encoded group."""
+    if (layout := IndexedLayout.of(group)) is None:
+        return iter(dict(group).items())
+    names = layout.read_names(group)
+    return ((k, group[layout.child_key(i)]) for i, k in enumerate(names))
+
+
+class DfChild[N: str | None](NamedTuple):
+    """A dataframe’s index or column."""
+
+    name: N
+    """Its name, which is `None` for an unnamed index."""
+    key: str
+    """The key of the child holding its data."""
+
+
+@dataclass(frozen=True)
+class DfChildren:
+    index: DfChild[str | None] | None
+    """The index, which is optional from v0.3.0 on."""
+    columns: list[DfChild[str]]
+
+
+def df_children(group: _GroupStorageType) -> DfChildren:
+    """Get the index and columns of a `dataframe` encoded group."""
+    from ..compat import _read_attr
+
+    if (layout := IndexedLayout.of(group)) is None:
+        idx = cast("str", _read_attr(group.attrs, "_index"))
+        col_order = cast("Iterable[str]", _read_attr(group.attrs, "column-order"))
+        return DfChildren(
+            DfChild(None if idx == "_index" else idx, idx),
+            [DfChild(c, c) for c in col_order],
+        )
+    names = layout.read_names(group)
+    cols = [DfChild(n, layout.child_key(i)) for i, n in enumerate(names)]
+    if (i_idx := group.attrs.get("df:index")) is None:
+        return DfChildren(None, cols)
+    idx_name, idx_key = cols.pop(int(cast("int", i_idx)))
+    return DfChildren(DfChild(idx_name or None, idx_key), cols)
+
+
+def read_df_index(group: _GroupStorageType) -> pd.Index:
+    """Read a `dataframe` encoded group’s index, or a `RangeIndex` if it has none."""
+    from .specs import read_elem
+
+    if (idx := df_children(group).index) is None:
+        n_rows, _ = cast("Sequence[int]", group.attrs["df:shape"])
+        return pd.RangeIndex(int(n_rows))
+    return pd.Index(cast("np.ndarray", read_elem(cast("StorageType", group[idx.key]))))
 
 
 # -------------------------------------------------------------------------------

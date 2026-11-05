@@ -63,10 +63,13 @@ class WriteConfig:
     accessor: bool = field(default_factory=_min_version("0.14"))
     """Write :mod:`anndata.acc` accessors using the `accessor` encoding (anndata ≥0.14)."""
 
-    escape_keys: bool = field(default_factory=_min_version("0.14"))
-    """Escape mapping keys that a file system may choke on (anndata ≥0.14).
+    indexed_keys: bool = field(default_factory=_min_version("0.14"))
+    """Store mapping keys and dataframe column names in an array instead of as child names (anndata ≥0.14).
 
-    E.g. `a/b`, `a:b`, or `NUL` in :attr:`~anndata.AnnData.uns`.
+    This allows any string as key, e.g. `a/b`, `a:b`, or `NUL` in :attr:`~anndata.AnnData.uns`,
+    and makes dataframes follow the `zarr dataframe convention`_.
+
+    .. _zarr dataframe convention: https://github.com/scverse/zarr-convention-dataframe
     """
 
     @property
@@ -100,7 +103,8 @@ class WriteCompat(WriteConfig, Enum):
     Enables
 
     - the `accessor` encoding for :mod:`anndata.acc` accessors.
-    - escaping keys that a file system may choke on, e.g. `a/b`, `a:b`, or `NUL`.
+    - storing mapping keys and dataframe column names in an array, so any string works as one,
+      e.g. `a/b`, `a:b`, or `NUL`.
     """
 
     DEFAULT = V0_13
