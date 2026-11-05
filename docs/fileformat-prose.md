@@ -87,11 +87,11 @@ From the `"0.14"` {doc}`write compatibility profile <write-compat>` on,
 mappings and dataframes therefore store their keys in a {ref}`string array <string-array>`
 and name their children by position instead:
 
-* The group MUST contain a string array of the keys in order (the *names array*)
-* The element for the *i*th key MUST be the child `{prefix}_{i}`,
-  where `{i}` is *i* in base 10 without sign or leading zeros,
+- The group MUST contain a string array of the keys in order (the _names array_)
+- The element for the *i*th key MUST be the child `{prefix}_{i}`,
+  where `{i}` is _i_ in base 10 without sign or leading zeros,
   and the children MUST be numbered consecutively from `{prefix}_0` with no gaps
-* Which names array and prefix to use is part of each encoding’s own specification –
+- Which names array and prefix to use is part of each encoding’s own specification –
   see {ref}`dataframes <dataframe-indexed>` and {ref}`mappings <mapping-indexed>`
 
 This is the layout of the [zarr dataframe convention][df-conv],
@@ -313,18 +313,18 @@ The index and columns are stored as {ref}`indexed keys <indexed-keys>`
 following the [zarr dataframe convention][df-conv],
 with the names array `"columns"` and the prefix `"column"`.
 
-* A dataframe MUST be stored as a group
-* The group's metadata:
-    * MUST contain encoding metadata `"encoding-type": "dataframe"`, `"encoding-version": "0.3.0"`
-    * MUST contain `"df:shape"`, the number of rows and the number of columns *including* the index
-    * MAY contain `"df:index"`, the position of the index in `"columns"`.
-      Without it, a reader MUST use a range index `0` … `n_rows - 1`.
-      When there is an index, anndata writes it at position `0`
-    * in `zarr`, MUST contain the convention’s `"zarr_conventions"` entry
-* The group MUST contain the string array `"columns"`, holding the index name (if any) and the column names
-* An unnamed index MUST be named `""` (the empty string)
-* `"column_{i}"` MUST hold the data for `columns[i]`, each an array with equivalent first dimensions
-* Each entry SHOULD share chunk sizes (in the HDF5 or zarr container)
+- A dataframe MUST be stored as a group
+- The group's metadata:
+  - MUST contain encoding metadata `"encoding-type": "dataframe"`, `"encoding-version": "0.3.0"`
+  - MUST contain `"df:shape"`, the number of rows and the number of columns _including_ the index
+  - MAY contain `"df:index"`, the position of the index in `"columns"`.
+    Without it, a reader MUST use a range index `0` … `n_rows - 1`.
+    When there is an index, anndata writes it at position `0`
+  - in `zarr`, MUST contain the convention’s `"zarr_conventions"` entry
+- The group MUST contain the string array `"columns"`, holding the index name (if any) and the column names
+- An unnamed index MUST be named `""` (the empty string)
+- `"column_{i}"` MUST hold the data for `columns[i]`, each an array with equivalent first dimensions
+- Each entry SHOULD share chunk sizes (in the HDF5 or zarr container)
 
 (mappings)=
 ## Mappings
@@ -380,10 +380,10 @@ pca/variance_ratio <zarr.core.Array '/uns/pca/variance_ratio' (50,) float64 read
 The keys are stored as {ref}`indexed keys <indexed-keys>`,
 with the names array `"keys"` and the prefix `"item"`.
 
-* Each mapping MUST be its own group
-* The group's metadata MUST contain the encoding metadata `"encoding-type": "dict"`, `"encoding-version": "0.2.0"`
-* The group MUST contain the string array `"keys"`
-* `"item_{i}"` MUST hold the element for `keys[i]`
+- Each mapping MUST be its own group
+- The group's metadata MUST contain the encoding metadata `"encoding-type": "dict"`, `"encoding-version": "0.2.0"`
+- The group MUST contain the string array `"keys"`
+- `"item_{i}"` MUST hold the element for `keys[i]`
 
 (acc-encoding)=
 ## Accessors
