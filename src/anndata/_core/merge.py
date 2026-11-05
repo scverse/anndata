@@ -611,6 +611,16 @@ class Reindexer:
             fill_value = default_fill_value([el])
         shape = list(el.shape)
         if el.shape[axis] == 0:
+            if isinstance(el._meta, CSArray | CSMatrix):
+                # Delegate to _apply_to_sparse's own zero-shape branch so the
+                # result stays sparse, matching what this same reindex does
+                # for a plain (non-dask) sparse input. The array is empty
+                # along this axis, so compute() is cheap regardless of the
+                # other axis's length.
+                sparse_result = self._apply_to_sparse(
+                    el.compute(), axis=axis, fill_value=fill_value
+                )
+                return da.from_array(sparse_result, chunks=sparse_result.shape)
             # Presumably faster since it won't allocate the full array
             shape[axis] = len(self.new_idx)
             return da.broadcast_to(fill_value, tuple(shape))
