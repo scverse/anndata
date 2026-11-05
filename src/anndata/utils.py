@@ -317,6 +317,9 @@ def make_index_unique(index: pd.Index[str], join: str = "-") -> pd.Index[str]:
         return index
     from collections import Counter
 
+    if isinstance(index.dtype, pd.CategoricalDtype):
+        # new names cannot be set in a Categorical without adding them as categories
+        index = index.astype(index.dtype.categories.dtype)
     values = index.array.copy()
     indices_dup = index.duplicated(keep="first") & index.notna()
     values_dup = values[indices_dup]
