@@ -10,7 +10,7 @@ from functools import partial, wraps
 from importlib.metadata import version
 from itertools import product
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Protocol, get_args
+from typing import TYPE_CHECKING, Protocol
 
 import h5py
 import numpy as np
@@ -49,7 +49,7 @@ from anndata.compat import (
 )
 
 from ..._settings import settings
-from ...acc._entry_points import WritableAcc
+from ...acc import AdRef, RefAcc
 from ...compat import PANDAS_3, PANDAS_STRING_ARRAY_TYPES
 from ...utils import iter_outer, warn
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
@@ -1567,7 +1567,7 @@ def write_string(
 def write_accessor(
     f: _GroupStorageType,
     k: str,
-    elem: acc.AdRef | acc.LayerAcc | acc.MultiAcc | acc.GraphAcc,
+    elem: AdRef | RefAcc,
     *,
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
@@ -1596,7 +1596,8 @@ def write_accessor(
 
 
 # Subclasses dispatch to these via `_iter_patterns`.
-for store_type, acc_type in product(_STORE_TYPES, get_args(WritableAcc)):
+# Includes ones without JSON form like `A.obs`: `to_json` rejects them.
+for store_type, acc_type in product(_STORE_TYPES, (AdRef, RefAcc)):
     _REGISTRY.register_write(store_type, acc_type, IOSpec("accessor", "0.1.0"))(
         write_accessor
     )

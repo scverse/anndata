@@ -70,3 +70,13 @@ def test_accessor_subclass_unwriteable() -> None:
 
     adata = ad.AnnData(shape=(3, 4), uns={"r": AdAcc(ref_class=MyRef).obsm["pca"][0]})
     assert adata.unwriteable(compat="0.14")
+
+
+def test_accessor_without_json_unwriteable(
+    diskfmt_store: Path | MemoryStore, diskfmt: Literal["h5ad", "zarr"]
+) -> None:
+    """`RefAcc`s reach the accessor writer, but ones without JSON form (`A.obs`) fail."""
+    adata = ad.AnnData(shape=(3, 4), uns={"r": A.obs})
+    assert adata.unwriteable(compat="0.14")
+    with pytest.raises(TypeError, match=r"Unsupported accessor"):
+        getattr(adata, f"write_{diskfmt}")(diskfmt_store, compat="0.14")

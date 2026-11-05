@@ -287,10 +287,14 @@ class ExtAcc(AdAcc):
     meta_cls: type[MetaAcc] = ExtMetaAcc
 
     def to_json(self, ref):
+        if isinstance(ref, ExtMetaAcc):  # whole `obs`/`var`, unlike `A`
+            return ["ext", ref.dim]
         return ["ext", *super().to_json(ref)]
 
     def from_json(self, data, *, vec=None):
         assert data[0] == "ext"
+        if len(data) == 2 and data[1] in {"obs", "var"}:
+            return getattr(self, data[1])
         return super().from_json(data[1:], vec=vec)
 
 
@@ -306,25 +310,20 @@ def registered_acc(
 
     params = getattr(request, "param", {})
     adacc = cast("AdAcc", params.get("adacc", ExtAcc()))
-    ep = SimpleNamespace(
-        name="ext",
-        dist=SimpleNamespace(name=params.get("dist", "ext")),
-        module=ExtMetaAcc.__module__,
-        load=lambda: adacc,
-    )
-
-    def entry_points(*, group: str, name: str | None = None) -> list:
-        assert group == _entry_points.GROUP
-        return [ep] if name in {None, ep.name} else []
-
-    monkeypatch.setattr(_entry_points, "entry_points", entry_points)
+    ep = SimpleNamespace(name="ext", module=ExtMetaAcc.__module__, load=lambda: adacc)
+    dist = params.get("dist", "ext")
+    monkeypatch.setattr(_entry_points, "_entry_points", lambda: [(ep, dist)])
     return adacc
 
 
+# `obs` has no writer of its own, so like mudata’s `ModMapAcc`, it dispatches via `RefAcc`
+@pytest.mark.parametrize(
+    "get_ref", [lambda a: a.obs["ct"], lambda a: a.obs], ids=["AdRef", "RefAcc"]
+)
 def test_accessor_ext_roundtrip(
-    store: _GroupStorageType, registered_acc: AdAcc
+    store: _GroupStorageType, registered_acc: AdAcc, get_ref: Callable[[AdAcc], object]
 ) -> None:
-    ref = registered_acc.obs["ct"]
+    ref = get_ref(registered_acc)
     write_elem(store, "ref", ref, compat="0.14")
     assert _read_attr(store["ref"].attrs, "accessor-project") == "ext"
     assert read_elem(store["ref"]) == ref

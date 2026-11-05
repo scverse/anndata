@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import partial, singledispatch, wraps
 from types import MappingProxyType
-from typing import TYPE_CHECKING, cast, get_args
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import zarr
@@ -288,9 +288,9 @@ def _iter_patterns(elem: RWAble) -> Generator[WriteSrcType]:
         yield (t, elem.dtype.kind)
     yield t
     # accessor subclasses (e.g. from other packages) are written by their closest base’s writer
-    from anndata.acc._entry_points import WritableAcc
+    from anndata.acc import AdRef, RefAcc
 
-    yield from (b for b in t.__mro__[1:] if b in get_args(WritableAcc))
+    yield from (b for b in t.__mro__[1:] if b in {AdRef, RefAcc})
 
 
 class Reader:

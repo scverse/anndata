@@ -1604,7 +1604,7 @@ class AnnData:  # noqa: PLW1641
                 return True
 
         from anndata._io.specs.registry import _REGISTRY
-        from anndata.acc._entry_points import WritableAcc
+        from anndata.acc import AdRef, RefAcc
 
         writeable_elems = {
             src_type
@@ -1657,7 +1657,7 @@ class AnnData:  # noqa: PLW1641
                 return accumulate or any(
                     predicate(v, accumulate=accumulate) for v in elem.values()
                 )
-            if isinstance(elem, WritableAcc):
+            if isinstance(elem, AdRef | RefAcc):
                 # writeable, but only with the `accessor` flag and a known project
                 if accumulate or not compat.accessor:
                     return True
