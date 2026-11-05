@@ -202,8 +202,8 @@ indptr <zarr.core.Array '/X/indptr' (164115,) int32 read-only>
 - The group MUST contain arrays `indices`, `indptr`, and `data`
 - The group's metadata MUST contain:
   - `"encoding-type"`, which is set to `"csr_matrix"` or `"csc_matrix"` for compressed sparse row and compressed sparse column, respectively.
-    - `"encoding-version"`, which is set to `"0.1.0"`
-    - `"shape"` which is an integer array of length 2 whose values are the sizes of the array's dimensions
+  - `"encoding-version"`, which is set to `"0.1.0"`
+  - `"shape"` which is an integer array of length 2 whose values are the sizes of the array's dimensions
 
 (dataframes)=
 ## DataFrames
@@ -278,8 +278,8 @@ feature_is_filtered <zarr.core.Array '/var/feature_is_filtered' (40145,) bool re
 - A dataframe MUST be stored as a group
 - The group's metadata:
   - MUST contain the field `"_index"`, whose value is the key of the array to be used as an index/ row labels
-    - MUST contain encoding metadata `"encoding-type": "dataframe"`, `"encoding-version": "0.2.0"`
-    - MUST contain `"column-order"` an array of strings denoting the order of column entries
+  - MUST contain encoding metadata `"encoding-type": "dataframe"`, `"encoding-version": "0.2.0"`
+  - MUST contain `"column-order"` an array of strings denoting the order of column entries
 - The group MUST contain an array for the index
 - Each entry in the group MUST correspond to an array with equivalent first dimensions
 - Each entry SHOULD share chunk sizes (in the HDF5 or zarr container)
@@ -382,11 +382,11 @@ random_state <zarr.core.Array '/uns/neighbors/params/random_state' () int64 read
 - Scalars MUST be written as a 0 dimensional array
 - Numeric scalars
   - MUST have `"encoding-type": "numeric-scalar"`, `"encoding-version": "0.2.0"` in their metadata
-    - MUST be a single numeric value, including boolean, unsigned integer, signed integer, floating point, or complex floating point
+  - MUST be a single numeric value, including boolean, unsigned integer, signed integer, floating point, or complex floating point
 - String scalars
   - MUST have `"encoding-type": "string"`, `"encoding-version": "0.2.0"` in their metadata
-    - In zarr, scalar strings MUST be stored as a fixed length unicode dtype
-    - In HDF5, scalar strings MUST be stored as a variable length utf-8 encoded string dtype
+  - In zarr, scalar strings MUST be stored as a fixed length unicode dtype
+  - In HDF5, scalar strings MUST be stored as a variable length utf-8 encoded string dtype
 
 (categorical-arrays)=
 ## Categorical arrays
