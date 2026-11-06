@@ -16,7 +16,7 @@
 # anndata - Annotated data
 
 anndata is a Python package for handling annotated data matrices in memory and on disk, positioned between pandas and xarray. anndata offers a broad range of computationally efficient features including, among others, sparse data support, and lazy operations.
-A separate data loader package, [annbatch](https://annbatch.readthedocs.io/en/stable/), offers minibatch data loading functionality for applications ranging from linear models to foundation models,  scaling all the way up from small in-memory matrices to terabyte-scale disk-backed anndata datasets.
+A separate data loader package, [annbatch](https://annbatch.readthedocs.io/en/stable/), offers minibatch data loading functionality for applications ranging from linear models to foundation models, scaling all the way up from small in-memory matrices to terabyte-scale disk-backed anndata datasets.
 
 - Discuss development on [GitHub](https://github.com/scverse/anndata).
 - Read the [documentation](https://anndata.readthedocs.io).
@@ -24,7 +24,7 @@ A separate data loader package, [annbatch](https://annbatch.readthedocs.io/en/st
 - Install via `pip install anndata` or `conda install anndata -c conda-forge`.
 - See [Scanpy's documentation](https://scanpy.readthedocs.io/) for usage related to single cell data. anndata was initially built for Scanpy.
 
-[//]: # (numfocus-fiscal-sponsor-attribution)
+[//]: # "numfocus-fiscal-sponsor-attribution"
 
 anndata is part of the scverse® project ([website](https://scverse.org), [governance](https://scverse.org/about/roles)) and is fiscally sponsored by [NumFOCUS](https://numfocus.org/).
 If you like scverse® and want to support our mission, please consider making a tax-deductible [donation](https://numfocus.org/donate-to-scverse) to help the project pay for developer time, professional services, travel, workshops, and a variety of other needs.
