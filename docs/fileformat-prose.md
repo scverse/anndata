@@ -352,10 +352,10 @@ serialized to a JSON string.
 (accessor)=
 ### Accessor specifications (v0.1.0)
 
-- Each accessor MUST be stored as a scalar {ref}`string <scalars>`,
-  i.e. a 0-dimensional array of variable-length UTF-8 strings
-- The array's metadata MUST contain the encoding metadata `"encoding-type": "accessor"`, `"encoding-version": "0.1.0"`
-- The array's metadata MUST contain `"accessor-project"`, the name of the project that defines the accessor's JSON form.
+- Each accessor MUST be stored as a JSON document encoded into a scalar {ref}`string <scalars>`,
+  i.e. a 0-dimensional array of variable-length UTF-8 strings.
+- The array’s metadata MUST contain the encoding metadata `"encoding-type": "accessor"`, `"encoding-version": "0.1.0"`
+- The array’s metadata MUST contain `"accessor-project"`, the name of the project that defines the accessor’s JSON form.
   `"anndata"` means the JSON document MUST validate against `#/$defs/ref` or `#/$defs/acc`
   of [`acc-schema-v1.json`](acc-schema-v1.json){.external}.
   Other projects define their own schema (see {ref}`extending accessors`).
