@@ -1,0 +1,1 @@
+Read sparse matrices from {mod}`zarr` faster with {func}`~anndata.io.sparse_dataset` and {func}`~anndata.experimental.read_elem_lazy` by using zarr’s `FusedCodecPipeline` (or {doc}`zarrs-python <zarrs:index>` without it) unless a codec pipeline is configured, and by opening a lazily read matrix’s arrays once instead of in every Dask task {user}`Intron7`
