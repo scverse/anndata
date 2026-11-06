@@ -10,6 +10,7 @@ from pandas.api.extensions import ExtensionArray
 from scipy import sparse as sp
 
 from anndata import read_h5ad
+from anndata._core.xarray import Dataset2D
 from anndata.acc import A
 from anndata.compat import (
     CSArray,
@@ -64,8 +65,17 @@ ND_PATHS: list[tuple[AdRef, Callable[[AnnData], object]]] = [
 DF_PATHS: list[tuple[AdRef, Callable[[AnnData], object]]] = [
     (A.obs["type"], lambda ad: ad.obs["type"]),
     (A.obs.index, lambda ad: ad.obs.index),
-    # TODO: copy entries from above that can also hold dataframes?
+    (A.varm["df"][:, "a"], lambda ad: _varm_df(ad)["a"]),
+    (A.varm["df"][:, 0], lambda ad: _varm_df(ad)["a"]),  # #2722
+    (A.varm["df"][:, -1], lambda ad: _varm_df(ad)["b"]),
 ]
+
+
+def _varm_df(adata: AnnData) -> pd.DataFrame | Dataset2D:
+    df = adata.varm["df"]
+    assert isinstance(df, pd.DataFrame | Dataset2D)
+    return df
+
 
 DASK_TYPES = [
     # TODO: check inner type
@@ -154,6 +164,9 @@ def convert_dataframes(
     adata.obs = df_conv(adata.obs)
     assert isinstance(adata.var, pd.DataFrame)
     adata.var = df_conv(adata.var)
+    df = adata.varm["df"]
+    assert isinstance(df, pd.DataFrame)
+    adata.varm["df"] = df_conv(df)
 
 
 def _expected2np(expected: object, ad_ref: AdRef, /) -> np.ndarray:
