@@ -32,7 +32,7 @@ from .access import ElementRef
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Callable, Iterable, Sequence
     from typing import Any, ClassVar
 
     from numpy.typing import NDArray
@@ -182,9 +182,15 @@ class ArrayView(_SetItemMixin, np.ndarray):
         )
         return results[0] if len(results) == 1 else results
 
-    def keys(self) -> tuple[str, ...]:
-        # it’s a structured array
-        return self.dtype.names or ()
+    @property
+    def keys(self) -> Callable[[], tuple[str, ...]]:
+        # Only structured arrays have keys. A `keys` attribute on plain arrays makes pandas
+        # treat them as dict-like and reindex them to all-NaN when used as a column.
+        if self.dtype.names is None:
+            msg = f"{type(self).__name__} without named fields has no `keys`"
+            raise AttributeError(msg)
+        names = self.dtype.names
+        return lambda: names
 
     def copy(  # type: ignore[override]
         self, order: Literal["K", "A", "C", "F"] | None = "C"
