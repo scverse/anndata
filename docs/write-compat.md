@@ -36,8 +36,10 @@ can read all files written with profile `"X.Y"`.
   - This is the default.
 * - `"0.14"`
   - unreleased
-  - Enables the {ref}`accessor <accessor>` encoding for {mod}`anndata.acc` accessors.
-    Older versions can’t read it.
+  - Enables the {ref}`accessor <accessor>` encoding for {mod}`anndata.acc` accessors,
+    and stores mapping keys and dataframe column names {ref}`in an array <indexed-keys>`,
+    so any string works as one, e.g. `a/b` or `a:b`.
+    Older versions can’t read either.
 ```
 
 ## Picking individual features
