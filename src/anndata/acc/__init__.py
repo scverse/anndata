@@ -455,18 +455,7 @@ class MetaAcc[R: AdRef[str | None, MuData | AnnData]](
         full: DataFrameLike = getattr(data, self.dim)
         if k is NO_IDX:
             return full
-        match full, k:
-            case pd.DataFrame() as df, None:
-                return df.index.array
-            case Dataset2D() as ds, None:
-                return ds.true_index.array
-            case pd.DataFrame() as df, k:
-                return df[k].array
-            case Dataset2D() as ds, k:
-                return ds[k].variable
-            case _:
-                msg = f"Unsupported {self.dim} container"
-                raise TypeError(msg)
+        return _get_column(self, full, k)
 
     def set(
         self, data: MuData | AnnData, k: str | NO_IDX | None, value: object, /
@@ -480,7 +469,9 @@ class MetaAcc[R: AdRef[str | None, MuData | AnnData]](
 
 
 @dataclass(frozen=True)
-class MultiAcc[R: AdRef[int, MuData | AnnData]](RefAcc[R, int, MuData | AnnData]):
+class MultiAcc[R: AdRef[int | str, MuData | AnnData]](
+    RefAcc[R, int | str, MuData | AnnData]
+):
     r"""Reference accessor for arrays from multi-dimensional containers (`A.`\ :attr:`~AdAcc.obsm`/`A.`\ :attr:`~AdAcc.varm`).
 
     Examples
@@ -506,46 +497,62 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](RefAcc[R, int, MuData | AnnData]
     """Key this accessor refers to, e.g. `A.varm['x'].k == 'x'`."""
 
     @staticmethod
-    def process_idx(i: object, /) -> int:
+    def process_idx(i: object, /) -> int | str:
         # bool is an int subclass, but boolean indexing isn’t supported
-        if not isinstance(i := _drop_multi_slice(i), int) or isinstance(i, bool):
+        if not isinstance(i := _drop_multi_slice(i), int | str) or isinstance(i, bool):
             msg = f"Unsupported index {i!r}"
             raise TypeError(msg)
         return i
 
     @overload
-    def __getitem__(self, i: int | tuple[slice, int], /) -> R: ...
+    def __getitem__(
+        self, i: int | str | tuple[slice, int] | tuple[slice, str], /
+    ) -> R: ...
     @overload
     def __getitem__(self, i: IdxMultiList, /) -> list[R]: ...
-    def __getitem__(self, i: int | tuple[slice, int] | IdxMultiList, /) -> R | list[R]:
+    def __getitem__(
+        self, i: int | str | tuple[slice, int] | tuple[slice, str] | IdxMultiList, /
+    ) -> R | list[R]:
         # TODO: add docstring once sphinx-autodoc-typehints can render `pd.Index[int]` in `IdxMultiList`
         if _is_t_list(idx := _drop_multi_slice(i), int):
             return [self[j] for j in idx]
         return super().__getitem__(idx)
 
-    def dims(self, i: int, /) -> Axes:
+    def dims(self, i: int | str, /) -> Axes:
         return {self.dim}
 
     def __repr__(self) -> str:
         return f"A.{self.dim}m[{self.k!r}]"
 
-    def idx_repr(self, i: int) -> str:
+    def idx_repr(self, i: int | str) -> str:
         return f"[:, {i!r}]"
 
-    def isin(self, data: MuData | AnnData, idx: int | None = None) -> bool:
+    def isin(self, data: MuData | AnnData, idx: int | str | None = None) -> bool:
         m: AxisArrays = getattr(data, f"{self.dim}m")
         if (arr := m.get(self.k)) is None:
             return False
+        if isinstance(idx, str):
+            return isinstance(arr, pd.DataFrame | Dataset2D) and idx in arr.columns
         return idx is None or -arr.shape[1] <= idx < arr.shape[1]
 
     @overload
     def get(self, data: MuData | AnnData, /) -> AlignedArray: ...
     @overload
-    def get(self, data: MuData | AnnData, i: int, /) -> InMemoryArray: ...
-    def get(self, data: MuData | AnnData, i: int | NO_IDX = NO_IDX, /) -> AlignedArray:
+    def get(self, data: MuData | AnnData, i: int | str, /) -> InMemoryArray: ...
+    def get(
+        self,
+        data: MuData | AnnData,
+        i: int | str | NO_IDX = NO_IDX,
+        /,
+    ) -> AlignedArray:
         full: AlignedArray = getattr(data, f"{self.dim}m")[self.k]
         if i is NO_IDX:
             return full
+        if isinstance(full, pd.DataFrame | Dataset2D):
+            return _get_column(self, full, i)
+        if isinstance(i, str):
+            msg = f"{self} can only retrieve a string column from a pd.DataFrame."
+            raise TypeError(msg)
         n_cols: int = full.shape[1]
         if not -n_cols <= i < n_cols:
             msg = (
@@ -556,11 +563,19 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](RefAcc[R, int, MuData | AnnData]
         # TODO: remove slicing when dropping scipy <1.14
         return self._maybe_flatten(i, full[:, i : i + 1])
 
-    def set(self, data: MuData | AnnData, i: int | NO_IDX, value: object, /) -> None:
+    def set(
+        self, data: MuData | AnnData, i: int | str | NO_IDX, value: object, /
+    ) -> None:
         if i is NO_IDX:
             getattr(data, f"{self.dim}m")[self.k] = value
             return
         full = _check_settable(self.get(data))
+        if isinstance(full, pd.DataFrame):
+            full[i if isinstance(i, str) else full.columns[i]] = value
+            return
+        if isinstance(i, str):
+            msg = f"{self} can only set a string column in a pd.DataFrame."
+            raise TypeError(msg)
         if not -full.shape[1] <= i < full.shape[1]:
             msg = f"Column index `{i}` is out of range for {self} with {full.shape[1]} columns."
             raise IndexError(msg)
@@ -984,6 +999,25 @@ _checks: dict[type[int | str], Callable[..., bool]] = {
     str: pd.api.types.is_string_dtype,
     int: pd.api.types.is_integer_dtype,
 }
+
+
+def _get_column(self: object, df: DataFrameLike, k: str | int | None) -> XVariable:
+    match df, k:
+        case pd.DataFrame(), None:
+            return df.index.array
+        case Dataset2D(), None:
+            return df.true_index.array
+        case pd.DataFrame(), str():
+            return df[k].array
+        case Dataset2D(), str():
+            return df[k].variable
+        case pd.DataFrame(), int():
+            return df.iloc[:, k].array
+        case Dataset2D(), int():
+            return df[df.columns[k]].variable
+        case _:
+            msg = f"Unsupported {self} container"
+            raise TypeError(msg)
 
 
 def _is_t_list[T: (int, str)](

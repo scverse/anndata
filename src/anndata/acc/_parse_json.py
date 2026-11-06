@@ -47,7 +47,7 @@ def _parse_json[R: AdRef](  # noqa: PLR0911
             return acc.index if col is None else acc[col]
         case ["obsm" | "varm" as dim, str(col)]:
             return (a.obsm if dim == "obsm" else a.varm)[col]
-        case ["obsm" | "varm" as dim, str(col), int(i)]:
+        case ["obsm" | "varm" as dim, str(col), int(i) | str(i)]:
             return (a.obsm if dim == "obsm" else a.varm)[col][i]
         case ["obsp" | "varp" as dim, str(k)]:
             return (a.obsp if dim == "obsp" else a.varp)[k]
