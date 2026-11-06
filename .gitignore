@@ -38,3 +38,4 @@ __pycache__/
 benchmark/benchmarks/data
 benchmarks/benchmarks/data
 benchmarks/pkgs
+benchmarks/results
