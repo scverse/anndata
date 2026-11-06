@@ -32,7 +32,7 @@ from .access import ElementRef
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Hashable, Iterable, Sequence
     from typing import Any, ClassVar
 
     from numpy.typing import NDArray
@@ -347,13 +347,27 @@ def as_view_dask_array(array, view_args):
     return DaskArrayView(array, view_args=view_args)
 
 
+def remove_unused_categories(df: pd.DataFrame, col: Hashable) -> None:
+    """Remove unused categories of a categorical column in place.
+
+    Checking usage with :func:`numpy.bincount` first is much faster than always calling
+    :meth:`pandas.Series.cat.remove_unused_categories`, which sorts all codes.
+    """
+    codes = df[col].cat.codes.to_numpy()
+    # shift by 1 to count missing values (code -1) separately
+    counts = np.bincount(codes + 1, minlength=len(df[col].cat.categories) + 1)
+    if counts[1:].all():
+        return
+    with pandas_no_chained_assignment_warning():
+        df[col] = df[col].cat.remove_unused_categories()
+
+
 @as_view.register(pd.DataFrame)
 def as_view_df(df, view_args):
     if settings.remove_unused_categories:
         for col in df.columns:
             if isinstance(df[col].dtype, pd.CategoricalDtype):
-                with pandas_no_chained_assignment_warning():
-                    df[col] = df[col].cat.remove_unused_categories()
+                remove_unused_categories(df, col)
     return DataFrameView(df, view_args=view_args)
 
 
