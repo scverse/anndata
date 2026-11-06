@@ -52,6 +52,10 @@ extensions = [
     "IPython.sphinxext.ipython_console_highlighting",
     *(p.stem for p in _extension_dir.glob("*.py")),
 ]
+myst_enable_extensions = [
+    *scverse_doc.config.DEFAULTS.myst_enable_extensions,
+    "attrs_inline",
+]
 myst_heading_anchors = 3
 
 # Generate the API documentation when building

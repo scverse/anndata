@@ -66,6 +66,7 @@ optional-dependencies.lazy = [ "aiohttp", "anndata[dask]", "requests", "xarray>=
 urls.Documentation = "https://anndata.readthedocs.io/"
 urls.Home-page = "https://github.com/scverse/anndata"
 urls.Source = "https://github.com/scverse/anndata"
+entry-points."anndata.acc".anndata = "anndata.acc:A"
 
 [dependency-groups]
 dev = [

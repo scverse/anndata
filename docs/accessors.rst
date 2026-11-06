@@ -275,3 +275,17 @@ There are three layers of extensibility:
     >>> A = EHRAcc()
     >>> A.tem["visit_id"]
     A.tem['visit_id']
+
+To make your subclasses writable (see :ref:`accessor encoding <accessor>`),
+register your :class:`AdAcc` instance as an ``anndata.acc`` entry point named after your project,
+and make sure its :meth:`~AdAcc.to_json` and :meth:`~AdAcc.from_json` round-trip them:
+
+..  code-block:: toml
+
+    [project.entry-points."anndata.acc"]
+    my-project = "my_project.acc:A"
+
+anndata picks the entry point whose module is in the same top-level package as your classes,
+and stores ``my-project`` with the written element so it can find your :class:`AdAcc` when reading it.
+If no entry point matches, it isn’t named after the project that registers it, or your :class:`AdAcc` cannot reproduce the original accessor from its JSON form,
+writing fails instead of losing information.

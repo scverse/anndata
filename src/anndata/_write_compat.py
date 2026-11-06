@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import operator
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from enum import Enum
 from types import MethodType
 from typing import TYPE_CHECKING
@@ -60,6 +60,9 @@ class WriteConfig:
     e.g. `a < b` means `b` enables every feature `a` does, and more.
     """
 
+    accessor: bool = field(default_factory=_min_version("0.14"))
+    """Write :mod:`anndata.acc` accessors using the `accessor` encoding (anndata ≥0.14)."""
+
     @property
     def _features(self) -> frozenset[str]:
         return frozenset(f.name for f in fields(self) if getattr(self, f.name))
@@ -84,6 +87,12 @@ class WriteCompat(WriteConfig, Enum):
 
     V0_13 = "0.13"
     """anndata 0.13 (2026-07-07)."""
+
+    V0_14 = "0.14"
+    """anndata 0.14 (unreleased).
+
+    Enables the `accessor` encoding for :mod:`anndata.acc` accessors.
+    """
 
     DEFAULT = V0_13
     """Alias for the profile write functions use by default, currently :attr:`V0_13`."""

@@ -34,6 +34,19 @@ can read all files written with profile `"X.Y"`.
 * - `"0.13"`
   - 2026-07-07
   - This is the default.
+* - `"0.14"`
+  - unreleased
+  - Enables the {ref}`accessor <accessor>` encoding for {mod}`anndata.acc` accessors.
+    Older versions can’t read it.
+```
+
+## Picking individual features
+
+Each profile is a {class}`~anndata.WriteConfig` with one boolean flag per feature.
+To pick features individually, pass a {class}`~anndata.WriteConfig` as `compat`:
+
+```python
+adata.write_h5ad("new.h5ad", compat=ad.WriteConfig(accessor=True))
 ```
 
 ## Checking before writing
@@ -48,7 +61,7 @@ if adata.unwriteable(compat="0.13"):
 
 ## The default profile
 
-The default is {attr}`anndata.WriteCompat.DEFAULT`.
+The default is {attr}`anndata.WriteCompat.DEFAULT`, later features are disabled.
 
 The default keeps lagging behind the newest profile by roughly a year,
 so files stay readable by the anndata versions people are likely to have.

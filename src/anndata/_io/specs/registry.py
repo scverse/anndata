@@ -242,7 +242,10 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
             and (typ_kind := (type(elem), elem.dtype.kind)) in self.write_specs
         ):
             return self.write_specs[typ_kind]
-        return self.write_specs[type(elem)]
+        for pattern in _iter_patterns(elem):
+            if pattern in self.write_specs:
+                return self.write_specs[pattern]
+        return self.write_specs[type(elem)]  # raises KeyError
 
 
 _REGISTRY: IORegistry[_ReadInternal, Read] = IORegistry()
@@ -284,6 +287,10 @@ def _iter_patterns(elem: RWAble) -> Generator[WriteSrcType]:
     if isinstance(elem, np.ndarray):
         yield (t, elem.dtype.kind)
     yield t
+    # accessor subclasses (e.g. from other packages) are written by their closest base’s writer
+    from anndata.acc import AdRef, RefAcc
+
+    yield from (b for b in t.__mro__[1:] if b in {AdRef, RefAcc})
 
 
 class Reader:
