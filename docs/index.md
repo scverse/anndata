@@ -29,6 +29,7 @@ tutorials/index
 
 api
 fileformat-prose
+write-compat
 interoperability
 ```
 
