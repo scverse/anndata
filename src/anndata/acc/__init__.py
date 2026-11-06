@@ -7,13 +7,14 @@ import sys
 from collections.abc import Hashable
 from dataclasses import KW_ONLY, dataclass, field
 from functools import cached_property
-from typing import TYPE_CHECKING, ClassVar, overload
+from typing import TYPE_CHECKING, ClassVar, Protocol, overload, runtime_checkable
 
 if sys.version_info < (3, 15):
     from typing_extensions import sentinel
 
 import numpy as np
 import pandas as pd
+from scverse_misc import Deprecation, future_abstractmethod
 
 from .. import AnnData
 from .._core.views import ArrayView
@@ -25,6 +26,7 @@ from ..compat import (
     DaskArray,
     SupportsArrayApiBase,
 )
+from ..typing import _is_in_memory
 
 if TYPE_CHECKING:
     from mudata import MuData
@@ -35,7 +37,14 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Sequence
     from typing import Any, Literal, Self, TypeGuard
 
-    from .._core.aligned_mapping import AxisArrays
+    from .._core.aligned_mapping import (
+        AxisArrays,
+        AxisArraysView,
+        Layers,
+        LayersView,
+        PairwiseArrays,
+        PairwiseArraysView,
+    )
     from ..compat import XVariable
     from ..typing import AlignedArray, InMemoryArray
 
@@ -161,7 +170,13 @@ class MapAcc[R: RefAcc](abc.ABC):
 
     @abc.abstractmethod
     def __getitem__(self, k: str, /) -> R:
-        """Get a reference accessor for mapped array."""
+        """Get a reference accessor for mapped array.
+
+        Parameters
+        ----------
+        k
+            The key of the mapped array.
+        """
 
 
 @dataclass(frozen=True)
@@ -179,6 +194,14 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
         return idx
 
     def __getitem__(self, idx: Any, /) -> R:  # noqa: ANN401  # subclasses may override `idx` however they want
+        """Get a reference to an array.
+
+        Parameters
+        ----------
+        idx
+            Index into the referenced element.
+            Subclasses define which indices are valid.
+        """
         idx = self.process_idx(idx)
         return self.ref_class(self, idx)
 
@@ -188,7 +211,11 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
 
     @abc.abstractmethod
     def __repr__(self, /) -> str:
-        """Get a string representation of the accessor."""
+        """Get a display representation of the accessor.
+
+        This is not a simplified representation supported by :meth:`AdAcc.resolve`, but instead the code used to create the accessor,
+        e.g. `A.layers['counts']`.
+        """
 
     @abc.abstractmethod
     def idx_repr(self, idx: I, /) -> str:
@@ -203,18 +230,31 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
     @overload
     def get(self, data: D, idx: I, /) -> Array: ...
     @abc.abstractmethod
-    def get(self, data: D, idx: I | NO_IDX = NO_IDX, /) -> AlignedArray | Array:  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
-        """Get the indexed array from the AnnData object at `idx`.
+    def get(self, data: D, idx: I | NO_IDX = NO_IDX, /) -> AlignedArray | Array:
+        """Get the indexed array or element from the AnnData object at `idx`.
 
         When `idx` is omitted (i.e., `idx` is :class:`~anndata.acc.NO_IDX`), return the full array one level up instead.
         This has the same semantics as the `AdRef` path but one level up:
-        `adata[A.obs]` returns the full :class:`~pandas.DataFrame` and `adata[A.obsm["pca"]]` the full :class:`numpy.ndarray`.
-        These both have defined `shape`-like properties (or :class:`awkward.Array`), unlike, for example, :attr:`~anndata.AnnData.obsm` or similar.
+        `adata[A.obs]` returns the full :class:`~pandas.DataFrame`, `adata[A.obsm["pca"]]` the full :class:`numpy.ndarray`, and `adata[A.layers]` the full :class:`Mapping`.
+        The first two both have defined `shape`-like properties (or :class:`awkward.Array`), but :attr:`~anndata.AnnData.layers` or similar do not.
         """
 
+    @future_abstractmethod(Deprecation("0.14.0"))
+    def set(self, data: D, idx: I | NO_IDX, value: object, /) -> None:
+        """Set the indexed array or element in the AnnData object at `idx`.
+
+        When `idx` is :class:`~anndata.acc.NO_IDX`, replace the full element one level up (see :meth:`get`),
+        otherwise assign into the existing element in-place.
+        """
+        msg = f"{type(self).__name__} does not support setting values."
+        raise NotImplementedError(msg)
+
     def _maybe_flatten(
-        self, idx: I, a: InMemoryArray | pd.api.extensions.ExtensionArray
+        self, idx: I, a: AlignedArray | pd.api.extensions.ExtensionArray
     ) -> Array:
+        if not (_is_in_memory(a) or isinstance(a, pd.api.extensions.ExtensionArray)):
+            msg = f"Cannot get {self.idx_repr(idx)} from {type(a).__name__}, load it into memory first."
+            raise TypeError(msg)
         if len(self.dims(idx)) != 1:
             return a
         if isinstance(a, DaskArray):
@@ -249,6 +289,7 @@ class LayerAcc[R: AdRef[Idx2D, AnnData]](RefAcc[R, Idx2D, AnnData]):
     @overload
     def __getitem__(self, idx: Idx2DList, /) -> list[R]: ...
     def __getitem__(self, idx: Idx2D | Idx2DList, /) -> R | list[R]:
+        # TODO: add docstring once sphinx-autodoc-typehints can render `pd.Index[str]` in `Idx2DList`
         if _is_idx2d_list(idx):
             return [self[i] for i in _expand_idx2d_list(idx)]
         return super().__getitem__(idx)
@@ -293,17 +334,22 @@ class LayerAcc[R: AdRef[Idx2D, AnnData]](RefAcc[R, Idx2D, AnnData]):
     def get(self, adata: AnnData, /) -> AlignedArray: ...
     @overload
     def get(self, adata: AnnData, idx: Idx2D, /) -> InMemoryArray: ...
-    def get(
-        self,
-        adata: AnnData,
-        idx: Idx2D | NO_IDX = NO_IDX,  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
-        /,
-    ) -> AlignedArray:
+    def get(self, adata: AnnData, idx: Idx2D | NO_IDX = NO_IDX, /) -> AlignedArray:
         if idx is NO_IDX:
             return adata.X if self.k is None else adata.layers[self.k]
         # To keep things as lazy as possible, we don't reuse the full-array branch here
         arr = adata[idx].X if self.k is None else adata[idx].layers[self.k]
         return self._maybe_flatten(idx, arr)
+
+    def set(self, adata: AnnData, idx: Idx2D | NO_IDX, value: object, /) -> None:
+        if idx is NO_IDX:
+            if self.k is None:
+                adata.X = value
+            else:
+                adata.layers[self.k] = value
+            return
+        full = _check_settable(self.get(adata))
+        full[_positional_idx(adata, idx, ("obs", "var"))] = value
 
 
 @dataclass(frozen=True)
@@ -315,6 +361,13 @@ class LayerMapAcc[R: AdRef](MapAcc[LayerAcc]):
     ref_acc_cls: type[LayerAcc] = LayerAcc
 
     def __getitem__(self, k: str | None, /) -> LayerAcc[R]:
+        """Get a reference accessor for a layer.
+
+        Parameters
+        ----------
+        k
+            The layer’s key, or `None` for :attr:`~anndata.AnnData.X` (see :attr:`AdAcc.X`).
+        """
         if not isinstance(k, str | None):
             msg = f"Unsupported layer {k!r}"
             raise TypeError(msg)
@@ -322,6 +375,9 @@ class LayerMapAcc[R: AdRef](MapAcc[LayerAcc]):
 
     def __repr__(self) -> str:
         return "A.layers"
+
+    def get(self, adata: AnnData) -> Layers | LayersView:
+        return adata.layers
 
 
 @dataclass(frozen=True)
@@ -365,6 +421,7 @@ class MetaAcc[R: AdRef[str | None, MuData | AnnData]](
     def __getitem__[K: str | None](
         self, k: K | list[K] | pd.Index[str], /
     ) -> R | list[R]:
+        # TODO: add docstring once sphinx-autodoc-typehints can render `pd.Index[str]`
         # _is_t_list doesn’t allow None, so be more liberal when checking for lists
         if isinstance(k, list) or _is_t_list(k, str):
             return [self[i] for i in k]
@@ -393,15 +450,22 @@ class MetaAcc[R: AdRef[str | None, MuData | AnnData]](
         self, data: MuData | AnnData, k: str | None, /
     ) -> pd.api.extensions.ExtensionArray | XVariable: ...
     def get(
-        self,
-        data: MuData | AnnData,
-        k: str | NO_IDX | None = NO_IDX,  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
-        /,
+        self, data: MuData | AnnData, k: str | NO_IDX | None = NO_IDX, /
     ) -> DataFrameLike | pd.api.extensions.ExtensionArray | XVariable:
         full: DataFrameLike = getattr(data, self.dim)
         if k is NO_IDX:
             return full
         return _get_column(self, full, k)
+
+    def set(
+        self, data: MuData | AnnData, k: str | NO_IDX | None, value: object, /
+    ) -> None:
+        if k is NO_IDX:
+            setattr(data, self.dim, value)
+        elif k is None:
+            setattr(data, f"{self.dim}_names", value)
+        else:
+            getattr(data, self.dim)[k] = value
 
 
 @dataclass(frozen=True)
@@ -434,7 +498,8 @@ class MultiAcc[R: AdRef[int | str, MuData | AnnData]](
 
     @staticmethod
     def process_idx(i: object, /) -> int | str:
-        if not isinstance(i := _drop_multi_slice(i), int | str):
+        # bool is an int subclass, but boolean indexing isn’t supported
+        if not isinstance(i := _drop_multi_slice(i), int | str) or isinstance(i, bool):
             msg = f"Unsupported index {i!r}"
             raise TypeError(msg)
         return i
@@ -448,6 +513,7 @@ class MultiAcc[R: AdRef[int | str, MuData | AnnData]](
     def __getitem__(
         self, i: int | str | tuple[slice, int] | tuple[slice, str] | IdxMultiList, /
     ) -> R | list[R]:
+        # TODO: add docstring once sphinx-autodoc-typehints can render `pd.Index[int]` in `IdxMultiList`
         if _is_t_list(idx := _drop_multi_slice(i), int):
             return [self[j] for j in idx]
         return super().__getitem__(idx)
@@ -465,15 +531,9 @@ class MultiAcc[R: AdRef[int | str, MuData | AnnData]](
         m: AxisArrays = getattr(data, f"{self.dim}m")
         if (arr := m.get(self.k)) is None:
             return False
-        return (
-            idx is None
-            or idx in range(arr.shape[1])
-            or (
-                isinstance(idx, str)
-                and isinstance(arr, pd.DataFrame | Dataset2D)
-                and idx in arr.columns
-            )
-        )
+        if isinstance(idx, str):
+            return isinstance(arr, pd.DataFrame | Dataset2D) and idx in arr.columns
+        return idx is None or -arr.shape[1] <= idx < arr.shape[1]
 
     @overload
     def get(self, data: MuData | AnnData, /) -> AlignedArray: ...
@@ -482,7 +542,7 @@ class MultiAcc[R: AdRef[int | str, MuData | AnnData]](
     def get(
         self,
         data: MuData | AnnData,
-        i: int | str | NO_IDX = NO_IDX,  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
+        i: int | str | NO_IDX = NO_IDX,
         /,
     ) -> AlignedArray:
         full: AlignedArray = getattr(data, f"{self.dim}m")[self.k]
@@ -490,11 +550,36 @@ class MultiAcc[R: AdRef[int | str, MuData | AnnData]](
             return full
         if isinstance(full, pd.DataFrame | Dataset2D):
             return _get_column(self, full, i)
-        elif isinstance(i, str):
+        if isinstance(i, str):
             msg = f"{self} can only retrieve a string column from a pd.DataFrame."
             raise TypeError(msg)
+        n_cols: int = full.shape[1]
+        if not -n_cols <= i < n_cols:
+            msg = (
+                f"Column index `{i}` is out of range for {self} with {n_cols} columns."
+            )
+            raise IndexError(msg)
+        i += n_cols * (i < 0)
         # TODO: remove slicing when dropping scipy <1.14
         return self._maybe_flatten(i, full[:, i : i + 1])
+
+    def set(
+        self, data: MuData | AnnData, i: int | str | NO_IDX, value: object, /
+    ) -> None:
+        if i is NO_IDX:
+            getattr(data, f"{self.dim}m")[self.k] = value
+            return
+        full = _check_settable(self.get(data))
+        if isinstance(full, pd.DataFrame):
+            full[i if isinstance(i, str) else full.columns[i]] = value
+            return
+        if isinstance(i, str):
+            msg = f"{self} can only set a string column in a pd.DataFrame."
+            raise TypeError(msg)
+        if not -full.shape[1] <= i < full.shape[1]:
+            msg = f"Column index `{i}` is out of range for {self} with {full.shape[1]} columns."
+            raise IndexError(msg)
+        full[:, i] = value
 
 
 @dataclass(frozen=True)
@@ -509,6 +594,13 @@ class MultiMapAcc[R: AdRef](MapAcc[MultiAcc]):
     ref_acc_cls: type[MultiAcc] = MultiAcc
 
     def __getitem__(self, k: str, /) -> MultiAcc[R]:
+        """Get a reference accessor for an array, e.g. `A.obsm["pca"]`.
+
+        Parameters
+        ----------
+        k
+            The array’s key.
+        """
         if not isinstance(k, str):
             msg = f"Unsupported {self.dim}m key {k!r}"
             raise TypeError(msg)
@@ -516,6 +608,9 @@ class MultiMapAcc[R: AdRef](MapAcc[MultiAcc]):
 
     def __repr__(self) -> str:
         return f"A.{self.dim}m"
+
+    def get(self, adata: AnnData) -> AxisArrays | AxisArraysView:
+        return getattr(adata, f"{self.dim}m")
 
 
 @dataclass(frozen=True)
@@ -554,6 +649,7 @@ class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](RefAcc[R, Idx2D, MuData | AnnD
     @overload
     def __getitem__(self, idx: Idx2DList, /) -> list[R]: ...
     def __getitem__(self, idx: Idx2D | Idx2DList, /) -> R | list[R]:
+        # TODO: add docstring once sphinx-autodoc-typehints can render `pd.Index[str]` in `Idx2DList`
         if _is_idx2d_list(idx):
             return [self[i] for i in _expand_idx2d_list(idx)]
         return super().__getitem__(idx)
@@ -581,10 +677,7 @@ class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](RefAcc[R, Idx2D, MuData | AnnD
     @overload
     def get(self, data: MuData | AnnData, idx: Idx2D, /) -> InMemoryArray: ...
     def get(
-        self,
-        data: MuData | AnnData,
-        idx: Idx2D | NO_IDX = NO_IDX,  # type: ignore[valid-type]  # https://github.com/python/mypy/pull/21647
-        /,
+        self, data: MuData | AnnData, idx: Idx2D | NO_IDX = NO_IDX, /
     ) -> AlignedArray:
         full: AlignedArray = getattr(data, f"{self.dim}p")[self.k]
         if idx is NO_IDX:
@@ -603,6 +696,15 @@ class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](RefAcc[R, Idx2D, MuData | AnnD
                 raise TypeError(msg)
         return self._maybe_flatten(idx, sub)
 
+    def set(
+        self, data: MuData | AnnData, idx: Idx2D | NO_IDX, value: object, /
+    ) -> None:
+        if idx is NO_IDX:
+            getattr(data, f"{self.dim}p")[self.k] = value
+            return
+        full = _check_settable(self.get(data))
+        full[_positional_idx(data, idx, (self.dim, self.dim))] = value
+
 
 @dataclass(frozen=True)
 class GraphMapAcc[R: AdRef](MapAcc[GraphAcc]):
@@ -616,6 +718,13 @@ class GraphMapAcc[R: AdRef](MapAcc[GraphAcc]):
     ref_acc_cls: type[GraphAcc] = GraphAcc
 
     def __getitem__(self, k: str, /) -> GraphAcc[R]:
+        """Get a reference accessor for a graph, e.g. `A.obsp["distances"]`.
+
+        Parameters
+        ----------
+        k
+            The graph’s key.
+        """
         if not isinstance(k, str):
             msg = f"Unsupported {self.dim}p key {k!r}"
             raise TypeError(msg)
@@ -623,6 +732,9 @@ class GraphMapAcc[R: AdRef](MapAcc[GraphAcc]):
 
     def __repr__(self) -> str:
         return f"A.{self.dim}p"
+
+    def get(self, adata: AnnData) -> PairwiseArrays | PairwiseArraysView:
+        return getattr(adata, f"{self.dim}p")
 
 
 # `R`’s bound can’t double as its default before PEP 696 (Python 3.13)
@@ -738,19 +850,58 @@ class AdAcc[R: AdRef]:
             object.__setattr__(self, f"{dim}m", multi)
             object.__setattr__(self, f"{dim}p", graphs)
 
-    def to_json(self, ref: R) -> list[str | int | None]:
-        """Serialize :class:`AdRef` to a JSON-compatible list.
+    def to_json(
+        self, ref: R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R]
+    ) -> list[str | int | None]:
+        """Serialize an :class:`AdRef` or a whole container accessor to a JSON-compatible list.
 
         Schema: `acc-schema-v1.json <../acc-schema-v1.json>`_
+        (`#/$defs/ref` matches vectors, `#/$defs/acc` whole containers)
+
+        Examples
+        --------
+        >>> A.to_json(A.obsm["pca"][0])
+        ['obsm', 'pca', 0]
+        >>> A.to_json(A.obsm["pca"])
+        ['obsm', 'pca']
+        >>> A.to_json(A.X)
+        ['layers', None]
         """
         from ._parse_json import to_json
 
         return to_json(ref)
 
-    def from_json(self, data: Sequence[str | int | None]) -> R:
-        """Create :class:`AdRef` from a JSON sequence.
+    @overload
+    def from_json(
+        self, data: Sequence[str | int | None], *, vec: Literal[True]
+    ) -> R: ...
+    @overload
+    def from_json(
+        self, data: Sequence[str | int | None], *, vec: Literal[False]
+    ) -> LayerAcc[R] | MultiAcc[R] | GraphAcc[R]: ...
+    @overload
+    def from_json(
+        self, data: Sequence[str | int | None], *, vec: None = None
+    ) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R]: ...
+    def from_json(
+        self, data: Sequence[str | int | None], *, vec: bool | None = None
+    ) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R]:
+        """Create an :class:`AdRef` or a whole container accessor from a JSON sequence.
+
+        `vec` works like in :meth:`resolve`:
+        if `True`, `data` must refer to a vector (:class:`AdRef`),
+        if `False`, to a whole container (:class:`LayerAcc`/:class:`MultiAcc`/:class:`GraphAcc`),
+        and if unset, both are accepted.
 
         Schema: `acc-schema-v1.json <../acc-schema-v1.json>`_
+        (`#/$defs/ref` matches vectors, `#/$defs/acc` whole containers)
+
+        Examples
+        --------
+        >>> A.from_json(["obsm", "pca", 0])
+        A.obsm['pca'][:, 0]
+        >>> A.from_json(["obsm", "pca"])
+        A.obsm['pca']
 
         Raises
         ------
@@ -760,9 +911,9 @@ class AdAcc[R: AdRef]:
         from ._parse_json import parse_json
 
         try:
-            return parse_json(self, data)
+            return parse_json(self, data, vec=vec)
         except Exception as e:
-            msg = f"Failed to parse {data!r}"
+            msg = f"Failed to parse {data!r}: {e}"
             raise ValueError(msg) from e
 
     @overload
@@ -908,6 +1059,30 @@ def _expand_idx2d_list(idx: Idx2DList) -> list[Idx2D]:
         case _:  # pragma: no cover
             msg = "Should have checked _is_idx2d_list before."
             raise AssertionError(msg)
+
+
+@runtime_checkable
+class _Settable(Protocol):
+    @property
+    def shape(self) -> tuple[int, ...]: ...
+    def __setitem__(self, idx: tuple[int | slice, ...], value: object, /) -> None: ...
+
+
+def _check_settable(a: AlignedArray, /) -> _Settable:
+    if not isinstance(a, _Settable):
+        msg = f"Cannot assign into {type(a).__name__}."
+        raise TypeError(msg)
+    return a
+
+
+def _positional_idx(
+    data: MuData | AnnData, idx: Idx2D, dims: tuple[str, str], /
+) -> tuple[int | slice, ...]:
+    """Turn the names in a 2D index into positions along `dims`."""
+    return tuple(
+        getattr(data, dim).index.get_loc(i) if isinstance(i, str) else i
+        for i, dim in zip(idx, dims, strict=True)
+    )
 
 
 if not TYPE_CHECKING:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580

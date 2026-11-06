@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    import sys
-    from typing import Any, Literal, Self
+    from types import CapsuleType
+    from typing import Any, Self
 
     from array_api.latest import ArrayNamespace
 
-    if sys.version_info >= (3, 13):
-        from types import CapsuleType
-    else:
-        from typing_extensions import CapsuleType
+
+__all__ = ["SupportsArrayApi", "SupportsArrayApiBase", "WriteCompatStr"]
 
 
 @runtime_checkable
@@ -39,7 +37,9 @@ class SupportsArrayApiBase(Protocol):
         self,
         *,
         api_version: Literal["2021.12", "2022.12", "2023.12", "2024.12"] | None = None,
-    ) -> ArrayNamespace: ...
+    ) -> ArrayNamespace:
+        """See :meth:`array_api.array.__array_namespace__`."""
+
     # `device` and the index are implementation-defined objects
     def to_device(
         self,
@@ -48,7 +48,8 @@ class SupportsArrayApiBase(Protocol):
         *,
         stream: int | Any | None = ...,  # noqa: ANN401  # protocol parameter
     ) -> object: ...
-    def __getitem__(self, k: Any, /) -> Self: ...  # noqa: ANN401  # protocol parameter
+    def __getitem__(self, k: Any, /) -> Self:  # noqa: ANN401  # protocol parameter
+        """See :meth:`array_api.array.__getitem__`."""
 
 
 @runtime_checkable
@@ -62,8 +63,11 @@ class SupportsArrayApi(SupportsArrayApiBase, Protocol):
         # the DLPack device type is an `IntEnum`, i.e. usable as a plain `int`
         dl_device: tuple[int, int] | None = None,
         copy: bool | None = None,
-    ) -> CapsuleType: ...
-    def __dlpack_device__(self) -> tuple[int, int]: ...
+    ) -> CapsuleType:
+        """See :meth:`array_api.array.__dlpack__`."""
+
+    def __dlpack_device__(self) -> tuple[int, int]:
+        """See :meth:`array_api.array.__dlpack_device__`."""
 
 
 def __getattr__(key: str):
@@ -86,3 +90,7 @@ def __getattr__(key: str):
         case _:
             msg = f"types has no attribute {key!r}"
             raise AttributeError(msg)
+
+
+type WriteCompatStr = Literal["0.13", "0.14"]
+"""The values of :class:`~anndata.WriteCompat`, which write functions also accept."""

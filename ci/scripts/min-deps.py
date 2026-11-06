@@ -59,7 +59,7 @@ def min_dep(req: Requirement) -> Requirement:
 
 def extract_min_deps(
     dependencies: Iterable[Requirement], *, pyproject
-) -> Generator[Requirement, None, None]:
+) -> Generator[Requirement]:
     dependencies = deque(dependencies)  # We'll be mutating this
     project_name = pyproject["project"]["name"]
 

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from functools import WRAPPER_ASSIGNMENTS, cache, wraps
 from itertools import pairwise
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
@@ -19,7 +20,15 @@ if TYPE_CHECKING:
     import zarr
     from pandas.core.dtypes.dtypes import BaseMaskedDtype
 
-    from .._types import StorageType, _ArrayStorageType, _WriteInternal
+    from .. import AnnData
+    from .._types import (
+        StorageType,
+        _ArrayStorageType,
+        _GroupStorageType,
+        _WriteInternal,
+    )
+    from ..acc import AdRef, MapAcc, RefAcc
+    from ..typing import RWAble
     from .specs.registry import Writer
 
     Storage = StorageType | BaseCompressedSparseDataset
@@ -150,9 +159,96 @@ def pandas_nullable_dtype(dtype: np.dtype) -> BaseMaskedDtype:
     return array_type(np.ones(1, dtype), np.ones(1, bool)).dtype
 
 
-# -------------------------------------------------------------------------------
-# Generic functions
-# -------------------------------------------------------------------------------
+def write_use(
+    f: _GroupStorageType,
+    adata: AnnData,
+    use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc],
+    *,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+) -> None:
+    """Write only the parts of `adata` referenced by `use` into the existing anndata group `f`."""
+    from .specs import read_elem, write_elem
+
+    if (
+        f.attrs.get("encoding-type"),
+        f.attrs.get("encoding-version"),
+    ) != ("anndata", "0.1.0"):
+        msg = "Cannot write a subelement of an AnnData object to a store that is not an AnnData store."
+        raise ValueError(msg)
+    for dim in ("obs", "var"):
+        group = cast("_GroupStorageType", f[dim])
+        on_disk = read_elem(
+            cast("StorageType", group[cast("str", group.attrs["_index"])])
+        )
+        if not pd.Index(cast("np.ndarray", on_disk)).equals(
+            getattr(adata, f"{dim}_names")
+        ):
+            msg = f"Cannot write {use}: {dim}_names in the store do not match the AnnData object."
+            raise ValueError(msg)
+
+    # resolve everything first so an invalid accessor fails before anything is written
+    uses = use if isinstance(use, Sequence) else [use]
+    for parent, key, elem in [_resolve_use(f, adata, u) for u in uses]:
+        if parent is not None and parent not in f:
+            write_elem(f, parent, {})
+        write_elem(
+            f if parent is None else cast("_GroupStorageType", f[parent]),
+            key,
+            elem,
+            dataset_kwargs=dataset_kwargs,
+        )
+
+
+def _resolve_use(  # noqa: PLR0911
+    f: _GroupStorageType, adata: AnnData, use: AdRef | RefAcc | MapAcc
+) -> tuple[str | None, str, RWAble]:
+    """Get the parent group, key, and element to write for `use`."""
+    from ..acc import (
+        AdRef,
+        GraphAcc,
+        GraphMapAcc,
+        LayerAcc,
+        LayerMapAcc,
+        MetaAcc,
+        MultiAcc,
+        MultiMapAcc,
+    )
+
+    match use:
+        case AdRef(acc=MetaAcc(dim=dim) as acc, idx=str() as col):
+            if col in {"_index", cast("_GroupStorageType", f[dim]).attrs["_index"]}:
+                msg = f"Cannot write column {col!r}: it is the name of the {dim} index."
+                raise ValueError(msg)
+            # `._values` is what `write_dataframe` writes for each column
+            return dim, col, acc.get(adata)[col]._values
+        case AdRef():
+            msg = f"Cannot write {use}: only `obs`/`var` columns can be written as single vectors."
+            raise ValueError(msg)
+        case LayerAcc(k=k):
+            return (
+                None if k is None else "layers",
+                "X" if k is None else k,
+                use.get(adata),
+            )
+        case MetaAcc(dim=dim):
+            return None, dim, use.get(adata)
+        case MultiAcc(dim=dim, k=k):
+            return f"{dim}m", k, use.get(adata)
+        case GraphAcc(dim=dim, k=k):
+            return f"{dim}p", k, use.get(adata)
+        case LayerMapAcc():  # `adata.layers` contains `X` as `None`
+            return (
+                None,
+                "layers",
+                {k: v for k, v in use.get(adata).items() if k is not None},
+            )
+        case MultiMapAcc(dim=dim):
+            return None, f"{dim}m", dict(use.get(adata))
+        case GraphMapAcc(dim=dim):
+            return None, f"{dim}p", dict(use.get(adata))
+        case _:
+            msg = f"Cannot write {use!r}."
+            raise TypeError(msg)
 
 
 def read_attribute(*args, **kwargs):

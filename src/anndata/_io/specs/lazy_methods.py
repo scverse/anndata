@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
 
     from ..._types import StorageType
-    from ...compat import CSArray, CSMatrix
+    from ...compat import CSArray, CSMatrix, CupyCSMatrix
     from .registry import LazyDataStructures, LazyReader
 
     BlockInfo = Mapping[
@@ -83,7 +83,7 @@ def make_dask_chunk(
     path_or_sparse_dataset: Path | CSRDataset | CSCDataset,
     elem_name: str,
     block_info: BlockInfo | None = None,
-) -> CSMatrix | CSArray | np.typing.NDArray:
+) -> CSMatrix | CSArray | CupyCSMatrix | np.typing.NDArray:
     if block_info is None:
         msg = "Block info is required"
         raise ValueError(msg)
@@ -95,7 +95,7 @@ def make_dask_chunk(
 
 def _compute_chunk(
     f: h5py.File | CSRDataset | CSCDataset, block_info: BlockInfo
-) -> CSMatrix | CSArray | np.typing.NDArray:
+) -> CSMatrix | CSArray | CupyCSMatrix | np.typing.NDArray:
     # See https://github.com/scverse/anndata/pull/2005 for why
     # should_cache_indptr is False.
     # The purpose of caching the indptr was when the dataset is reused
@@ -110,7 +110,8 @@ def _compute_chunk(
     idx = tuple(
         slice(start, stop) for start, stop in block_info[None]["array-location"]
     )
-    rv = mtx[idx]
+    # dense datasets can be 1D, sparse ones are always 2D
+    rv = mtx[idx] if isinstance(mtx, h5py.Dataset) else mtx[idx[0], idx[1]]
     if TYPE_CHECKING:  # annotation bug: indexing with slices never returns a scalar
         assert not isinstance(rv, int | float)
     return rv
@@ -248,6 +249,12 @@ def read_zarr_array(
 ) -> DaskArray:
     import dask.array as da
 
+    if chunks is None:
+        if hasattr(elem, "shards") and (elem.shards is not None):
+            chunks = elem.shards
+        else:
+            chunks = elem.chunks
+
     return da.from_zarr(elem, chunks=chunks)
 
 
@@ -255,7 +262,7 @@ def _gen_xarray_dict_iterator_from_elems(
     elem_dict: Mapping[str, LazyDataStructures | pd.Index],
     dim_name: str,
     index: pd.Index,
-) -> Generator[tuple[str, XVariable], None, None]:
+) -> Generator[tuple[str, XVariable]]:
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
 
     from ...compat import xarray as xr

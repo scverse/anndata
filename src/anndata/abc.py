@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     import numpy as np
 
     from ._types import _GroupStorageType
-    from .compat import CSArray, CSMatrix
+    from .compat import CSArray, CSMatrix, CupyCSMatrix
     from .typing import Index
 
 
@@ -43,7 +43,7 @@ class _AbstractCSDataset(ABC):
         """The group underlying the backed matrix."""
 
     @abstractmethod
-    def __getitem__(self, index: Index) -> float | CSMatrix | CSArray:
+    def __getitem__(self, index: Index) -> float | CSMatrix | CSArray | CupyCSMatrix:
         """Load a slice or an element from the sparse dataset into memory.
 
         Parameters
@@ -57,7 +57,7 @@ class _AbstractCSDataset(ABC):
         """
 
     @abstractmethod
-    def to_memory(self) -> CSMatrix | CSArray:
+    def to_memory(self) -> CSMatrix | CSArray | CupyCSMatrix:
         """Load the sparse dataset into memory.
 
         Returns

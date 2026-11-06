@@ -298,7 +298,7 @@ def test_concatenate_dense():
     assert_equal(adata.layers["Xs"], X_combined)
     assert adata.obs.columns.tolist() == ["batch"]
     assert adata.var.columns.tolist() == ["annoA", "annoB"]
-    assert adata.var.values.tolist() == [[1, 2], [2, 1]]
+    assert adata.var.to_numpy().tolist() == [[1, 2], [2, 1]]
     assert adata.obsm.keys() == {"X_1", "X_2"}
     assert adata.obsm["X_1"].tolist() == np.concatenate([X1, X1, X1]).tolist()
 
@@ -320,7 +320,7 @@ def test_concatenate_dense():
         [np.nan, 6.0, 5.0, 4.0],
     ])
     np.testing.assert_equal(adata.X, X_ref)
-    var_ma = ma.masked_invalid(adata.var.values.tolist())
+    var_ma = ma.masked_invalid(adata.var.to_numpy().tolist())
     var_ma_ref = ma.masked_invalid(
         np.array([
             [0.0, np.nan],
@@ -1401,7 +1401,7 @@ def test_bool_promotion():
     result = concat({"np_bool": np_bool, "b": missing}, join="outer", label="batch")
 
     assert pd.api.types.is_bool_dtype(result.obs["bool"])
-    assert pd.isnull(result.obs.loc[result.obs["batch"] == "missing", "bool"]).all()
+    assert pd.isna(result.obs.loc[result.obs["batch"] == "missing", "bool"]).all()
 
     # Check that promotion doesn't occur if it doesn't need to:
     np_bool_2 = AnnData(
@@ -1415,6 +1415,25 @@ def test_bool_promotion():
     )
 
     assert result.obs["bool"].dtype == np.dtype(bool)
+
+
+def test_bool_promotion_alt_axis(tmp_path):
+    # https://github.com/scverse/anndata/issues/1505
+    # Outer join with a union merge strategy reindexes alt-axis annotations,
+    # which promoted numpy bool columns to object and made the result unwritable.
+    a = AnnData(
+        np.ones((3, 2)),
+        var=pd.DataFrame({"bool": [True, False]}, index=["g1", "g2"]),
+    )
+    b = AnnData(
+        np.ones((3, 2)),
+        var=pd.DataFrame({"bool": [True, True]}, index=["g2", "g3"]),
+    )
+    result = concat([a, b], join="outer", merge="first")
+
+    assert pd.api.types.is_bool_dtype(result.var["bool"])
+    assert pd.isna(result.var.loc["g3", "bool"])
+    result.write_h5ad(tmp_path / "result.h5ad")
 
 
 @pytest.mark.parametrize(
@@ -1547,10 +1566,11 @@ def test_concat_size_0_axis(
             for k, result_elem in getattr(b_result, mapping_elem).items():
                 elem_name = f"{mapping_elem}/{k}"
                 # pd.concat can have unintuitive return types. is similar to numpy promotion
+                # index names of {obs,var}m dataframes are not kept in sync with {obs,var}_names
                 if isinstance(result_elem, pd.DataFrame):
                     assert_equal(
-                        getattr(b, mapping_elem)[k].astype(object),
-                        result_elem.astype(object),
+                        getattr(b, mapping_elem)[k].astype(object).rename_axis(None),
+                        result_elem.astype(object).rename_axis(None),
                         elem_name=elem_name,
                     )
                 else:
@@ -1895,3 +1915,10 @@ def test_1d_concat():
     adata = AnnData(np.ones((5, 20)), obsm={"1d-array": np.ones(5)})
     concated = concat([adata, adata])
     assert concated.obsm["1d-array"].shape == (10, 1)
+
+
+def test_concat_sparse_non_numeric_fill_value() -> None:
+    a = AnnData(sparse.random(3, 2, format="csr"), var=pd.DataFrame(index=["a", "b"]))
+    b = AnnData(sparse.random(3, 2, format="csr"), var=pd.DataFrame(index=["b", "c"]))
+    with pytest.raises(TypeError, match=r"only be filled with numbers"):
+        concat([a, b], join="outer", fill_value="x")

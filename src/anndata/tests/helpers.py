@@ -20,7 +20,9 @@ from packaging.version import Version
 from pandas.api.types import is_numeric_dtype
 from pandas.core.arrays.integer import IntegerDtype
 from scipy import sparse
-from zarr.storage import LocalStore
+from zarr.abc.store import Store
+from zarr.core.buffer import default_buffer_prototype
+from zarr.storage import MemoryStore, WrapperStore
 
 from anndata import AnnData, ExperimentalFeatureWarning, Raw
 from anndata._core.aligned_mapping import AlignedMappingBase
@@ -45,6 +47,7 @@ from anndata.utils import asarray
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable, MutableMapping
+    from pathlib import Path
     from types import ModuleType
     from typing import Any, Literal, TypeGuard
 
@@ -373,8 +376,8 @@ def gen_adata(  # noqa: PLR0913
     obs = gen_typed_df(M, obs_names, dtypes=obs_dtypes)
     var = gen_typed_df(N, var_names, dtypes=var_dtypes)
     # For #147
-    obs.rename(columns=dict(cat="obs_cat"), inplace=True)
-    var.rename(columns=dict(cat="var_cat"), inplace=True)
+    obs = obs.rename(columns=dict(cat="obs_cat"))
+    var = var.rename(columns=dict(cat="var_cat"))
 
     if has_xr := find_spec("xarray"):
         if obs_xdataset:
@@ -734,8 +737,7 @@ def assert_equal_sparse(
 def assert_equal_cupy_sparse(
     a: CupySparseMatrix, b: object, *, exact: bool = False, elem_name: str | None = None
 ):
-    a = a.toarray()
-    assert_equal(b, a, exact=exact, elem_name=elem_name)
+    assert_equal(b, a.toarray(), exact=exact, elem_name=elem_name)
 
 
 @assert_equal.register(h5py.Dataset)
@@ -921,7 +923,7 @@ def assert_adata_equal(
             idx[1] = a.var_names
             change_flag = True
         if change_flag:
-            b = b[tuple(idx)].copy()
+            b = b[idx[0], idx[1]].copy()
     for attr in [
         "X",
         "obs",
@@ -1039,8 +1041,10 @@ def _as_sparse_dask_inner(
         msg = "Dask <2025.3 without fast-array-utils doesn’t support sparse arrays"
         raise TypeError(msg)
     if issubclass(typ, CupySparseMatrix):
+        import cupy as cp
+
         # Cupy sparse constructors don’t accept numpy ndarrays
-        return typ(as_cupy(a))
+        return typ(cp.asarray(a) if isinstance(a, np.ndarray) else a)
     return typ(a)
 
 
@@ -1085,7 +1089,10 @@ def _(a):
 try:
     import cupyx.scipy.sparse as cpsparse
 
-    format_to_memory_class = {"csr": cpsparse.csr_matrix, "csc": cpsparse.csc_matrix}
+    format_to_memory_class: dict[str, type[CupyCSMatrix]] = {
+        "csr": cpsparse.csr_matrix,
+        "csc": cpsparse.csc_matrix,
+    }
 except ImportError:
     format_to_memory_class = {}
 
@@ -1241,16 +1248,50 @@ DASK_CUPY_MATRIX_PARAMS = [
 ]
 
 
-class AccessTrackingStore(LocalStore):
+@overload
+def open_store(store: Path, /, mode: Literal["r", "a"] = "a") -> h5py.File: ...
+@overload
+def open_store(store: MemoryStore, /, mode: Literal["r", "a"] = "a") -> zarr.Group: ...
+def open_store(
+    store: Path | MemoryStore, /, mode: Literal["r", "a"] = "a"
+) -> h5py.File | zarr.Group:
+    """Open a `diskfmt_store`: a `Path` for h5, a `MemoryStore` for zarr."""
+    if not isinstance(store, MemoryStore):
+        return h5py.File(store, mode)
+    return zarr.open_group(store, mode=mode)
+
+
+class AccessTrackingStore(WrapperStore[Store]):
+    """Wraps a store to count reads of (prefixes of) keys.
+
+    Wrap the store a fixture wrote to, e.g. ``AccessTrackingStore(store)``,
+    to get a fresh set of counters over the same data.
+
+    The wrapper is always read-only: `zarr` re-wraps a writable store when
+    opened with ``mode="r"``, which would silently reset the counters.
+    """
+
     _access_count: Counter[str]
     _accessed: defaultdict[str, set]
     _accessed_keys: defaultdict[str, list[str]]
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, store: Store) -> None:
+        super().__init__(store.with_read_only(read_only=True))
         self._access_count = Counter()
         self._accessed = defaultdict(set)
         self._accessed_keys = defaultdict(list)
+
+    def get_sync(
+        self,
+        key: str,
+        prototype: BufferPrototype | None = None,
+        byte_range: ByteRequest | None = None,
+    ) -> Buffer | None:
+        if Version(version("zarr")) < Version("3.3"):  # pragma: no-cover
+            msg = "zarr-python does not implement `Store.get_sync` below 3.3."
+            raise NotImplementedError(msg)
+        self._check_and_track_key(key)
+        return super().get_sync(key, prototype=prototype, byte_range=byte_range)
 
     async def get(
         self,
@@ -1259,7 +1300,9 @@ class AccessTrackingStore(LocalStore):
         byte_range: ByteRequest | None = None,
     ) -> Buffer | None:
         self._check_and_track_key(key)
-        return await super().get(key, prototype=prototype, byte_range=byte_range)
+        if prototype is None:  # concrete stores default it, the ABC does not
+            prototype = default_buffer_prototype()
+        return await self._store.get(key, prototype, byte_range)
 
     def _check_and_track_key(self, key: str):
         for tracked in self._access_count:

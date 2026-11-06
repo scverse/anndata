@@ -9,6 +9,7 @@ import pytest
 from pandas.api.extensions import ExtensionArray
 from scipy import sparse as sp
 
+from anndata import read_h5ad
 from anndata.acc import A
 from anndata.compat import (
     CSArray,
@@ -33,16 +34,18 @@ from anndata.utils import asarray
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
+    from typing import Literal
 
     from anndata import AnnData
-    from anndata.acc import AdRef, InMemoryArray
-    from anndata.compat import SparseArray, SparseMatrix
+    from anndata.acc import AdRef, GraphAcc, InMemoryArray, LayerAcc, MultiAcc
+    from anndata.typing import AlignedArray
 
 
 needs_dask = pytest.mark.skipif(not find_spec("dask"), reason="dask not installed.")
 
 
-ND_PATHS: list[tuple[AdRef, Callable[[AnnData], InMemoryArray]]] = [
+ND_PATHS: list[tuple[AdRef, Callable[[AnnData], object]]] = [
     (A.X[:, :], lambda ad: ad.X),
     (A.X[:, "gene-3"], lambda ad: ad[:, "gene-3"].X),
     (A.X["cell-5", :], lambda ad: ad["cell-5"].X),
@@ -51,12 +54,14 @@ ND_PATHS: list[tuple[AdRef, Callable[[AnnData], InMemoryArray]]] = [
     (A.layers["a"]["cell-77", :], lambda ad: ad["cell-77"].layers["a"]),
     (A.obsm["umap"][0], lambda ad: asarray(ad.obsm["umap"])[:, 0]),
     (A.obsm["umap"][1], lambda ad: asarray(ad.obsm["umap"])[:, 1]),
+    (A.obsm["umap"][-1], lambda ad: asarray(ad.obsm["umap"])[:, -1]),
+    (A.obsm["umap"][-2], lambda ad: asarray(ad.obsm["umap"])[:, -2]),
     (A.varp["cons"][:, :], lambda ad: asarray(ad.varp["cons"])),
     (A.varp["cons"]["gene-46", :], lambda ad: asarray(ad.varp["cons"])[46, :]),
     (A.varp["cons"][:, "gene-46"], lambda ad: asarray(ad.varp["cons"])[:, 46]),
 ]
 
-DF_PATHS: list[tuple[AdRef, Callable[[AnnData], InMemoryArray]]] = [
+DF_PATHS: list[tuple[AdRef, Callable[[AnnData], object]]] = [
     (A.obs["type"], lambda ad: ad.obs["type"]),
     (A.obs.index, lambda ad: ad.obs.index),
     # TODO: copy entries from above that can also hold dataframes?
@@ -100,7 +105,7 @@ ND_TYPES = [
         id="cpx.csr_matrix",
     ),
     *[
-        pytest.param(*t.values, marks=[*t.marks, needs_dask], id=t.id)
+        pytest.param(*t.values, marks=[*t.marks, needs_dask], id=t.id)  # noqa: PD011
         for t in DASK_TYPES
     ],
 ]
@@ -123,7 +128,8 @@ DF_TYPES = [
 def convert_ndarrays(
     adata: AnnData, array_conv: Callable[[InMemoryArray], InMemoryArray], /
 ) -> None:
-    def conv(v: InMemoryArray) -> InMemoryArray:
+    def conv(v: AlignedArray) -> InMemoryArray:
+        assert isinstance(v, np.ndarray | CSMatrix | CSArray)
         if isinstance(v, CSMatrix | CSArray):
             v = v.toarray()
         return array_conv(v)
@@ -131,7 +137,8 @@ def convert_ndarrays(
     for k, v in adata.layers.items():
         adata.layers[k] = conv(v)
     for k, v in adata.varm.items():
-        adata.varm[k] = conv(v)
+        if not isinstance(v, pd.DataFrame):
+            adata.varm[k] = conv(v)
     for k, v in adata.obsm.items():
         adata.obsm[k] = conv(v)
     for k, v in adata.obsp.items():
@@ -149,9 +156,7 @@ def convert_dataframes(
     adata.var = df_conv(adata.var)
 
 
-def _expected2np(
-    expected: InMemoryArray | SparseArray | SparseMatrix, ad_ref: AdRef, /
-) -> np.ndarray:
+def _expected2np(expected: object, ad_ref: AdRef, /) -> np.ndarray:
     ndim = len(ad_ref.dims)
     match expected:
         case np.ndarray():
@@ -171,7 +176,7 @@ def _expected2np(
 @pytest.fixture(
     params=[
         pytest.param(
-            (ad_ref, ad_expected, *typ.values, convert),
+            (ad_ref, ad_expected, *typ.values, convert),  # noqa: PD011
             marks=typ.marks,
             id=f"{ad_ref}-{typ.id}",
         )
@@ -205,3 +210,99 @@ def test_get_values(
     assert isinstance(vals, type_expected)
     vals_np = asarray(vals)
     np.testing.assert_array_equal(vals_np, expected, strict=True)
+
+
+@pytest.mark.parametrize("i", [2, 99, -3], ids=str)
+@pytest.mark.parametrize("dim", ["obs", "var"], ids=str)
+def test_get_multi_out_of_range(
+    adata: AnnData, dim: Literal["obs", "var"], i: int
+) -> None:
+    """Out-of-range column indices raise instead of yielding an empty array."""
+    adata.varm["pcs"] = np.zeros((adata.n_vars, 2))  # `obsm["umap"]` also has 2 columns
+    ad_ref = getattr(A, f"{dim}m")["umap" if dim == "obs" else "pcs"][i]
+    assert ad_ref not in adata
+    msg = rf"Column index `{i}` is out of range for A\.{dim}m\[.+\] with 2 columns\."
+    with pytest.raises(IndexError, match=msg):
+        adata[ad_ref]
+
+
+@pytest.mark.parametrize(
+    "ad_ref",
+    [
+        A.X[:, "gene-3"],
+        A.X["cell-5", :],
+        A.layers["a"][:, "gene-18"],
+        A.obsm["umap"][1],
+        A.obsm["umap"][-1],
+        A.varp["cons"]["gene-46", :],
+        A.varp["cons"][:, "gene-46"],
+        A.obs["type"],
+        A.obs["new"],
+        A.var.index,
+    ],
+    ids=str,
+)
+@pytest.mark.parametrize("view", [False, True], ids=["actual", "view"])
+def test_set_values(adata: AnnData, ad_ref: AdRef, *, view: bool) -> None:
+    if view:
+        adata = adata[:, :]
+    (dim,) = ad_ref.dims
+    value = np.arange(adata.n_obs if dim == "obs" else adata.n_vars)
+    value = value.astype(str) if ad_ref.idx is None else value.astype(np.float32)
+
+    adata[ad_ref] = value
+
+    assert not adata.is_view
+    np.testing.assert_array_equal(asarray(adata[ad_ref]), value)
+
+
+@pytest.mark.parametrize(
+    "acc", [A.X, A.layers["new"], A.obsm["new"], A.obsp["new"]], ids=str
+)
+def test_set_full(adata: AnnData, acc: LayerAcc | MultiAcc | GraphAcc) -> None:
+    n_cols = adata.n_obs if acc == A.obsp["new"] else adata.n_vars
+    value = np.ones((adata.n_obs, n_cols), dtype=np.float32)
+    adata[acc] = value
+    assert adata[acc] is value
+
+
+def test_set_full_df(adata: AnnData) -> None:
+    df = pd.DataFrame(dict(x=np.arange(adata.n_obs)), index=adata.obs_names)
+    adata[A.obs] = df
+    obs = adata[A.obs]
+    assert isinstance(obs, pd.DataFrame)
+    pd.testing.assert_frame_equal(obs, df)
+
+
+@pytest.mark.parametrize(
+    ("index", "exc"), [(A.obsm, IndexError), (0, TypeError)], ids=str
+)
+def test_set_unsupported(adata: AnnData, index: object, exc: type[Exception]) -> None:
+    with pytest.raises(exc):
+        adata[index] = 0  # type: ignore[index]
+
+
+def test_set_unsettable(adata: AnnData, tmp_path: Path) -> None:
+    adata.X = adata.layers["a"]
+    adata.write_h5ad(tmp_path / "test.h5ad")
+    adata = read_h5ad(tmp_path / "test.h5ad", backed="r")
+    with pytest.raises(TypeError, match=r"Cannot assign into _?CSRDataset"):
+        adata[A.X[:, "gene-3"]] = np.zeros(adata.n_obs)
+
+
+def test_subclass_without_set_warns() -> None:
+    from anndata.acc import RefAcc
+
+    with pytest.warns(FutureWarning, match=r"doesn’t implement RefAcc\.set"):
+
+        class _NoSet(RefAcc):  # pyright: ignore[reportUnusedClass]
+            def dims(self, idx, /): ...
+            def __repr__(self): ...
+            def idx_repr(self, idx, /): ...
+            def isin(self, data, idx=None, /): ...
+            def get(self, data, idx=None, /): ...
+
+
+def test_set_multi_out_of_range(adata: AnnData) -> None:
+    with pytest.raises(IndexError, match=r"out of range"):
+        adata[A.obsm["umap"][2]] = np.zeros(adata.n_obs)

@@ -30,7 +30,7 @@ Let's start off with an example:
         obsm: 'X_pca', 'X_umap'
         varm: 'PCs'
         obsp: ...
-        layers: None (.X)
+        layers: ...None (.X)
 
 If we split this object up by clusters of observations, then stack those subsets we'll obtain the same values – just ordered differently.
 
@@ -43,7 +43,7 @@ If we split this object up by clusters of observations, then stack those subsets
         var: 'n_counts', 'means', 'dispersions', 'dispersions_norm', 'highly_variable'
         obsm: 'X_pca', 'X_umap'
         varm: 'PCs'
-        layers: None (.X)
+        layers: ...None (.X)
 
 Note that we concatenated along the observations by default, and that most elements aligned to the observations were concatenated as well.
 A notable exception is :attr:`~anndata.AnnData.obsp`, which can be re-enabled with the `pairwise` keyword argument.
@@ -178,7 +178,7 @@ Now we will split this object by the categorical `"blobs"` and recombine it to i
     >>> for group, idx in blobs.obs.groupby("blobs").indices.items():
     ...     sub_adata = blobs[idx].copy()
     ...     sub_adata.obsm["qc"], sub_adata.varm[f"{group}_qc"] = sc.pp.calculate_qc_metrics(
-    ...         sub_adata, percent_top=(), inplace=False, log1p=False
+    ...         sub_adata, percent_top=(), log1p=False
     ...     )
     ...     adatas.append(sub_adata)
     >>> adatas[0]

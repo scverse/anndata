@@ -108,13 +108,13 @@ def write_loom(
     }
     row_names = adata.var_names
     row_dim = row_names.name if row_names.name is not None else "var_names"
-    row_attrs[row_dim] = row_names.values
+    row_attrs[row_dim] = row_names.to_numpy()
     col_attrs: dict[Hashable, Any] = {
         k: np.array(v) for k, v in obs.to_dict("list").items()
     }
     col_names = adata.obs_names
     col_dim = col_names.name if col_names.name is not None else "obs_names"
-    col_attrs[col_dim] = col_names.values
+    col_attrs[col_dim] = col_names.to_numpy()
 
     if adata.X is None:
         msg = "loompy does not accept empty matrices as data"

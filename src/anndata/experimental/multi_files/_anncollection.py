@@ -588,7 +588,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         return self.reference.attrs_keys
 
 
-# a `type` alias would hand the docs build a `TypeAliasType`, which would loop infinitely
+# no `type` alias: Sphinx would render its self-reference as a link to this undocumented alias
 ConvertType: TypeAlias = "Callable | Mapping[str, ConvertType]"  # noqa: UP040
 
 
@@ -832,6 +832,19 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         self.indices_strict = indices_strict
 
     def __getitem__(self, index: Index):
+        """Lazily subset the collection.
+
+        Parameters
+        ----------
+        index
+            An :type:`~anndata.typing.Index` along observations and variables,
+            as for :class:`~anndata.AnnData`.
+
+        Returns
+        -------
+        A view that only loads data from the underlying objects when accessed.
+        Use its `to_adata` method to get an :class:`~anndata.AnnData` object.
+        """
         oidx, vidx = _normalize_indices(index, self.obs_names, self.var_names)
         resolved_idx = self._resolve_idx(oidx, vidx)
 

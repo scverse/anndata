@@ -76,8 +76,9 @@ class H5ADReadSuite:
     def peakmem_read_full(self, *_):
         anndata.read_h5ad(self.filepath)
 
-    def mem_readfull_object(self, *_):
-        return anndata.read_h5ad(self.filepath)
+    # https://github.com/pympler/pympler/issues/180
+    # def mem_readfull_object(self, *_):
+    #     return anndata.read_h5ad(self.filepath)
 
     def track_read_full_memratio(self, *_):
         mem_recording = memory_usage(

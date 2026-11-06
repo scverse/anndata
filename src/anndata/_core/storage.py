@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
-from anndata.compat import CSArray, CSMatrix
+from anndata.compat import CSArray, CSMatrix, CupyCSMatrix, CupySparseMatrix
 
 from .._warnings import ImplicitModificationWarning
 from ..compat import XDataset, has_xp_base
@@ -99,10 +99,11 @@ def coerce_array(
         for base, csr_c_format in [
             (sparse.spmatrix, CSMatrix),
             (sparse.sparray, CSArray),
+            (CupySparseMatrix, CupyCSMatrix),
         ]
     )
     if any(is_non_csc_r_array_or_matrix):
-        msg = f"Only CSR and CSC {'matrices' if isinstance(value, sparse.spmatrix) else 'arrays'} are supported."
+        msg = f"Only CSR and CSC {'arrays' if isinstance(value, sparse.sparray) else 'matrices'} are supported."
         raise ValueError(msg)
     # if value is an array-like object, try to convert it
     e = None

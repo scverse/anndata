@@ -10,23 +10,19 @@ import pytest
 import zarr
 
 from anndata import AnnData
-from anndata._io.zarr import open_write_group
 from anndata.io import write_elem
-from anndata.tests.helpers import assert_equal
+from anndata.tests.helpers import assert_equal, open_store
 
 if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
 
+    from zarr.storage import MemoryStore
+
 
 @pytest.fixture
-def file(tmp_path: Path, diskfmt: Literal["h5ad", "zarr"]) -> h5py.File | zarr.Group:
-    path = tmp_path / f"test.{diskfmt}"
-    if diskfmt == "zarr":
-        return open_write_group(path, mode="a")
-    if diskfmt == "h5ad":
-        return h5py.File(path, "a")
-    pytest.fail(f"Unknown diskfmt: {diskfmt}")
+def file(diskfmt_store: Path | MemoryStore) -> h5py.File | zarr.Group:
+    return open_store(diskfmt_store)
 
 
 @pytest.mark.parametrize("assign", ["init", "assign"])

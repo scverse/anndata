@@ -1,5 +1,5 @@
-References
-----------
+Bibliography
+------------
 
 .. [Hastie09]
    Hastie *et al.* (2009),

@@ -25,6 +25,7 @@ from ..compat import (
     ZappyArray,
     has_xp,
     has_xp_base,
+    pandas_no_chained_assignment_warning,
 )
 from ..utils import warn
 from .access import ElementRef
@@ -261,12 +262,12 @@ class SparseCSCArrayView(_ViewMixin, sparse.csc_array):
 
 
 class CupySparseCSRView(_ViewMixin, CupyCSRMatrix):
-    def copy(self) -> CupyCSRMatrix:
+    def copy(self) -> CupyCSRMatrix:  # type: ignore[override]
         return CupyCSRMatrix(self).copy()
 
 
 class CupySparseCSCView(_ViewMixin, CupyCSCMatrix):
-    def copy(self) -> CupyCSCMatrix:
+    def copy(self) -> CupyCSCMatrix:  # type: ignore[override]
         return CupyCSCMatrix(self).copy()
 
 
@@ -285,10 +286,10 @@ class CupyArrayView(_ViewMixin, CupyArray):
         arr._view_args = view_args
         return arr
 
-    def copy(self) -> CupyArray:
+    def copy(self, order: Literal["C", "F", "A", "K"] = "C") -> CupyArray:
         import cupy as cp
 
-        return cp.array(self).copy()
+        return cp.array(self).copy(order)
 
 
 class DictView(_ViewMixin, dict):
@@ -306,10 +307,10 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
         if not inplace:
             return self.copy().drop(*args, **kw)
         if self._view_args is None:
-            super().drop(*args, inplace=True, **kw)
+            super().drop(*args, inplace=True, **kw)  # noqa: PD002
             return
         with view_update(*self._view_args) as df:
-            df.drop(*args, inplace=True, **kw)
+            df.drop(*args, inplace=True, **kw)  # noqa: PD002
 
     def __setattr__(self, key: str, value: object) -> None:
         if key == "index" and self._view_args is not None:
@@ -351,8 +352,7 @@ def as_view_df(df, view_args):
     if settings.remove_unused_categories:
         for col in df.columns:
             if isinstance(df[col].dtype, pd.CategoricalDtype):
-                # TODO: this mode is going away
-                with pd.option_context("mode.chained_assignment", None):
+                with pandas_no_chained_assignment_warning():
                     df[col] = df[col].cat.remove_unused_categories()
     return DataFrameView(df, view_args=view_args)
 

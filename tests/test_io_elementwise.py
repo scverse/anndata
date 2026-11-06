@@ -6,8 +6,10 @@ from __future__ import annotations
 
 import re
 from contextlib import ExitStack, nullcontext
+from dataclasses import dataclass
 from importlib.metadata import version
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
 
 import h5py
@@ -17,11 +19,12 @@ import pytest
 import zarr
 from packaging.version import Version
 from scipy import sparse
+from zarr.storage import MemoryStore
 
 import anndata as ad
 from anndata._io.specs import _REGISTRY, IOSpec, get_spec
 from anndata._io.specs.registry import IORegistryError
-from anndata._io.zarr import open_write_group
+from anndata.acc import A, AdAcc, MetaAcc
 from anndata.compat import CSArray, CSMatrix, DaskArray, _read_attr
 from anndata.experimental import read_elem_lazy
 from anndata.io import read_elem, write_elem
@@ -33,11 +36,12 @@ from anndata.tests.helpers import (
     assert_equal,
     check_all_sharded,
     gen_adata,
+    open_store,
     visititems_zarr,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Callable, Generator
     from pathlib import Path
     from typing import Literal
 
@@ -48,7 +52,7 @@ PANDAS_3 = Version(version("pandas")) >= Version("3rc0")
 
 
 @pytest.fixture
-def exit_stack() -> Generator[ExitStack, None, None]:
+def exit_stack() -> Generator[ExitStack]:
     with ExitStack() as stack:
         yield stack
 
@@ -56,13 +60,13 @@ def exit_stack() -> Generator[ExitStack, None, None]:
 @pytest.fixture
 def store(
     diskfmt: Literal["h5ad", "zarr"], tmp_path: Path
-) -> Generator[h5py.Group | zarr.Group, None, None]:
+) -> Generator[h5py.Group | zarr.Group]:
     store: h5py.Group | zarr.Group
     if diskfmt == "h5ad":
         file = h5py.File(tmp_path / "test.h5ad", "w")
         store = cast("h5py.Group", file["/"])
     elif diskfmt == "zarr":
-        store = open_write_group(tmp_path / "test.zarr")
+        store = zarr.open_group(MemoryStore(), mode="w")
     else:
         pytest.fail(f"Unknown store type: {diskfmt}")
 
@@ -258,6 +262,91 @@ def test_io_spec_compressed_scalars(
 
     from_disk = read_elem(store[key])
     assert_equal(value, from_disk)
+
+
+@pytest.mark.parametrize(
+    "ref",
+    [A.obsm["pca"][0], A.obsm["pca"], A.X[:, "gene-5"], A.obs["ct"], A.obs.index],
+    ids=str,
+)
+def test_accessor_roundtrip(store: _GroupStorageType, ref: object) -> None:
+    """`anndata.acc` accessors round-trip via their `to_json` form."""
+    write_elem(store, "ref", ref, compat="0.14")
+    assert _read_attr(store["ref"].attrs, "encoding-type") == "accessor"
+    assert _read_attr(store["ref"].attrs, "accessor-project") == "anndata"
+    assert read_elem(store["ref"]) == ref
+
+
+@dataclass(frozen=True)
+class ExtMetaAcc(MetaAcc):
+    """A third-party accessor that `A.to_json` would serialize lossily."""
+
+
+@dataclass(frozen=True)
+class ExtAcc(AdAcc):
+    meta_cls: type[MetaAcc] = ExtMetaAcc
+
+    def to_json(self, ref):
+        if isinstance(ref, ExtMetaAcc):  # whole `obs`/`var`, unlike `A`
+            return ["ext", ref.dim]
+        return ["ext", *super().to_json(ref)]
+
+    def from_json(self, data, *, vec=None):
+        assert data[0] == "ext"
+        if len(data) == 2 and data[1] in {"obs", "var"}:
+            return getattr(self, data[1])
+        return super().from_json(data[1:], vec=vec)
+
+
+@pytest.fixture
+def registered_acc(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> AdAcc:
+    """Pretend that the project `ext` defining `ExtMetaAcc` registered an `AdAcc`.
+
+    Override `adacc` (default: `ExtAcc()`) or the project name `dist` via indirect parametrization.
+    """
+    from anndata.acc import _entry_points
+
+    params = getattr(request, "param", {})
+    adacc = cast("AdAcc", params.get("adacc", ExtAcc()))
+    ep = SimpleNamespace(name="ext", module=ExtMetaAcc.__module__, load=lambda: adacc)
+    dist = params.get("dist", "ext")
+    monkeypatch.setattr(_entry_points, "_entry_points", lambda: [(ep, dist)])
+    return adacc
+
+
+# `obs` has no writer of its own, so like mudata’s `ModMapAcc`, it dispatches via `RefAcc`
+@pytest.mark.parametrize(
+    "get_ref", [lambda a: a.obs["ct"], lambda a: a.obs], ids=["AdRef", "RefAcc"]
+)
+def test_accessor_ext_roundtrip(
+    store: _GroupStorageType, registered_acc: AdAcc, get_ref: Callable[[AdAcc], object]
+) -> None:
+    ref = get_ref(registered_acc)
+    write_elem(store, "ref", ref, compat="0.14")
+    assert _read_attr(store["ref"].attrs, "accessor-project") == "ext"
+    assert read_elem(store["ref"]) == ref
+
+
+def test_accessor_ext_unregistered(store: _GroupStorageType) -> None:
+    with pytest.raises(TypeError, match=r"no 'anndata\.acc' entry point"):
+        write_elem(store, "ref", ExtAcc().obs["ct"], compat="0.14")
+
+
+@pytest.mark.parametrize("registered_acc", [dict(adacc=A)], indirect=True)
+@pytest.mark.usefixtures("registered_acc")
+def test_accessor_ext_lossy(store: _GroupStorageType) -> None:
+    """A project whose `AdAcc` drops information (here: the subclass) can’t write."""
+    with pytest.raises(TypeError, match=r"lossily"):
+        write_elem(store, "ref", ExtAcc().obs["ct"], compat="0.14")
+
+
+@pytest.mark.parametrize("registered_acc", [dict(dist="other")], indirect=True)
+def test_accessor_ext_misnamed(store: _GroupStorageType, registered_acc: AdAcc) -> None:
+    """Entry points must be named after their project."""
+    with pytest.raises(ValueError, match=r"named after the project.*'other'"):
+        write_elem(store, "ref", registered_acc.obs["ct"], compat="0.14")
 
 
 # Can't instantiate cupy types at the top level, so converting them within the test
@@ -461,6 +550,49 @@ def test_write_indptr_dtype_override(store, sparse_format):
     np.testing.assert_array_equal(store["X/indptr"][...], X.indptr)
 
 
+@pytest.fixture(params=["indices-data", "shape"])
+def bad_sparray(request: pytest.FixtureRequest):
+    m = sparse.random_array((100, 100), format="csr", density=0.1)
+    match request.param:
+        case "indices-data":
+            m.indices = np.zeros(len(m.indices) * 2, dtype=m.indices.dtype)
+        case "shape":
+            m._shape = (10**11, m.shape[1])  # type: ignore[attr-defined]
+        case _:
+            pytest.fail(f"Unknown matrix type: {request.param}")
+    return m
+
+
+def test_write_bad_sparray(
+    diskfmt_store: Path | MemoryStore, bad_sparray: sparse.csr_array
+) -> None:
+    f = open_store(diskfmt_store)
+
+    with pytest.raises(
+        ValueError, match=r"index pointer size|should have the same size"
+    ):
+        ad.io.write_elem(f, "mtx", bad_sparray)
+
+
+def test_read_bad_sparray(
+    diskfmt_store: Path | MemoryStore, bad_sparray: sparse.csr_array
+) -> None:
+    f = open_store(diskfmt_store)
+    x = f.create_group("mtx")
+    x.attrs["encoding-type"] = "csr_matrix"
+    x.attrs["encoding-version"] = "0.1.0"
+    x.attrs["shape"] = bad_sparray.shape
+    c = x.create_dataset if isinstance(x, h5py.Group) else x.create_array
+    c("data", data=bad_sparray.data)
+    c("indices", data=bad_sparray.indices)
+    c("indptr", data=bad_sparray.indptr)
+
+    with pytest.raises(
+        ValueError, match=r"index pointer size|should have the same size"
+    ):
+        ad.io.read_elem(f["mtx"])
+
+
 @pytest.mark.parametrize(
     ("num_minor_axis", "expected_dtype"),
     [
@@ -634,6 +766,9 @@ def test_write_io_error(store, obj):
 
 
 PAT_IMPLICIT = r"allow_write_nullable_strings.*None.*future\.infer_string.*False"
+ALWAYS_INFER_STRING = pytest.mark.skipif(
+    PANDAS_3, reason="Can’t disable `future.infer_string` in pandas 3+."
+)
 
 
 @pytest.mark.parametrize(
@@ -648,6 +783,7 @@ PAT_IMPLICIT = r"allow_write_nullable_strings.*None.*future\.infer_string.*False
                 (ValueError, r"missing values.*allow_write_nullable_strings.*False"),
                 "string-array",
                 id=f"off-explicit-{int(pd_ignored)}",
+                marks=() if pd_ignored else ALWAYS_INFER_STRING,
             )
             for pd_ignored in [False, True]
         ),
@@ -658,10 +794,17 @@ PAT_IMPLICIT = r"allow_write_nullable_strings.*None.*future\.infer_string.*False
             (RuntimeError, PAT_IMPLICIT),
             (RuntimeError, PAT_IMPLICIT),
             id="off-implicit",
+            marks=ALWAYS_INFER_STRING,
         ),
         # when enabled, we expect arrays to be written in the nullable format
         pytest.param(None, True, *(["nullable-string-array"] * 2), id="on-implicit"),
-        pytest.param(True, False, *(["nullable-string-array"] * 2), id="on-explicit-0"),
+        pytest.param(
+            True,
+            False,
+            *(["nullable-string-array"] * 2),
+            id="on-explicit-0",
+            marks=ALWAYS_INFER_STRING,
+        ),
         pytest.param(True, True, *(["nullable-string-array"] * 2), id="on-explicit-1"),
     ],
 )
@@ -678,7 +821,11 @@ def test_write_nullable_string(
     expected = expected_missing if missing else expected_no_missing
     with (
         ad.settings.override(allow_write_nullable_strings=ad_setting),
-        pd.option_context("future.infer_string", pd_setting),
+        (  # `future.infer_string` defaults to True in pandas 3, and setting it is deprecated in pandas 3.1
+            nullcontext()
+            if PANDAS_3
+            else pd.option_context("future.infer_string", pd_setting)
+        ),
         (
             nullcontext()
             if isinstance(expected, str)
@@ -773,12 +920,12 @@ def test_write_to_root(store: _GroupStorageType, value):
     "consolidated", [True, False], ids=["consolidated", "unconsolidated"]
 )
 @pytest.mark.zarr_io
-def test_read_zarr_from_group(tmp_path, consolidated):
+def test_read_zarr_from_group(consolidated):
     # https://github.com/scverse/anndata/issues/1056
-    pth = tmp_path / "test.zarr"
+    store = MemoryStore()
     adata = gen_adata((3, 2), **GEN_ADATA_NO_XARRAY_ARGS)
 
-    z = open_write_group(pth)
+    z = zarr.open_group(store, mode="w")
     write_elem(z.create_group("table"), "table", adata)
 
     if consolidated:
@@ -793,7 +940,7 @@ def test_read_zarr_from_group(tmp_path, consolidated):
 
     read_func = zarr.open_consolidated if consolidated else zarr.open
 
-    z = read_func(pth)
+    z = read_func(store)
     expected = ad.read_zarr(z["table/table"])
     assert_equal(adata, expected)
 
@@ -853,13 +1000,11 @@ def test_io_pd_cow(
 
 
 def test_read_sparse_array(
-    tmp_path: Path,
+    diskfmt_store: Path | MemoryStore,
     sparse_format: Literal["csr", "csc"],
-    diskfmt: Literal["h5ad", "zarr"],
 ):
-    path = tmp_path / f"test.{diskfmt.replace('ad', '')}"
     a = sparse.random(100, 100, format=sparse_format)
-    f = open_write_group(path, mode="a") if diskfmt == "zarr" else h5py.File(path, "a")
+    f = open_store(diskfmt_store)
     ad.io.write_elem(f, "mtx", a)
     ad.settings.use_sparse_array_on_read = True
     mtx = ad.io.read_elem(f["mtx"])
@@ -868,8 +1013,16 @@ def test_read_sparse_array(
 
 @pytest.mark.parametrize(
     ("chunks", "expected_chunks"),
-    [((1,), (1,)), ((-1,), (120,)), (None, (25,))],
-    ids=["small", "minus_one_uses_full", "none_uses_ondisk_chunking"],
+    [
+        ((1,), lambda s: (1,)),
+        ((-1,), lambda s: (120,)),
+        (None, lambda s: s.chunks if isinstance(s, h5py.Dataset) else s.shards),
+    ],
+    ids=[
+        "small",
+        "minus_one_uses_full",
+        "none_uses_ondisk_sharding_if_zarr_else_chunks",
+    ],
 )
 @pytest.mark.parametrize(
     "arr", [np.arange(120), np.array(["a"] * 120)], ids=["numeric", "string"]
@@ -878,33 +1031,35 @@ def test_chunking_1d_array(
     store: h5py.Group | zarr.Group,
     arr: np.ndarray,
     chunks: tuple[int] | None,
-    expected_chunks: tuple[int],
+    expected_chunks: Callable[[h5py.Dataset | zarr.Array], tuple[int]],
 ):
     write_elem(store, "foo", arr, dataset_kwargs={"chunks": (25,)})
     lazy_arr = read_elem_lazy(store["foo"], chunks=chunks)
     assert isinstance(lazy_arr, DaskArray)
-    assert lazy_arr.chunksize == expected_chunks
+    assert lazy_arr.chunksize == expected_chunks(
+        cast("h5py.Dataset | zarr.Array", store["foo"])
+    )
 
 
 @pytest.mark.parametrize(
     ("chunks", "expected_chunks"),
     [
-        ((1, 50), (1, 50)),
-        ((10, -1), (10, 50)),
-        ((10, None), (10, 50)),
-        (None, (25, 25)),
+        ((1, 50), lambda s: (1, 50)),
+        ((10, -1), lambda s: (10, 50)),
+        ((10, None), lambda s: (10, 50)),
+        (None, lambda s: s.chunks if isinstance(s, h5py.Dataset) else s.shards),
     ],
     ids=[
         "small",
         "minus_one_uses_full",
         "none_on_axis_uses_full",
-        "none_uses_ondisk_chunking",
+        "none_uses_ondisk_sharding_if_zarr_else_chunks",
     ],
 )
 def test_chunking_2d_array(
     store: h5py.Group | zarr.Group,
     chunks: tuple[int] | None,
-    expected_chunks: tuple[int],
+    expected_chunks: Callable[[h5py.Dataset | zarr.Array], tuple[int, int]],
 ):
     write_elem(
         store,
@@ -914,7 +1069,9 @@ def test_chunking_2d_array(
     )
     arr = read_elem_lazy(store["foo"], chunks=chunks)
     assert isinstance(arr, DaskArray)
-    assert arr.chunksize == expected_chunks
+    assert arr.chunksize == expected_chunks(
+        cast("h5py.Dataset | zarr.Array", store["foo"])
+    )
 
 
 @pytest.mark.parametrize(
@@ -939,13 +1096,13 @@ def test_h5_unchunked(
 
 
 @pytest.mark.zarr_io
-def test_write_auto_sharded(tmp_path: Path):
-    path = tmp_path / "check.zarr"
+def test_write_auto_sharded():
+    store = MemoryStore()
     adata = gen_adata((100, 10), **GEN_ADATA_NO_XARRAY_ARGS)
-    with ad.settings.override(auto_shard_zarr_v3=True, zarr_write_format=3):
-        adata.write_zarr(path)
+    with ad.settings.override(auto_shard_zarr_v3=True):
+        adata.write_zarr(store)
 
-    check_all_sharded(zarr.open_group(path))
+    check_all_sharded(zarr.open_group(store))
 
 
 @pytest.mark.zarr_io
@@ -953,9 +1110,8 @@ def test_write_auto_sharded(tmp_path: Path):
     Version(version("zarr")) < Version("3.1.4"),
     reason="autosharding with chosen size was not available",
 )
-def test_write_auto_sharded_size(tmp_path: Path):
-    path = tmp_path / "check_shards.zarr"
-    z = zarr.open_group(path)
+def test_write_auto_sharded_size():
+    z = zarr.open_group(MemoryStore())
     ad.io.write_elem(z, "two_shards", np.arange(101), dataset_kwargs={"chunks": (7,)})
     two_shards = z["two_shards"]
     assert isinstance(two_shards, zarr.Array)
@@ -966,12 +1122,12 @@ def test_write_auto_sharded_size(tmp_path: Path):
 
 
 @pytest.mark.zarr_io
-def test_write_shards_by_default(tmp_path: Path):
-    path = tmp_path / "check.zarr"
+def test_write_shards_by_default():
+    store = MemoryStore()
     adata = gen_adata((100, 10), **GEN_ADATA_NO_XARRAY_ARGS)
     ad.settings.reset("auto_shard_zarr_v3")
-    adata.write_zarr(path)
-    check_all_sharded(zarr.open_group(path))
+    adata.write_zarr(store)
+    check_all_sharded(zarr.open_group(store))
 
 
 @pytest.mark.zarr_io
@@ -979,9 +1135,8 @@ def test_write_shards_by_default(tmp_path: Path):
     Version(version("zarr")) < Version("3.1.4"),
     reason="autosharding with chosen size was not available",
 )
-def test_write_auto_sharded_size_sparse(tmp_path: Path):
-    path = "memory://check_shards.zarr"
-    z = zarr.open_group(path)
+def test_write_auto_sharded_size_sparse():
+    z = zarr.open_group(MemoryStore())
     mat = sparse.random(
         1000, 1000, density=0.5, format="csr", random_state=np.random.default_rng(42)
     )
@@ -998,8 +1153,8 @@ def test_write_auto_sharded_size_sparse(tmp_path: Path):
 
 
 @pytest.mark.zarr_io
-def test_write_auto_sharded_does_not_override(tmp_path: Path):
-    z = open_write_group(tmp_path / "arr.zarr", zarr_format=3)
+def test_write_auto_sharded_does_not_override():
+    z = zarr.open_group(MemoryStore(), mode="w", zarr_format=3)
     X = sparse.random(
         100, 100, density=0.1, format="csr", random_state=np.random.default_rng(42)
     )
@@ -1028,3 +1183,18 @@ def test_write_auto_sharded_does_not_override(tmp_path: Path):
     x_manually_set = z["X_manually_set"]
     assert isinstance(x_manually_set, zarr.Group)
     visititems_zarr(x_manually_set, visitor)
+
+
+@pytest.mark.parametrize("col", ["new", "a"], ids=["append", "overwrite"])
+def test_write_dataframe_column_updates_order(
+    store: _GroupStorageType, col: str
+) -> None:
+    df = pd.DataFrame({"a": [1, 2], "b": ["x", "y"]}, index=["c0", "c1"])
+    write_elem(store, "df", df)
+    group = cast("_GroupStorageType", store["df"])
+    write_elem(group, col, np.array([3, 4]))
+    expected = df.assign(**{col: [3, 4]})
+    assert list(cast("list[str]", group.attrs["column-order"])) == list(
+        expected.columns
+    )
+    pd.testing.assert_frame_equal(cast("pd.DataFrame", read_elem(group)), expected)

@@ -1,21 +1,20 @@
 from __future__ import annotations
 
-import json
 from importlib.util import find_spec
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 import pytest
 import zarr
+from zarr.storage import MemoryStore
 
 from anndata import AnnData
 from anndata._core.xarray import Dataset2D
 from anndata.compat import DaskArray
 from anndata.experimental import read_elem_lazy, read_lazy
 from anndata.experimental.backed._io import ANNDATA_ELEMS
-from anndata.io import read_zarr, write_elem
+from anndata.io import read_zarr, write_elem, write_zarr
 from anndata.tests.helpers import (
     GEN_ADATA_NO_XARRAY_ARGS,
     AccessTrackingStore,
@@ -26,6 +25,7 @@ from anndata.tests.helpers import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
     from anndata._types import AnnDataElem
 
@@ -92,9 +92,9 @@ def test_access_count_subset_column_compute(
 
 def test_access_count_index(
     remote_store_tall_skinny: AccessTrackingStore,
-    adata_remote_with_store_tall_skinny_path: Path,
+    adata_remote_tall_skinny_orig_store: MemoryStore,
 ) -> None:
-    adata_orig = read_zarr(adata_remote_with_store_tall_skinny_path)
+    adata_orig = read_zarr(adata_remote_tall_skinny_orig_store)
 
     remote_store_tall_skinny.initialize_key_trackers(["obs/obs_names"])
     read_lazy(remote_store_tall_skinny, load_annotation_index=False)
@@ -111,7 +111,7 @@ def test_access_count_index(
 def test_access_count_dtype(
     remote_store_tall_skinny: AccessTrackingStore,
     adata_remote_tall_skinny: AnnData,
-    adata_remote_with_store_tall_skinny_path: Path,
+    adata_remote_tall_skinny_orig_store: MemoryStore,
 ) -> None:
 
     remote_store_tall_skinny.initialize_key_trackers(["obs/cat/categories"])
@@ -150,7 +150,7 @@ def test_to_memory(adata_remote: AnnData, adata_orig: AnnData):
     assert_equal(remote_to_memory, adata_orig)
 
 
-def test_access_counts_obsm_df(tmp_path: Path):
+def test_access_counts_obsm_df():
     adata = AnnData(
         X=np.array(np.random.rand(100, 20)),
     )
@@ -158,8 +158,8 @@ def test_access_counts_obsm_df(tmp_path: Path):
         {"col1": np.random.rand(100), "col2": np.random.rand(100)},
         index=adata.obs_names,
     )
-    adata.write_zarr(tmp_path)
-    store = AccessTrackingStore(tmp_path, read_only=True)
+    adata.write_zarr(orig_store := MemoryStore())
+    store = AccessTrackingStore(orig_store)
     store.initialize_key_trackers(["obsm/df"])
     read_lazy(store, load_annotation_index=False)
     store.assert_access_count("obsm/df", 0)
@@ -202,17 +202,11 @@ def test_view_of_view_to_memory(adata_remote: AnnData, adata_orig: AnnData):
 
 
 @pytest.mark.zarr_io
-def test_unconsolidated(tmp_path: Path, mtx_format):
+def test_unconsolidated(mtx_format):
     adata = gen_adata((10, 10), mtx_format, **GEN_ADATA_NO_XARRAY_ARGS)
-    orig_pth = tmp_path / "orig.zarr"
-    adata.write_zarr(orig_pth)
-    with Path.open(orig_pth / "zarr.json", "r+") as f:
-        data = json.load(f)
-        del data["consolidated_metadata"]
-        f.seek(0)
-        json.dump(data, f)
-        f.truncate()
-    store = AccessTrackingStore(orig_pth, read_only=True)
+    orig_store = MemoryStore()
+    write_zarr(orig_store, adata, consolidate_metadata=False)
+    store = AccessTrackingStore(orig_store)
     store.initialize_key_trackers(["obs/zarr.json", "zarr.json"])
     with pytest.warns(UserWarning, match=r"Did not read zarr as consolidated"):
         remote = read_lazy(store)
@@ -222,11 +216,10 @@ def test_unconsolidated(tmp_path: Path, mtx_format):
 
 
 @pytest.mark.zarr_io
-def test_empty_df_warns(tmp_path: Path):
+def test_empty_df_warns():
     adata = AnnData(X=np.ones((10, 10)))
-    zarr_path = tmp_path / "orig.zarr"
-    adata.write_zarr(zarr_path)
-    root = zarr.open(zarr_path)
+    adata.write_zarr(store := MemoryStore())
+    root = zarr.open(store)
     assert isinstance(root, zarr.Group)
     obs = read_elem_lazy(root["obs"])
     assert isinstance(obs, Dataset2D)
@@ -248,12 +241,12 @@ def test_h5_file_obj(tmp_path: Path):
 
 
 @pytest.fixture(scope="session")
-def df_group(tmp_path_factory) -> zarr.Group:
+def df_group() -> zarr.Group:
     df = gen_typed_df(120)
-    path = tmp_path_factory.mktemp("foo.zarr")
-    g = zarr.open_group(path, mode="w", zarr_format=2)
+    store = MemoryStore()
+    g = zarr.open_group(store, mode="w", zarr_format=2)
     write_elem(g, "foo", df, dataset_kwargs={"chunks": 25})
-    foo = zarr.open_group(path, mode="r")["foo"]
+    foo = zarr.open_group(store, mode="r")["foo"]
     assert isinstance(foo, zarr.Group)
     return foo
 
@@ -264,7 +257,6 @@ def df_group(tmp_path_factory) -> zarr.Group:
     ids=["small", "minus_one_uses_full", "none_uses_ondisk_chunking"],
 )
 def test_chunks_df(
-    tmp_path: Path,
     chunks: tuple[int] | None,
     expected_chunks: tuple[int],
     df_group: zarr.Group,

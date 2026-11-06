@@ -179,6 +179,38 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
     generated/anndata.acc.Idx2D
     generated/anndata.acc.NO_IDX
 
+Serialization
+-------------
+
+:term:`reference`\ s round-trip through JSON-compatible lists
+via :meth:`AdAcc.to_json` and :meth:`AdAcc.from_json`:
+
+>>> A.to_json(A.obsm["pca"][:, 0])
+['obsm', 'pca', 0]
+>>> A.from_json(["obsm", "pca", 0])
+A.obsm['pca'][:, 0]
+
+So do the :term:`reference accessor`\ s they came from,
+as the same lists without the trailing index:
+
+>>> A.to_json(A.obsm["pca"])
+['obsm', 'pca']
+>>> A.from_json(["layers", None])
+A.X
+
+Pass `vec=True` or `vec=False` to :meth:`~AdAcc.from_json`
+to accept only :term:`reference`\ s or only :term:`reference accessor`\ s,
+like :meth:`AdAcc.resolve` does for strings.
+:class:`MetaAcc` (i.e. :attr:`~AdAcc.obs`/:attr:`~AdAcc.var`) is the exception:
+only its :term:`reference`\ s are serializable, as it has no array of its own.
+
+Both are described by `acc-schema-v1.json <acc-schema-v1.json>`_,
+as separate subschemas you can validate against independently
+using JSON pointers into it:
+`#/$defs/ref` matches :term:`reference`\ s,
+`#/$defs/acc` :term:`reference accessor`\ s,
+and the schema itself either.
+
 .. _extending accessors:
 
 Extending accessors
@@ -243,3 +275,17 @@ There are three layers of extensibility:
     >>> A = EHRAcc()
     >>> A.tem["visit_id"]
     A.tem['visit_id']
+
+To make your subclasses writable (see :ref:`accessor encoding <accessor>`),
+register your :class:`AdAcc` instance as an ``anndata.acc`` entry point named after your project,
+and make sure its :meth:`~AdAcc.to_json` and :meth:`~AdAcc.from_json` round-trip them:
+
+..  code-block:: toml
+
+    [project.entry-points."anndata.acc"]
+    my-project = "my_project.acc:A"
+
+anndata picks the entry point whose module is in the same top-level package as your classes,
+and stores ``my-project`` with the written element so it can find your :class:`AdAcc` when reading it.
+If no entry point matches, it isn’t named after the project that registers it, or your :class:`AdAcc` cannot reproduce the original accessor from its JSON form,
+writing fails instead of losing information.

@@ -13,6 +13,7 @@ import zarr
 from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
 from anndata._settings import settings
 from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
+from anndata._write_compat import WriteCompat
 from anndata.compat import DaskArray, _read_attr, has_xp
 
 from ...utils import warn
@@ -29,7 +30,9 @@ if TYPE_CHECKING:
         _GroupStorageType,
         _WriteInternal,
     )
+    from anndata._write_compat import WriteConfig
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
+    from anndata.types import WriteCompatStr
     from anndata.typing import RWAble
 
     from ..._core.xarray import Dataset2D
@@ -239,7 +242,10 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
             and (typ_kind := (type(elem), elem.dtype.kind)) in self.write_specs
         ):
             return self.write_specs[typ_kind]
-        return self.write_specs[type(elem)]
+        for pattern in _iter_patterns(elem):
+            if pattern in self.write_specs:
+                return self.write_specs[pattern]
+        return self.write_specs[type(elem)]  # raises KeyError
 
 
 _REGISTRY: IORegistry[_ReadInternal, Read] = IORegistry()
@@ -268,7 +274,7 @@ def get_spec(elem: StorageType) -> IOSpec:
     })
 
 
-def _iter_patterns(elem: RWAble) -> Generator[WriteSrcType, None, None]:
+def _iter_patterns(elem: RWAble) -> Generator[WriteSrcType]:
     """Iterates over possible patterns for an element in order of precedence."""
     from anndata.compat import DaskArray
 
@@ -281,6 +287,10 @@ def _iter_patterns(elem: RWAble) -> Generator[WriteSrcType, None, None]:
     if isinstance(elem, np.ndarray):
         yield (t, elem.dtype.kind)
     yield t
+    # accessor subclasses (e.g. from other packages) are written by their closest base’s writer
+    from anndata.acc import AdRef, RefAcc
+
+    yield from (b for b in t.__mro__[1:] if b in {AdRef, RefAcc})
 
 
 class Reader:
@@ -339,9 +349,16 @@ class LazyReader(Reader):
 
 
 class Writer:
-    def __init__(self, registry: IORegistry, callback: WriteCallback | None = None):
+    def __init__(
+        self,
+        registry: IORegistry,
+        callback: WriteCallback | None = None,
+        *,
+        compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
+    ):
         self.registry = registry
         self.callback = callback
+        self.compat = WriteCompat.or_config(compat)
 
     def find_write_func(
         self, dest_type: type, elem: RWAble, modifiers: frozenset[str]
@@ -412,16 +429,23 @@ class Writer:
 
         write_func = self.find_write_func(type(store), elem, modifiers)
 
-        if self.callback is None:
-            return write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
-        return self.callback(
-            write_func,
-            store,
-            k,
-            elem,
-            dataset_kwargs=dataset_kwargs,
-            iospec=self.registry.get_spec(elem),
-        )
+        if self.callback is not None:
+            write_func = partial(
+                self.callback, write_func, iospec=self.registry.get_spec(elem)
+            )
+        write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
+        _add_to_column_order(store, k)
+
+
+def _add_to_column_order(store: _GroupStorageType, k: str) -> None:
+    """Register a column written into an existing dataframe group in its column order."""
+    if (
+        k != "/"  # writing the dataframe itself to the root
+        and store.attrs.get("encoding-type") == "dataframe"
+        and k != store.attrs["_index"]
+        and k not in (order := list(cast("Iterable[str]", store.attrs["column-order"])))
+    ):
+        store.attrs["column-order"] = [*order, k]
 
 
 def read_elem(elem: StorageType) -> RWAble:
@@ -527,6 +551,7 @@ def write_elem(
     elem: RWAble,
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
 ) -> None:
     """
     Write an element to a storage group using anndata encoding.
@@ -545,8 +570,12 @@ def write_elem(
     dataset_kwargs
         Keyword arguments to pass to the stores dataset creation function.
         E.g. for zarr this would be `chunks`, `compressor`.
+    compat
+        Which anndata version’s write behavior to target, see :class:`~anndata.WriteCompat`.
     """
-    Writer(_REGISTRY).write_elem(store, k, elem, dataset_kwargs=dataset_kwargs)
+    Writer(_REGISTRY, compat=compat).write_elem(
+        store, k, elem, dataset_kwargs=dataset_kwargs
+    )
 
 
 # TODO: If all items would be read, just call normal read method

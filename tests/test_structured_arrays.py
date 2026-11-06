@@ -11,7 +11,10 @@ from anndata import AnnData
 from anndata.tests.helpers import gen_vstr_recarray
 
 if TYPE_CHECKING:
+    from pathlib import Path
     from typing import Literal
+
+    from zarr.storage import MemoryStore
 
 
 def assert_str_contents_equal(A, B):
@@ -27,7 +30,10 @@ def assert_str_contents_equal(A, B):
 
 
 def test_io(
-    tmp_path, diskfmt: Literal["zarr", "h5ad"], diskfmt2: Literal["zarr", "h5ad"]
+    diskfmt: Literal["zarr", "h5ad"],
+    diskfmt2: Literal["zarr", "h5ad"],
+    diskfmt_store: Path | MemoryStore,
+    diskfmt2_store: Path | MemoryStore,
 ) -> None:
     from zarr.core.dtype.common import UnstableSpecificationWarning
 
@@ -40,9 +46,6 @@ def test_io(
     read2 = getattr(ad, f"read_{diskfmt2}")
     write2 = lambda adata, pth: getattr(adata, f"write_{diskfmt2}")(pth)
 
-    filepth1 = tmp_path / f"test1.{diskfmt}"
-    filepth2 = tmp_path / f"test2.{diskfmt2}"
-
     str_recarray = gen_vstr_recarray(3, 5)
     u_recarray = str_recarray.astype([(n, "U10") for n in str_recarray.dtype.fields])
     s_recarray = str_recarray.astype([(n, "S10") for n in str_recarray.dtype.fields])
@@ -50,10 +53,10 @@ def test_io(
     initial = AnnData(np.zeros((3, 3)))
     initial.uns = dict(str_rec=str_recarray, u_rec=u_recarray, s_rec=s_recarray)
 
-    write1(initial, filepth1)
-    disk_once = read1(filepth1)
-    write2(disk_once, filepth2)
-    disk_twice = read2(filepth2)
+    write1(initial, diskfmt_store)
+    disk_once = read1(diskfmt_store)
+    write2(disk_once, diskfmt2_store)
+    disk_twice = read2(diskfmt2_store)
 
     adatas = [initial, disk_once, disk_twice]
     keys = [

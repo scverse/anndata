@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import zarr
 from scipy.sparse import csc_matrix, csr_matrix
+from zarr.abc.store import Store
 
 from .._core.file_backing import to_memory
 from .._core.merge import (
@@ -33,7 +34,7 @@ from .._io.specs import read_elem, write_elem
 from . import read_dispatched, read_elem_lazy
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Generator, Iterator, Sequence
+    from collections.abc import Callable, Collection, Generator, Sequence
     from typing import Literal
 
     from pandas.api.typing.aliases import Scalar
@@ -44,6 +45,8 @@ if TYPE_CHECKING:
     from ..compat import CSMatrix
 
     type AnyReindexer = Reindexer | IdentityReindexer
+
+type ConcatOnDiskTarget = PathLike[str] | str | Store | h5py.Group | zarr.Group
 
 SPARSE_MATRIX = {"csc_matrix", "csr_matrix"}
 
@@ -116,6 +119,12 @@ def as_group(store, *, mode: AccessModeLiteral) -> Generator[zarr.Group | h5py.G
     raise NotImplementedError(msg)
 
 
+@as_group.register(Store)
+@contextmanager
+def _(store: Store, *, mode: AccessModeLiteral) -> Generator[zarr.Group]:
+    yield zarr.open_group(store, mode=mode)
+
+
 @as_group.register(PathLike)
 @as_group.register(str)
 @contextmanager
@@ -131,13 +140,8 @@ def _(
             yield f
         finally:
             f.close()
-
-    elif mode == "r":  # others all write: r+, a, w, w-
-        yield zarr.open_group(store, mode=mode)
     else:
-        from anndata._io.zarr import open_write_group
-
-        yield open_write_group(store, mode=mode)
+        yield zarr.open_group(store, mode=mode)
 
 
 @as_group.register(zarr.Group)
@@ -267,13 +271,9 @@ def write_concat_sparse(  # noqa: PLR0917
     fill_value
         The fill value to use for missing elements. Defaults to None.
     """
-    elems: Iterator[BaseCompressedSparseDataset | CSMatrix]
-    if all(ri.no_change for ri in reindexers):
-        elems = iter(datasets)
-    else:
-        elems = _gen_slice_to_append(
-            datasets, reindexers, max_loaded_elems, axis, fill_value
-        )
+    elems = _gen_slice_to_append(
+        datasets, reindexers, max_loaded_elems, axis, fill_value
+    )
     number_non_zero = sum(d.group["indices"].shape[0] for d in datasets)
     init_elem = next(elems)
     indptr_dtype = "int64" if number_non_zero >= np.iinfo(np.int32).max else "int32"
@@ -493,9 +493,8 @@ def _write_alt_pairwise(
 
 
 def concat_on_disk(  # noqa: PLR0913
-    in_files: Collection[PathLike[str] | str | h5py.Group | zarr.Group]
-    | Mapping[str, PathLike[str] | str | h5py.Group | zarr.Group],
-    out_file: PathLike[str] | str | h5py.Group | zarr.Group,
+    in_files: Collection[ConcatOnDiskTarget] | Mapping[str, ConcatOnDiskTarget],
+    out_file: ConcatOnDiskTarget,
     *,
     max_loaded_elems: int = 100_000_000,
     axis: Literal["obs", 0, "var", 1] = 0,
