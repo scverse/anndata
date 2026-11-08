@@ -31,11 +31,12 @@ from .specs.registry import IOSpec, write_spec
 from .utils import (
     _check_has_no_slash_key,
     _read_legacy_raw,
+    filter_callback,
     idx_chunks_along_axis,
     no_write_dataset_2d,
     report_read_key_on_error,
     report_write_key_on_error,
-    write_use,
+    write_subelems,
 )
 
 if TYPE_CHECKING:
@@ -57,7 +58,7 @@ def write_h5ad(  # noqa: PLR0912
     as_dense: Sequence[str] = (),
     convert_strings_to_categoricals: bool = True,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
+    elem: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
     **kwargs,
 ) -> None:
     """See :meth:`~anndata.AnnData.write_h5ad`."""
@@ -80,9 +81,9 @@ def write_h5ad(  # noqa: PLR0912
             adata.strings_to_categoricals(adata.raw.var)
     dataset_kwargs = {**dataset_kwargs, **kwargs}
     filepath = Path(filepath)
-    if use is not None:
+    if elem is not None:
         with h5py.File(filepath, "r+") as f:
-            write_use(f, adata, use, dataset_kwargs=dataset_kwargs)
+            write_subelems(f, adata, elem, dataset_kwargs=dataset_kwargs)
         return
     mode = "a" if adata.isbacked else "w"
     if adata.isbacked:  # close so that we can reopen below
@@ -95,8 +96,8 @@ def write_h5ad(  # noqa: PLR0912
         f = cast("h5py.Group", f["/"])
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
-        for k, elem in iter_outer(adata):
-            _check_has_no_slash_key(k, elem)
+        for k, value in iter_outer(adata):
+            _check_has_no_slash_key(k, value)
 
             if k == "raw":
                 if adata.raw is not None:
@@ -106,8 +107,8 @@ def write_h5ad(  # noqa: PLR0912
                 continue
 
             if k == "layers":
-                assert isinstance(elem, MutableMapping)
-                if None in elem:
+                assert isinstance(value, MutableMapping)
+                if None in value:
                     _write_x(
                         f,
                         adata,  # accessing adata.X reopens adata.file if it’s backed
@@ -115,12 +116,12 @@ def write_h5ad(  # noqa: PLR0912
                         as_dense=as_dense,
                         dataset_kwargs=dataset_kwargs,
                     )
-                elem = {k: v for k, v in elem.items() if k is not None}
+                value = {k: v for k, v in value.items() if k is not None}
 
             write_elem(
                 f,
                 k,
-                dict(elem) if isinstance(elem, MutableMapping) else elem,
+                dict(value) if isinstance(value, MutableMapping) else value,
                 dataset_kwargs=dataset_kwargs,
             )
 
@@ -230,6 +231,7 @@ def read_h5ad(
     as_sparse: Sequence[str] = (),
     as_sparse_fmt: type[CSMatrix] = sparse.csr_matrix,
     chunk_size: int = 6000,  # TODO, probably make this 2d chunks
+    filter: AdRef | Sequence[AdRef] | None = None,
 ) -> AnnData:
     """\
     Read `.h5ad`-formatted hdf5 file.
@@ -261,7 +263,14 @@ def read_h5ad(
         until it reads the whole dataset.
         Higher size means higher memory consumption and higher (to a point)
         loading speed.
+    filter
+        Only read the observations and/or variables selected by boolean `obs`/`var` columns,
+        e.g. `A.obs["keep"]` or `[A.obs["keep"], A.var["highly_variable"]]`.
+        Multiple columns along the same axis are combined with logical and.
     """
+    if filter is not None and (backed not in {None, False} or as_sparse):
+        msg = "`filter` is not supported together with `backed` or `as_sparse`."
+        raise NotImplementedError(msg)
     if backed not in {None, False}:
         mode = backed
         if mode is True:
@@ -302,7 +311,7 @@ def read_h5ad(
             elif elem_name == "/X" and "X" in as_sparse:
                 assert isinstance(elem, h5py.Dataset)
                 return rdasp(elem)
-            elif elem_name == "/raw":
+            elif elem_name == "/raw" and filter is None:
                 return _read_raw(f, as_sparse, rdasp)
             elif elem_name in {"/obs", "/var"}:
                 # Backwards compat
@@ -310,6 +319,8 @@ def read_h5ad(
                 return read_dataframe(elem)
             return read_func(elem)
 
+        if filter is not None:
+            callback = filter_callback(f, filter, callback)
         adata = read_dispatched(f, callback=callback)
         if not isinstance(adata, AnnData):
             msg = f"Expected an AnnData at the file root, got {type(adata).__name__}"

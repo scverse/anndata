@@ -61,7 +61,7 @@ def test_write_obs_column(
     _write(adata, diskfmt_store, diskfmt)
     adata.obs[col] = np.arange(5) * 10
     adata.obs["unwritten"] = 1
-    _write(adata, diskfmt_store, diskfmt, use=A.obs[col])
+    _write(adata, diskfmt_store, diskfmt, elem=A.obs[col])
 
     read = _read(diskfmt_store, diskfmt)
     expected_cols = ["a", "b"] if col == "a" else ["a", "b", col]
@@ -100,7 +100,7 @@ def _set_layers(dst: ad.AnnData, src: ad.AnnData) -> None:
 
 
 @pytest.mark.parametrize(
-    ("use", "apply"),
+    ("elem", "apply"),
     [
         pytest.param(A.X, _setter("X"), id="X"),
         pytest.param(A.obs, _setter("obs"), id="obs"),
@@ -133,7 +133,7 @@ def test_write_elem(
     adata: ad.AnnData,
     diskfmt: Literal["h5ad", "zarr"],
     diskfmt_store: Path | MemoryStore,
-    use: RefAcc | MapAcc,
+    elem: RefAcc | MapAcc,
     apply: Callable[[ad.AnnData, ad.AnnData], None],
 ) -> None:
     _write(adata, diskfmt_store, diskfmt)
@@ -145,7 +145,7 @@ def test_write_elem(
     modified.layers["new"] = rng.random((5, 3))
     modified.obsm["o"] = rng.random((5, 2))
     modified.obsp["p"] = sparse.random(5, 5, format="csr", rng=rng)
-    _write(modified, diskfmt_store, diskfmt, use=use)
+    _write(modified, diskfmt_store, diskfmt, elem=elem)
 
     expected = adata.copy()
     apply(expected, modified)
@@ -153,7 +153,7 @@ def test_write_elem(
 
 
 @pytest.mark.parametrize(
-    ("use", "match"),
+    ("elem", "match"),
     [
         pytest.param(A.obsm["o"][:, 0], r"only `obs`/`var` columns", id="vector"),
         pytest.param(A.obs.index, r"only `obs`/`var` columns", id="index"),
@@ -164,12 +164,12 @@ def test_write_invalid_ref(
     adata: ad.AnnData,
     diskfmt: Literal["h5ad", "zarr"],
     diskfmt_store: Path | MemoryStore,
-    use: AdRef,
+    elem: AdRef,
     match: str,
 ) -> None:
     _write(adata, diskfmt_store, diskfmt)
     with pytest.raises(ValueError, match=match):
-        _write(adata, diskfmt_store, diskfmt, use=use)
+        _write(adata, diskfmt_store, diskfmt, elem=elem)
 
 
 def _rename_var(adata: ad.AnnData) -> ad.AnnData:
@@ -185,18 +185,18 @@ def _rename_var(adata: ad.AnnData) -> ad.AnnData:
         pytest.param(_rename_var, "var", id="var-renamed"),
     ],
 )
-@pytest.mark.parametrize("use", [A.obs["a"], A.X], ids=["column", "X"])
+@pytest.mark.parametrize("elem", [A.obs["a"], A.X], ids=["column", "X"])
 def test_write_names_mismatch(
     adata: ad.AnnData,
     diskfmt: Literal["h5ad", "zarr"],
     diskfmt_store: Path | MemoryStore,
     modify: Callable[[ad.AnnData], ad.AnnData],
     dim: Literal["obs", "var"],
-    use: AdRef | RefAcc,
+    elem: AdRef | RefAcc,
 ) -> None:
     _write(adata, diskfmt_store, diskfmt)
     with pytest.raises(ValueError, match=rf"{dim}_names in the store do not match"):
-        _write(modify(adata), diskfmt_store, diskfmt, use=use)
+        _write(modify(adata), diskfmt_store, diskfmt, elem=elem)
 
 
 def test_write_not_anndata_store(
@@ -209,7 +209,7 @@ def test_write_not_anndata_store(
     else:
         zarr.open_group(diskfmt_store, mode="w")
     with pytest.raises(ValueError, match=r"not an AnnData store"):
-        _write(adata, diskfmt_store, diskfmt, use=A.X)
+        _write(adata, diskfmt_store, diskfmt, elem=A.X)
 
 
 def test_write_list(
@@ -223,7 +223,7 @@ def test_write_list(
     adata.obs["new"] = np.arange(5) * 10
     adata.obs["a"] = np.arange(5) + 1
     adata.obsm["o"] = rng.random((5, 2))
-    _write(adata, diskfmt_store, diskfmt, use=[A.X, *A.obs[["new", "a"]], A.obsm])
+    _write(adata, diskfmt_store, diskfmt, elem=[A.X, *A.obs[["new", "a"]], A.obsm])
     assert_equal(_read(diskfmt_store, diskfmt), adata)
 
 
@@ -236,5 +236,5 @@ def test_write_list_invalid_writes_nothing(
     expected = adata.copy()
     adata.X = np.zeros((5, 3))
     with pytest.raises(ValueError, match=r"only `obs`/`var` columns"):
-        _write(adata, diskfmt_store, diskfmt, use=[A.X, A.obsm["o"][:, 0]])
+        _write(adata, diskfmt_store, diskfmt, elem=[A.X, A.obsm["o"][:, 0]])
     assert_equal(_read(diskfmt_store, diskfmt), expected)

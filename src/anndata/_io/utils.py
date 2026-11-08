@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 
     from .. import AnnData
     from .._types import (
+        ReadCallback,
         StorageType,
         _ArrayStorageType,
         _GroupStorageType,
@@ -159,14 +160,14 @@ def pandas_nullable_dtype(dtype: np.dtype) -> BaseMaskedDtype:
     return array_type(np.ones(1, dtype), np.ones(1, bool)).dtype
 
 
-def write_use(
+def write_subelems(
     f: _GroupStorageType,
     adata: AnnData,
-    use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc],
+    elem: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc],
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> None:
-    """Write only the parts of `adata` referenced by `use` into the existing anndata group `f`."""
+    """Write only the parts of `adata` referenced by `elem` into the existing anndata group `f`."""
     from .specs import read_elem, write_elem
 
     if (
@@ -183,26 +184,26 @@ def write_use(
         if not pd.Index(cast("np.ndarray", on_disk)).equals(
             getattr(adata, f"{dim}_names")
         ):
-            msg = f"Cannot write {use}: {dim}_names in the store do not match the AnnData object."
+            msg = f"Cannot write {elem}: {dim}_names in the store do not match the AnnData object."
             raise ValueError(msg)
 
     # resolve everything first so an invalid accessor fails before anything is written
-    uses = use if isinstance(use, Sequence) else [use]
-    for parent, key, elem in [_resolve_use(f, adata, u) for u in uses]:
+    elems = elem if isinstance(elem, Sequence) else [elem]
+    for parent, key, value in [_resolve_subelem(f, adata, e) for e in elems]:
         if parent is not None and parent not in f:
             write_elem(f, parent, {})
         write_elem(
             f if parent is None else cast("_GroupStorageType", f[parent]),
             key,
-            elem,
+            value,
             dataset_kwargs=dataset_kwargs,
         )
 
 
-def _resolve_use(  # noqa: PLR0911
-    f: _GroupStorageType, adata: AnnData, use: AdRef | RefAcc | MapAcc
+def _resolve_subelem(  # noqa: PLR0911
+    f: _GroupStorageType, adata: AnnData, elem: AdRef | RefAcc | MapAcc
 ) -> tuple[str | None, str, RWAble]:
-    """Get the parent group, key, and element to write for `use`."""
+    """Get the parent group, key, and element to write for `elem`."""
     from ..acc import (
         AdRef,
         GraphAcc,
@@ -214,7 +215,7 @@ def _resolve_use(  # noqa: PLR0911
         MultiMapAcc,
     )
 
-    match use:
+    match elem:
         case AdRef(acc=MetaAcc(dim=dim) as acc, idx=str() as col):
             if col in {"_index", cast("_GroupStorageType", f[dim]).attrs["_index"]}:
                 msg = f"Cannot write column {col!r}: it is the name of the {dim} index."
@@ -222,33 +223,91 @@ def _resolve_use(  # noqa: PLR0911
             # `._values` is what `write_dataframe` writes for each column
             return dim, col, acc.get(adata)[col]._values
         case AdRef():
-            msg = f"Cannot write {use}: only `obs`/`var` columns can be written as single vectors."
+            msg = f"Cannot write {elem}: only `obs`/`var` columns can be written as single vectors."
             raise ValueError(msg)
         case LayerAcc(k=k):
             return (
                 None if k is None else "layers",
                 "X" if k is None else k,
-                use.get(adata),
+                elem.get(adata),
             )
         case MetaAcc(dim=dim):
-            return None, dim, use.get(adata)
+            return None, dim, elem.get(adata)
         case MultiAcc(dim=dim, k=k):
-            return f"{dim}m", k, use.get(adata)
+            return f"{dim}m", k, elem.get(adata)
         case GraphAcc(dim=dim, k=k):
-            return f"{dim}p", k, use.get(adata)
+            return f"{dim}p", k, elem.get(adata)
         case LayerMapAcc():  # `adata.layers` contains `X` as `None`
             return (
                 None,
                 "layers",
-                {k: v for k, v in use.get(adata).items() if k is not None},
+                {k: v for k, v in elem.get(adata).items() if k is not None},
             )
         case MultiMapAcc(dim=dim):
-            return None, f"{dim}m", dict(use.get(adata))
+            return None, f"{dim}m", dict(elem.get(adata))
         case GraphMapAcc(dim=dim):
-            return None, f"{dim}p", dict(use.get(adata))
+            return None, f"{dim}p", dict(elem.get(adata))
         case _:
-            msg = f"Cannot write {use!r}."
+            msg = f"Cannot write {elem!r}."
             raise TypeError(msg)
+
+
+def filter_callback(
+    f: _GroupStorageType,
+    filter: AdRef | Sequence[AdRef],
+    callback: ReadCallback,
+) -> ReadCallback:
+    """Wrap `callback` to only read the obs/var subset selected by the boolean `obs`/`var` columns in `filter`."""
+    from .._settings import settings
+    from ..acc import AdRef, MetaAcc
+    from .specs import read_elem
+    from .specs.registry import read_elem_partial
+
+    masks: dict[str, np.ndarray] = {}
+    for ref in [filter] if isinstance(filter, AdRef) else filter:
+        match ref:
+            case AdRef(acc=MetaAcc(dim=dim), idx=str() as col):
+                mask = read_elem(cast("_GroupStorageType", f[dim])[col])
+            case _:
+                msg = (
+                    f"Cannot filter by {ref!r}: only `obs`/`var` columns are supported."
+                )
+                raise ValueError(msg)
+        if not pd.api.types.is_bool_dtype(mask):
+            msg = f"Cannot filter by {ref!r}: it is not a boolean column."
+            raise ValueError(msg)
+        masks[dim] = masks.get(dim, True) & np.asarray(mask, dtype=bool)
+    obs, var = (
+        np.flatnonzero(masks[dim]) if dim in masks else slice(None)
+        for dim in ("obs", "var")
+    )
+
+    def cb(read_func, elem_name: str, elem: StorageType, iospec):
+        match elem_name.strip("/").split("/"):
+            case ["X"] | ["layers", _]:
+                idx = (obs, var)
+            case ["obs"] | ["obsm", _] | ["raw", "X"]:
+                idx = (obs, slice(None))
+            case ["var"] | ["varm", _]:
+                idx = (var, slice(None))
+            case ["obsp", _]:
+                idx = (obs, obs)
+            case ["varp", _]:
+                idx = (var, var)
+            case [""]:
+                adata = callback(read_func, elem_name, elem, iospec=iospec)
+                if settings.remove_unused_categories:  # like `adata[...]` does
+                    for df in (adata.obs, adata.var):
+                        type(adata)._remove_unused_categories(df, df, adata.uns)
+                    for df in (*adata.obsm.values(), *adata.varm.values()):
+                        if isinstance(df, pd.DataFrame):
+                            type(adata)._remove_unused_categories(df, df, {})
+                return adata
+            case _:
+                return callback(read_func, elem_name, elem, iospec=iospec)
+        return read_elem_partial(elem, indices=idx)
+
+    return cb
 
 
 def read_attribute(*args, **kwargs):
@@ -403,7 +462,8 @@ def _read_legacy_raw(
     Backwards compat for reading legacy raw.
     Makes sure that no modern raw group coexists with legacy raw.* groups.
     """
-    if modern_raw:
+    # a 0-obs `AnnData` is falsy, so only treat empty mappings as missing
+    if modern_raw is not None and (not isinstance(modern_raw, Mapping) or modern_raw):
         if any(k.startswith("raw.") for k in f):
             what = f"File {f.filename}" if hasattr(f, "filename") else "Store"
             msg = f"{what} has both legacy and current raw formats."

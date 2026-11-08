@@ -5,6 +5,7 @@ import warnings
 from collections.abc import Mapping, MutableMapping
 from contextlib import contextmanager, nullcontext
 from copy import copy
+from dataclasses import dataclass
 from functools import partial, wraps
 from importlib.metadata import version
 from itertools import product
@@ -677,6 +678,9 @@ def read_array(elem: _ArrayStorageType, *, _reader: Reader) -> npt.NDArray:
 @_REGISTRY.register_read_partial(h5py.Dataset, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_read_partial(zarr.Array, IOSpec("string-array", "0.2.0"))
 def read_array_partial(elem, *, items=None, indices=(slice(None, None))):
+    if isinstance(indices, tuple) and len(indices) > 1:
+        # h5py only supports one fancy index, so index the other axes in memory
+        return elem[indices[0]][(slice(None), *indices[1:])]
     return elem[indices]
 
 
@@ -1096,6 +1100,13 @@ def read_awkward(elem: _GroupStorageType, *, _reader: Reader) -> AwkArray:
     return ak.from_buffers(form, int(length), container)
 
 
+@_REGISTRY.register_read_partial(h5py.Group, IOSpec("awkward-array", "0.1.0"))
+@_REGISTRY.register_read_partial(zarr.Group, IOSpec("awkward-array", "0.1.0"))
+def read_awkward_partial(elem, *, items=None, indices=(slice(None),)):
+    # ponytail: reads all buffers, then indexes in memory; selecting on disk needs walking the (ragged) offsets
+    return read_elem(elem)[indices]
+
+
 ##############
 # DataFrames #
 ##############
@@ -1424,6 +1435,32 @@ def _read_nullable_string(
     )
     arr[mask] = pd.NA
     return arr
+
+
+@dataclass(frozen=True)
+class _PartialReader:
+    """Stand-in for :class:`Reader` that reads every child element partially."""
+
+    indices: Any
+
+    def read_elem(self, elem: StorageType) -> Any:  # noqa: ANN401
+        return read_elem_partial(elem, indices=self.indices)
+
+
+for store_type, (spec, read_func) in product(
+    _STORE_TYPES,
+    [
+        ("nullable-integer", read_nullable_integer),
+        ("nullable-boolean", read_nullable_boolean),
+        ("nullable-string-array", _read_nullable_string),
+    ],
+):
+
+    @_REGISTRY.register_read_partial(store_type, IOSpec(spec, "0.1.0"))
+    def read_nullable_partial(
+        elem, *, items=None, indices=slice(None), _read_func=read_func
+    ):
+        return _read_func(elem, _reader=_PartialReader(indices))
 
 
 ###########

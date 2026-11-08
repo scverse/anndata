@@ -1,0 +1,1 @@
+Add a `filter` argument to {func}`~anndata.io.read_h5ad` and {func}`~anndata.io.read_zarr` that only reads the observations and/or variables selected by boolean `obs`/`var` columns, e.g. `filter=[A.obs["keep"], A.var["highly_variable"]]`, via {doc}`/accessors` {user}`ilan-gold`

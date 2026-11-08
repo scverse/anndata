@@ -22,9 +22,10 @@ from ..utils import warn
 from .specs import read_elem
 from .utils import (
     _read_legacy_raw,
+    filter_callback,
     no_write_dataset_2d,
     report_read_key_on_error,
-    write_use,
+    write_subelems,
 )
 
 if TYPE_CHECKING:
@@ -98,7 +99,7 @@ def write_zarr(
     chunks: tuple[int | None, ...] | None = None,
     convert_strings_to_categoricals: bool = True,
     consolidate_metadata: bool = True,
-    use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
+    elem: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
     **ds_kwargs,
 ) -> None:
     """See :meth:`~anndata.AnnData.write_zarr`."""
@@ -120,11 +121,11 @@ def write_zarr(
 
     with fast_zarr_context():
         # TODO: Use spec writing system for this
-        if use is not None:
+        if elem is not None:
             # stale consolidated metadata would hide the newly written element
             consolidate_metadata |= is_group_consolidated(zarr.open_group(store))
             f = zarr.open_group(store, mode="r+", use_consolidated=False)
-            write_use(f, adata, use, dataset_kwargs=ds_kwargs)
+            write_subelems(f, adata, elem, dataset_kwargs=ds_kwargs)
         else:
             f = zarr.open_group(store, mode="w")
             f.attrs.setdefault("encoding-type", "anndata")
@@ -160,7 +161,11 @@ def _add_packed_store_note(e: BaseException, store: StoreLike) -> None:
         e.add_note(f"Did you mean `read_zarr({cls_name}({path!r}))`?")
 
 
-def read_zarr(store: StoreLike | zarr.Group) -> AnnData:
+def read_zarr(
+    store: StoreLike | zarr.Group,
+    *,
+    filter: AdRef | Sequence[AdRef] | None = None,
+) -> AnnData:
     """\
     Read from a hierarchical Zarr array store.
 
@@ -168,6 +173,10 @@ def read_zarr(store: StoreLike | zarr.Group) -> AnnData:
     ----------
     store
         The filename, a :class:`~typing.MutableMapping`, or a Zarr storage class.
+    filter
+        Only read the observations and/or variables selected by boolean `obs`/`var` columns,
+        e.g. `A.obs["keep"]` or `[A.obs["keep"], A.var["highly_variable"]]`.
+        Multiple columns along the same axis are combined with logical and.
     """
 
     def callback(func, elem_name: str, elem, iospec):
@@ -197,6 +206,8 @@ def read_zarr(store: StoreLike | zarr.Group) -> AnnData:
             except GroupNotFoundError as e:
                 _add_packed_store_note(e, store)
                 raise
+        if filter is not None:
+            callback = filter_callback(f, filter, callback)
         adata = read_dispatched(f, callback=callback)
         if not isinstance(adata, AnnData):
             msg = f"Expected an AnnData at the store root, got {type(adata).__name__}"
