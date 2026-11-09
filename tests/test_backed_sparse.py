@@ -21,6 +21,7 @@ from anndata.compat import CSArray, CSMatrix, DaskArray
 from anndata.experimental import read_dispatched
 from anndata.tests import helpers as test_helpers
 from anndata.tests.helpers import (
+    DASK_CAN_SPARRAY,
     AccessTrackingStore,
     assert_equal,
     open_store,
@@ -773,7 +774,19 @@ def test_compact_index_dtype(tmp_path, fmt: Literal["csr", "csc"], idx_dtype):
 
 
 @pytest.mark.parametrize("fmt", ["csr", "csc"])
-@pytest.mark.parametrize("sparse_array", [True, False], ids=["array", "matrix"])
+@pytest.mark.parametrize(
+    "sparse_array",
+    [
+        pytest.param(
+            True,
+            id="array",
+            marks=pytest.mark.skipif(
+                not DASK_CAN_SPARRAY, reason="Dask does not support sparrays"
+            ),
+        ),
+        pytest.param(False, id="matrix"),
+    ],
+)
 @pytest.mark.parametrize("store", ["zarr", "h5ad"])
 def test_read_elem_lazy_sparse_meta(
     tmp_path, *, fmt: Literal["csr", "csc"], sparse_array: bool, store: str
