@@ -12,6 +12,7 @@ from ._io.read import (
     read_umi_tools,
 )
 from ._io.specs import read_elem, write_elem
+from ._io.utils import write_use
 from ._io.write import write_csvs, write_loom  # noqa: F401
 from ._io.zarr import read_zarr, write_zarr
 
@@ -29,5 +30,6 @@ __all__ = [
     "write_csvs",
     "write_elem",
     "write_h5ad",
+    "write_use",
     "write_zarr",
 ]
