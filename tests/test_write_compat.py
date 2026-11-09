@@ -126,8 +126,6 @@ def test_indexed_layout_on_disk(
     diskfmt_store: Path | MemoryStore, diskfmt: Literal["h5ad", "zarr"]
 ) -> None:
     """Names are stored in an array, children are numbered, dataframes follow the convention."""
-    from anndata._io.utils import DF_CONVENTION
-
     obs = pd.DataFrame({"a/b": [1, 2], "x": [3, 4]}, index=["c1", "c2"])
     adata = ad.AnnData(np.zeros((2, 3)), obs=obs, uns={"c:d": 1})
     getattr(adata, f"write_{diskfmt}")(diskfmt_store, compat="0.14")
@@ -148,10 +146,6 @@ def test_indexed_layout_on_disk(
         assert obs_g.attrs["df:index"] == 0
         assert set(obs_g) == {"columns", "column_0", "column_1", "column_2"}
         assert list(ad.io.read_elem(names["columns"])) == ["", "a/b", "x"]  # type: ignore[arg-type]
-        if isinstance(f, zarr.Group):
-            assert obs_g.attrs["zarr_conventions"] == [dict(DF_CONVENTION)]
-        else:  # a zarr mechanism, and h5py can’t store it
-            assert "zarr_conventions" not in obs_g.attrs
 
     if diskfmt == "zarr":
         check(zarr.open_group(diskfmt_store))

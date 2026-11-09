@@ -29,7 +29,6 @@ from anndata._core.merge import intersect_keys
 from anndata._core.sparse_dataset import _CSCDataset, _CSRDataset, sparse_dataset
 from anndata._core.storage import _check_x_and_layers_are_2d_on_write
 from anndata._io.utils import (
-    DF_CONVENTION,
     IndexedLayout,
     _check_has_no_slash_key,
     check_key,
@@ -1190,8 +1189,6 @@ def write_dataframe(
         "df:shape": [len(df), n_cols],
         "df:index": 0,
     })
-    if isinstance(group, zarr.Group):  # `zarr_conventions` is a zarr mechanism
-        group.attrs["zarr_conventions"] = [dict(DF_CONVENTION)]
 
 
 @_REGISTRY.register_read(h5py.Group, IOSpec("dataframe", "0.2.0"))

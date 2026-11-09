@@ -408,16 +408,6 @@ def _check_has_no_slash_key(attr: str, elem: object, *, compat: WriteConfig) -> 
         raise ValueError(msg)
 
 
-# https://github.com/scverse/zarr-convention-dataframe
-DF_CONVENTION = MappingProxyType({
-    "uuid": "1f1b36d2-3185-6da8-91f6-9a0823af2d33",
-    "schema_url": "https://raw.githubusercontent.com/scverse/zarr-convention-dataframe/refs/tags/v1/schema.json",
-    "spec_url": "https://github.com/scverse/zarr-convention-dataframe/blob/v1/README.md",
-    "name": "df:",
-    "description": "A collection of 1d-interpreted arrays to be used as a dataframe",
-})
-
-
 @dataclass(frozen=True)
 class _IndexedLayout:
     encoding_type: str
