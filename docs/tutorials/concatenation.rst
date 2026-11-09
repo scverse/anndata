@@ -178,7 +178,7 @@ Now we will split this object by the categorical `"blobs"` and recombine it to i
     >>> for group, idx in blobs.obs.groupby("blobs").indices.items():
     ...     sub_adata = blobs[idx].copy()
     ...     sub_adata.obsm["qc"], sub_adata.varm[f"{group}_qc"] = sc.pp.calculate_qc_metrics(
-    ...         sub_adata, percent_top=(), inplace=False, log1p=False
+    ...         sub_adata, percent_top=(), log1p=False
     ...     )
     ...     adatas.append(sub_adata)
     >>> adatas[0]

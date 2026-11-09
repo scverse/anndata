@@ -6,8 +6,10 @@ from __future__ import annotations
 
 import re
 from contextlib import ExitStack, nullcontext
+from dataclasses import dataclass
 from importlib.metadata import version
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
 
 import h5py
@@ -22,6 +24,7 @@ from zarr.storage import MemoryStore
 import anndata as ad
 from anndata._io.specs import _REGISTRY, IOSpec, get_spec
 from anndata._io.specs.registry import IORegistryError
+from anndata.acc import A, AdAcc, MetaAcc
 from anndata.compat import CSArray, CSMatrix, DaskArray, _read_attr
 from anndata.experimental import read_elem_lazy
 from anndata.io import read_elem, write_elem
@@ -259,6 +262,91 @@ def test_io_spec_compressed_scalars(
 
     from_disk = read_elem(store[key])
     assert_equal(value, from_disk)
+
+
+@pytest.mark.parametrize(
+    "ref",
+    [A.obsm["pca"][0], A.obsm["pca"], A.X[:, "gene-5"], A.obs["ct"], A.obs.index],
+    ids=str,
+)
+def test_accessor_roundtrip(store: _GroupStorageType, ref: object) -> None:
+    """`anndata.acc` accessors round-trip via their `to_json` form."""
+    write_elem(store, "ref", ref, compat="0.14")
+    assert _read_attr(store["ref"].attrs, "encoding-type") == "accessor"
+    assert _read_attr(store["ref"].attrs, "accessor-project") == "anndata"
+    assert read_elem(store["ref"]) == ref
+
+
+@dataclass(frozen=True)
+class ExtMetaAcc(MetaAcc):
+    """A third-party accessor that `A.to_json` would serialize lossily."""
+
+
+@dataclass(frozen=True)
+class ExtAcc(AdAcc):
+    meta_cls: type[MetaAcc] = ExtMetaAcc
+
+    def to_json(self, ref):
+        if isinstance(ref, ExtMetaAcc):  # whole `obs`/`var`, unlike `A`
+            return ["ext", ref.dim]
+        return ["ext", *super().to_json(ref)]
+
+    def from_json(self, data, *, vec=None):
+        assert data[0] == "ext"
+        if len(data) == 2 and data[1] in {"obs", "var"}:
+            return getattr(self, data[1])
+        return super().from_json(data[1:], vec=vec)
+
+
+@pytest.fixture
+def registered_acc(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> AdAcc:
+    """Pretend that the project `ext` defining `ExtMetaAcc` registered an `AdAcc`.
+
+    Override `adacc` (default: `ExtAcc()`) or the project name `dist` via indirect parametrization.
+    """
+    from anndata.acc import _entry_points
+
+    params = getattr(request, "param", {})
+    adacc = cast("AdAcc", params.get("adacc", ExtAcc()))
+    ep = SimpleNamespace(name="ext", module=ExtMetaAcc.__module__, load=lambda: adacc)
+    dist = params.get("dist", "ext")
+    monkeypatch.setattr(_entry_points, "_entry_points", lambda: [(ep, dist)])
+    return adacc
+
+
+# `obs` has no writer of its own, so like mudata’s `ModMapAcc`, it dispatches via `RefAcc`
+@pytest.mark.parametrize(
+    "get_ref", [lambda a: a.obs["ct"], lambda a: a.obs], ids=["AdRef", "RefAcc"]
+)
+def test_accessor_ext_roundtrip(
+    store: _GroupStorageType, registered_acc: AdAcc, get_ref: Callable[[AdAcc], object]
+) -> None:
+    ref = get_ref(registered_acc)
+    write_elem(store, "ref", ref, compat="0.14")
+    assert _read_attr(store["ref"].attrs, "accessor-project") == "ext"
+    assert read_elem(store["ref"]) == ref
+
+
+def test_accessor_ext_unregistered(store: _GroupStorageType) -> None:
+    with pytest.raises(TypeError, match=r"no 'anndata\.acc' entry point"):
+        write_elem(store, "ref", ExtAcc().obs["ct"], compat="0.14")
+
+
+@pytest.mark.parametrize("registered_acc", [dict(adacc=A)], indirect=True)
+@pytest.mark.usefixtures("registered_acc")
+def test_accessor_ext_lossy(store: _GroupStorageType) -> None:
+    """A project whose `AdAcc` drops information (here: the subclass) can’t write."""
+    with pytest.raises(TypeError, match=r"lossily"):
+        write_elem(store, "ref", ExtAcc().obs["ct"], compat="0.14")
+
+
+@pytest.mark.parametrize("registered_acc", [dict(dist="other")], indirect=True)
+def test_accessor_ext_misnamed(store: _GroupStorageType, registered_acc: AdAcc) -> None:
+    """Entry points must be named after their project."""
+    with pytest.raises(ValueError, match=r"named after the project.*'other'"):
+        write_elem(store, "ref", registered_acc.obs["ct"], compat="0.14")
 
 
 # Can't instantiate cupy types at the top level, so converting them within the test
