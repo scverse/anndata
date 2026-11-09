@@ -249,7 +249,15 @@ def test_write_indexed_mapping(
     np.testing.assert_array_equal(read.obsm[key], np.ones((2, 2)))
 
 
-@pytest.mark.parametrize("col", ["a", "new/col"], ids=["existing", "new"])
+@pytest.mark.parametrize(
+    "col",
+    [
+        pytest.param("a", id="existing"),
+        pytest.param("new/col", id="new"),
+        # an unnamed index is stored as `""` too
+        pytest.param("", id="empty"),
+    ],
+)
 def test_write_indexed_df_column(
     diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore, col: str
 ) -> None:

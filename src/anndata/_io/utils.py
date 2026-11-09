@@ -198,7 +198,11 @@ def write_use(
             continue
         # the group stores names in an array, so add `key` there if it’s new
         names = layout.read_names(group)
-        i = names.index(key) if key in names else len(names)
+        # skip the index, whose name might equal a column’s (e.g. `""`)
+        i_idx = group.attrs.get("df:index")
+        i = next(
+            (j for j, n in enumerate(names) if n == key and j != i_idx), len(names)
+        )
         write_elem(
             group,
             layout.child_key(i),

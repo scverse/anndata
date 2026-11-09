@@ -14,14 +14,13 @@ import zarr
 import anndata as ad
 from anndata._io.specs.registry import read_elem_partial
 from anndata.acc import A, AdAcc, AdRef
+from anndata.experimental.backed import Dataset2D
 
 if TYPE_CHECKING:
     from pathlib import Path
     from typing import Literal
 
     from zarr.storage import MemoryStore
-
-    from anndata.experimental.backed import Dataset2D
 
 
 def test_compares_by_features() -> None:
@@ -167,6 +166,7 @@ def test_column_named_index(
     back = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
     pd.testing.assert_frame_equal(back.obs, df)
     lazy = ad.experimental.read_lazy(diskfmt_store)
+    assert isinstance(lazy.obs, Dataset2D)
     pd.testing.assert_frame_equal(lazy.obs.to_memory(), df)
 
 
@@ -180,6 +180,7 @@ def test_index_named_index(
     back = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
     assert back.obs.index.name == "_index"
     lazy = ad.experimental.read_lazy(diskfmt_store)
+    assert isinstance(lazy.obs, Dataset2D)
     assert lazy.obs.to_memory().index.name == "_index"
 
 
