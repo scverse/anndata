@@ -13,7 +13,7 @@ from scipy import sparse
 
 import anndata as ad
 from anndata._core.file_backing import filename, get_elem_name
-from anndata._core.xarray import Dataset2D, requires_xarray
+from anndata._core.xarray import DS_UNNAMED_INDEX_NAME, Dataset2D, requires_xarray
 from anndata._io.utils import DfChild, df_children, read_df_index
 from anndata.compat import DaskArray, XDataset, XVariable, pandas_as_str
 
@@ -320,11 +320,9 @@ def read_dataframe(
     if idx is None:  # optional from v0.3.0 on
         use_range_index = True
     else:
-        if idx.name is None and "_index" in {c.name for c in columns}:
-            msg = "Cannot lazily read a dataframe with an unnamed index and a column named '_index'."
-            raise NotImplementedError(msg)
-        # `to_memory` turns an index named `_index` back into an unnamed one
-        idx_name, idx_key = idx.name or "_index", idx.key
+        # `to_memory` turns this back into an unnamed index
+        idx_name = DS_UNNAMED_INDEX_NAME if idx.name is None else idx.name
+        idx_key = idx.key
         columns = [*columns, DfChild(idx_name, idx_key)]
     # going through dask for reading into memory the index doesn't make sense, hence the ternary.
     elem_dict = {

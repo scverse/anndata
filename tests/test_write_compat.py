@@ -166,6 +166,8 @@ def test_column_named_index(
     getattr(adata, f"write_{diskfmt}")(diskfmt_store, compat="0.14")
     back = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
     pd.testing.assert_frame_equal(back.obs, df)
+    lazy = ad.experimental.read_lazy(diskfmt_store)
+    pd.testing.assert_frame_equal(lazy.obs.to_memory(), df)
 
 
 def test_index_named_index(
@@ -177,6 +179,8 @@ def test_index_named_index(
     getattr(adata, f"write_{diskfmt}")(diskfmt_store, compat="0.14")
     back = getattr(ad, f"read_{diskfmt}")(diskfmt_store)
     assert back.obs.index.name == "_index"
+    lazy = ad.experimental.read_lazy(diskfmt_store)
+    assert lazy.obs.to_memory().index.name == "_index"
 
 
 def test_dataframe_without_index() -> None:
