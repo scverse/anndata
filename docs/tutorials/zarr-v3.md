@@ -38,8 +38,8 @@ And even if it is fully readable, it will almost certainly be much slower to rea
 There are two ways of opening remote `zarr` stores from the `zarr-python` package, {class}`zarr.storage.FsspecStore` and {class}`zarr.storage.ObjectStore`, and both can be used with `read_lazy`.
 [`obstore` claims] to be more performant out-of-the-box, but notes that this claim has not been benchmarked with the `uvloop` event loop, which itself claims to be 2× more performant than the default event loop for `python`.
 
-{mod}`zarr` ships a `FusedCodecPipeline` that is likely *much* (~2-4x) faster for some use-cases, like small chunks, and is no worse than the current default.
-We strongly encourage users to switch to it via `zarr.config.set({"codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline"})` for remote data. If {mod}`zarr` is new enough, it will be used *by default* for {func}`~anndata.io.read_zarr` and {meth}`~anndata.AnnData.write_zarr`.
+{mod}`zarr` ships a `FusedCodecPipeline` that is likely _much_ (~2-4x) faster for some use-cases, like small chunks, and is no worse than the current default.
+We strongly encourage users to switch to it via `zarr.config.set({"codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline"})` for remote data. If {mod}`zarr` is new enough, it will be used _by default_ for {func}`~anndata.io.read_zarr` and {meth}`~anndata.AnnData.write_zarr`.
 
 ## Local data
 
@@ -100,7 +100,7 @@ zarr.config.set({"codec_pipeline.path": "zarrs.ZarrsCodecPipeline"})
 
 However, this pipeline is not compatible with all types of zarr store, especially remote stores and there are limitations on where rust can give a performance boost for indexing.
 We therefore recommend this pipeline for writing full datasets and reading contiguous regions of said written data locally.
-If installed, it will be used *by default* for {func}`~anndata.io.read_zarr` and {meth}`~anndata.AnnData.write_zarr`.
+If installed, it will be used _by default_ for {func}`~anndata.io.read_zarr` and {meth}`~anndata.AnnData.write_zarr`.
 
 ## Codecs
 
@@ -117,7 +117,7 @@ Therefore it may be better to customize this behavior by passing `chunks=my_zarr
 ## GPU i/o
 
 At the moment, it is unlikely your `anndata` i/o will work if you use [`zarr.config.enable_gpu`][GPU user guide].
-It's *possible* dense data i/o i.e., using {func}`anndata.io.read_elem` will work as expected, but this functionality is untested – sparse data, awkward arrays, and dataframes will not.
+It's _possible_ dense data i/o i.e., using {func}`anndata.io.read_elem` will work as expected, but this functionality is untested – sparse data, awkward arrays, and dataframes will not.
 `kvikio` currently provides a {class}`kvikio.zarr.GDSStore` although there are no working compressors at the moment exported from the `zarr-python` package (work is underway for `Zstd`: {pr}`zarr-developers/zarr-python#2863`.
 
 We anticipate enabling officially supporting this functionality officially for dense data, sparse data, and possibly awkward arrays in the next minor release, 0.13.

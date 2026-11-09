@@ -1,7 +1,8 @@
 {
-    "$schema": "https://biomejs.dev/schemas/2.2.0/schema.json",
+    "$schema": "https://biomejs.dev/schemas/2.6.3/schema.json",
     "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
     "formatter": { "useEditorconfig": true },
+    "markdown": { "parser": { "frontmatter": true } },
     "overrides": [
         {
             "includes": ["./.vscode/*.json", "**/*.jsonc", "**/asv.conf.json"],

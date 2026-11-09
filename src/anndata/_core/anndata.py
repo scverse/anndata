@@ -27,6 +27,7 @@ from anndata.types import SupportsArrayApiBase
 from .. import utils
 from .._settings import settings
 from .._warnings import ImplicitModificationWarning
+from .._write_compat import WriteCompat
 from ..compat import (
     AwkArray,
     CSArray,
@@ -90,6 +91,7 @@ if TYPE_CHECKING:
     from anndata.typing import RWAble
 
     from .._types import ReduceFunc
+    from .._write_compat import WriteConfig
     from ..acc import (
         AdRef,
         Array,
@@ -101,6 +103,7 @@ if TYPE_CHECKING:
         MultiAcc,
         RefAcc,
     )
+    from ..types import WriteCompatStr
     from ..typing import AlignedArray, Index, Index1D, Storable, _Index, _Index1DNorm
     from .aligned_df import IntoAlignedDf
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
@@ -1149,6 +1152,34 @@ class AnnData:  # noqa: PLW1641
 
         return self._getitem(index)
 
+    def __setitem__(self, index: AdRef | RefAcc, value: object) -> None:
+        """Set an array or element using an accessor.
+
+        Parameters
+        ----------
+        index
+            One of
+
+            - an :class:`~anndata.acc.AdRef`, assigning into the referenced 1D or 2D array,
+              e.g. `adata[A.obs["cell-type"]] = ...` or `adata[A.layers["counts"][:, "gene-1"]] = ...`;
+            - a :term:`reference accessor`, replacing the full element (see :meth:`~anndata.acc.RefAcc.set`),
+              e.g. `adata[A.obs] = ...` or `adata[A.obsm["pca"]] = ...`.
+        value
+            The value to assign.
+        """
+        from ..acc import NO_IDX, AdRef, MapAcc, RefAcc
+
+        if isinstance(index, AdRef):
+            index.acc.set(self, index.idx, value)
+        elif isinstance(index, RefAcc):
+            index.set(self, NO_IDX, value)
+        elif isinstance(index, MapAcc):
+            msg = f"Cannot index with {index} because this is not a path to an array-like structure."
+            raise IndexError(msg)
+        else:
+            msg = f"{type(self).__name__} only supports item assignment via accessors, not {index!r}."
+            raise TypeError(msg)
+
     def _getitem(self, index: _Index[IndexManager]) -> AnnData:
         """Like `__getitem__`, but also accepts `IndexManager` objects stored by views."""
         oidx, vidx = self._normalize_indices(index)
@@ -1549,13 +1580,21 @@ class AnnData:  # noqa: PLW1641
             accumulate = func(attr, accumulate=accumulate, attr_name=attr_name)
         return accumulate
 
-    def unwriteable(self, *, store_type: Literal["h5", "zarr"] | None = None) -> bool:
+    def unwriteable(
+        self,
+        *,
+        store_type: Literal["h5", "zarr"] | None = None,
+        compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
+    ) -> bool:
         """Whether or not an `AnnData` object can be written to disk for a given store type.
 
         Parameters
         ----------
         store_type
             Which backing store - `None` indicates that it can be writeable to either.
+        compat
+            Which anndata python package version’s write behavior to check against,
+            see :class:`~anndata.WriteCompat`.
 
         Returns
         -------
@@ -1564,7 +1603,7 @@ class AnnData:  # noqa: PLW1641
             this new type's evaluation as a boolean will not change from the current behavior i.e.,
             `bool(adata.unwriteable())` will always evaluate the same.
         """
-
+        compat = WriteCompat.or_config(compat)
         if _non_2d_message(self.X, name="X") is not None:
             return True
         for value in self.layers.values():
@@ -1572,6 +1611,7 @@ class AnnData:  # noqa: PLW1641
                 return True
 
         from anndata._io.specs.registry import _REGISTRY
+        from anndata.acc import AdRef, RefAcc
 
         writeable_elems = {
             src_type
@@ -1588,7 +1628,9 @@ class AnnData:  # noqa: PLW1641
             if elem is None:
                 return accumulate
             if isinstance(elem, AnnData):
-                return accumulate or elem.unwriteable(store_type=store_type)
+                return accumulate or elem.unwriteable(
+                    store_type=store_type, compat=compat
+                )
             if isinstance(elem, pd.Categorical):
                 return accumulate or predicate(elem.categories, accumulate=accumulate)
             if isinstance(elem, pd.Series | pd.Index):
@@ -1622,6 +1664,17 @@ class AnnData:  # noqa: PLW1641
                 return accumulate or any(
                     predicate(v, accumulate=accumulate) for v in elem.values()
                 )
+            if isinstance(elem, AdRef | RefAcc):
+                # writeable, but only with the `accessor` flag and a known project
+                if accumulate or not compat.accessor:
+                    return True
+                from anndata.acc._entry_points import to_json
+
+                try:
+                    to_json(elem)
+                except (TypeError, ValueError, LookupError):
+                    return True
+                return False
             return (
                 (accumulate or type(elem) not in writeable_elems)
                 if not isinstance(elem, SupportsArrayApiBase)
@@ -1718,6 +1771,7 @@ class AnnData:  # noqa: PLW1641
         compression_opts: int | object = None,
         as_dense: Sequence[str] = (),
         use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
+        compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
     ):
         """\
         Write `.h5ad`-formatted hdf5 file.
@@ -1787,6 +1841,8 @@ class AnnData:  # noqa: PLW1641
             e.g. `A.obs["a"]` (a single column, updating the column order), `A.obs`, `A.X`,
             `A.layers["counts"]`, `A.layers`, `A.obsm["pca"]`, or `A.obsp`.
             Lists such as `[A.X, *A.obs[["a", "b"]]]` are written together after validating all entries.
+        compat
+            Which anndata version’s write behavior to target, see :class:`~anndata.WriteCompat`.
         """
         from ..io import write_h5ad
 
@@ -1805,6 +1861,7 @@ class AnnData:  # noqa: PLW1641
             compression_opts=compression_opts,
             as_dense=as_dense,
             use=use,
+            compat=compat,
         )
         # Only reset the filename if the AnnData object now points to a complete new copy
         if self.isbacked and not self.is_view:
@@ -1867,6 +1924,7 @@ class AnnData:  # noqa: PLW1641
         convert_strings_to_categoricals: bool = True,
         consolidate_metadata: bool = True,
         use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
+        compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
     ):
         """\
         Write a hierarchical Zarr array store.
@@ -1886,6 +1944,8 @@ class AnnData:  # noqa: PLW1641
             e.g. `A.obs["a"]` (a single column, updating the column order), `A.obs`, `A.X`,
             `A.layers["counts"]`, `A.layers`, `A.obsm["pca"]`, or `A.obsp`.
             Lists such as `[A.X, *A.obs[["a", "b"]]]` are written together after validating all entries.
+        compat
+            Which anndata version’s write behavior to target, see :class:`~anndata.WriteCompat`.
         """
         from ..io import write_zarr
 
@@ -1903,6 +1963,7 @@ class AnnData:  # noqa: PLW1641
             convert_strings_to_categoricals=convert_strings_to_categoricals,
             consolidate_metadata=consolidate_metadata,
             use=use,
+            compat=compat,
         )
 
     def chunked_X(self, chunk_size: int | None = None):

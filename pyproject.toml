@@ -46,7 +46,7 @@ dependencies = [
     "packaging>=24.2",
     "pandas>=2.3",
     "scipy>=1.15,!=1.17",
-    "scverse-misc[settings]>=0.1.3",
+    "scverse-misc[settings]>=0.1.8",
     # `typing_extensions.sentinel`, see `anndata.acc`
     "typing-extensions>=4.16; python_version<'3.15'",
     "zarr>=3.1",
@@ -66,6 +66,7 @@ optional-dependencies.lazy = [ "aiohttp", "anndata[dask]", "requests", "xarray>=
 urls.Documentation = "https://anndata.readthedocs.io/"
 urls.Home-page = "https://github.com/scverse/anndata"
 urls.Source = "https://github.com/scverse/anndata"
+entry-points."anndata.acc".anndata = "anndata.acc:A"
 
 [dependency-groups]
 dev = [

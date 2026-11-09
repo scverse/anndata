@@ -73,23 +73,23 @@ Using this information, we're able to dispatch onto readers for the different el
 (element)=
 ### Element Specification
 
-* An element can be any object within the storage hierarchy (typically an array or group) with associated metadata
-* An element MUST have a string-valued field `"encoding-type"` in its metadata
-* An element MUST have a string-valued field `"encoding-version"` in its metadata that can be evaluated to a version
+- An element can be any object within the storage hierarchy (typically an array or group) with associated metadata
+- An element MUST have a string-valued field `"encoding-type"` in its metadata
+- An element MUST have a string-valued field `"encoding-version"` in its metadata that can be evaluated to a version
 
 (anndata)=
 ### AnnData specification (v0.1.0)
 
-* An `AnnData` object MUST be a group.
-* The group's metadata MUST include entries: `"encoding-type": "anndata"`, `"encoding-version": "0.1.0"`.
-* An `AnnData` group MUST contain entries `"obs"` and `"var"`, which MUST be dataframes (though this may only have an index with no columns).
-* The group MAY contain an entry `X`, which MUST be either a dense or sparse array and whose shape MUST be (`n_obs`, `n_var`)
-* The group MAY contain a mapping `layers`. Entries in `layers` MUST be dense or sparse arrays which have shapes (`n_obs`, `n_var`)
-* The group MAY contain a mapping `obsm`. Entries in `obsm` MUST be sparse arrays, dense arrays, or dataframes. These entries MUST have a first dimension of size `n_obs`
-* The group MAY contain a mapping `varm`. Entries in `varm` MUST be sparse arrays, dense arrays, or dataframes. These entries MUST have a first dimension of size `n_var`
-* The group MAY contain a mapping `obsp`. Entries in `obsp` MUST be sparse or dense arrays. The entries first two dimensions MUST be of size `n_obs`
-* The group MAY contain a mapping `varp`. Entries in `varp` MUST be sparse or dense arrays. The entries first two dimensions MUST be of size `n_var`
-* The group MAY contain a mapping `uns`. Entries in `uns` MUST be an anndata encoded type.
+- An `AnnData` object MUST be a group.
+- The group's metadata MUST include entries: `"encoding-type": "anndata"`, `"encoding-version": "0.1.0"`.
+- An `AnnData` group MUST contain entries `"obs"` and `"var"`, which MUST be dataframes (though this may only have an index with no columns).
+- The group MAY contain an entry `X`, which MUST be either a dense or sparse array and whose shape MUST be (`n_obs`, `n_var`)
+- The group MAY contain a mapping `layers`. Entries in `layers` MUST be dense or sparse arrays which have shapes (`n_obs`, `n_var`)
+- The group MAY contain a mapping `obsm`. Entries in `obsm` MUST be sparse arrays, dense arrays, or dataframes. These entries MUST have a first dimension of size `n_obs`
+- The group MAY contain a mapping `varm`. Entries in `varm` MUST be sparse arrays, dense arrays, or dataframes. These entries MUST have a first dimension of size `n_var`
+- The group MAY contain a mapping `obsp`. Entries in `obsp` MUST be sparse or dense arrays. The entries first two dimensions MUST be of size `n_obs`
+- The group MAY contain a mapping `varp`. Entries in `varp` MUST be sparse or dense arrays. The entries first two dimensions MUST be of size `n_var`
+- The group MAY contain a mapping `uns`. Entries in `uns` MUST be an anndata encoded type.
 
 (dense-arrays)=
 ## Dense arrays
@@ -136,8 +136,8 @@ X_umap                   Dataset {38410, 2}
 (array)=
 ### Dense arrays specification (v0.2.0)
 
-* Dense arrays MUST be stored in an Array object
-* Dense arrays MUST have the entries `'encoding-type': 'array'` and `'encoding-version': '0.2.0'` in their metadata
+- Dense arrays MUST be stored in an Array object
+- Dense arrays MUST have the entries `'encoding-type': 'array'` and `'encoding-version': '0.2.0'` in their metadata
 
 (sparse-arrays)=
 ## Sparse arrays
@@ -198,12 +198,12 @@ indptr <zarr.core.Array '/X/indptr' (164115,) int32 read-only>
 (csc_matrix)=
 ### Sparse array specification (v0.1.0)
 
-* Each sparse array MUST be its own group
-* The group MUST contain arrays `indices`, `indptr`, and `data`
-* The group's metadata MUST contain:
-    * `"encoding-type"`, which is set to `"csr_matrix"` or `"csc_matrix"` for compressed sparse row and compressed sparse column, respectively.
-    * `"encoding-version"`, which is set to `"0.1.0"`
-    * `"shape"` which is an integer array of length 2 whose values are the sizes of the array's dimensions
+- Each sparse array MUST be its own group
+- The group MUST contain arrays `indices`, `indptr`, and `data`
+- The group's metadata MUST contain:
+  - `"encoding-type"`, which is set to `"csr_matrix"` or `"csc_matrix"` for compressed sparse row and compressed sparse column, respectively.
+  - `"encoding-version"`, which is set to `"0.1.0"`
+  - `"shape"` which is an integer array of length 2 whose values are the sizes of the array's dimensions
 
 (dataframes)=
 ## DataFrames
@@ -275,14 +275,14 @@ feature_is_filtered <zarr.core.Array '/var/feature_is_filtered' (40145,) bool re
 (dataframe)=
 ### Dataframe Specification (v0.2.0)
 
-* A dataframe MUST be stored as a group
-* The group's metadata:
-    * MUST contain the field `"_index"`, whose value is the key of the array to be used as an index/ row labels
-    * MUST contain encoding metadata `"encoding-type": "dataframe"`, `"encoding-version": "0.2.0"`
-    * MUST contain `"column-order"` an array of strings denoting the order of column entries
-* The group MUST contain an array for the index
-* Each entry in the group MUST correspond to an array with equivalent first dimensions
-* Each entry SHOULD share chunk sizes (in the HDF5 or zarr container)
+- A dataframe MUST be stored as a group
+- The group's metadata:
+  - MUST contain the field `"_index"`, whose value is the key of the array to be used as an index/ row labels
+  - MUST contain encoding metadata `"encoding-type": "dataframe"`, `"encoding-version": "0.2.0"`
+  - MUST contain `"column-order"` an array of strings denoting the order of column entries
+- The group MUST contain an array for the index
+- Each entry in the group MUST correspond to an array with equivalent first dimensions
+- Each entry SHOULD share chunk sizes (in the HDF5 or zarr container)
 
 (mappings)=
 ## Mappings
@@ -329,8 +329,40 @@ pca/variance_ratio <zarr.core.Array '/uns/pca/variance_ratio' (50,) float64 read
 (mapping)=
 ### Mapping specifications (v0.1.0)
 
-* Each mapping MUST be its own group
-* The group's metadata MUST contain the encoding metadata `"encoding-type": "dict"`, `"encoding-version": "0.1.0"`
+- Each mapping MUST be its own group
+- The group's metadata MUST contain the encoding metadata `"encoding-type": "dict"`, `"encoding-version": "0.1.0"`
+
+(acc-encoding)=
+## Accessors
+
+{mod}`anndata.acc` accessors –
+references to a vector or container within an `AnnData`, such as `A.obsm["pca"][0]` –
+are stored as their {meth}`~anndata.acc.AdAcc.to_json` form –
+a list of strings, integers and nulls
+described by [`acc-schema-v1.json`](acc-schema-v1.json){.external} –
+serialized to a JSON string.
+
+```python
+>>> store["uns/ref"]  # uns["ref"] == A.obsm["pca"][0]
+<HDF5 dataset "ref": shape (), type "|O">
+>>> store["uns/ref"].asstr()[()]
+'["obsm","pca",0]'
+```
+
+(accessor)=
+### Accessor specifications (v0.1.0)
+
+- Each accessor MUST be stored as a JSON document encoded into a scalar {ref}`string <scalars>`,
+  i.e. a 0-dimensional array of variable-length UTF-8 strings.
+- The array’s metadata MUST contain the encoding metadata `"encoding-type": "accessor"`, `"encoding-version": "0.1.0"`
+- The array’s metadata MUST contain `"accessor-project"`, the name of the project that defines the accessor’s JSON form.
+  `"anndata"` means the JSON document MUST validate against `#/$defs/ref` or `#/$defs/acc`
+  of [`acc-schema-v1.json`](acc-schema-v1.json){.external}.
+  Other projects define their own schema (see {ref}`extending accessors`).
+
+In zarr v3, this is byte-for-byte the layout of the `json` data type ({pr}`zarr-developers/zarr-extensions#9`)
+(which also uses the `vlen-utf8` codec),
+so only the `data_type` metadata will need to change once zarr implementations support it.
 
 (scalars)=
 ## Scalars
@@ -379,14 +411,14 @@ random_state <zarr.core.Array '/uns/neighbors/params/random_state' () int64 read
 (string)=
 ### Scalar specification (v0.2.0)
 
-* Scalars MUST be written as a 0 dimensional array
-* Numeric scalars
-    * MUST have `"encoding-type": "numeric-scalar"`, `"encoding-version": "0.2.0"` in their metadata
-    * MUST be a single numeric value, including boolean, unsigned integer, signed integer,  floating point, or complex floating point
-* String scalars
-    * MUST have `"encoding-type": "string"`, `"encoding-version": "0.2.0"` in their metadata
-    * In zarr, scalar strings MUST be stored as a fixed length unicode dtype
-    * In HDF5, scalar strings MUST be stored as a variable length utf-8 encoded string dtype
+- Scalars MUST be written as a 0 dimensional array
+- Numeric scalars
+  - MUST have `"encoding-type": "numeric-scalar"`, `"encoding-version": "0.2.0"` in their metadata
+  - MUST be a single numeric value, including boolean, unsigned integer, signed integer, floating point, or complex floating point
+- String scalars
+  - MUST have `"encoding-type": "string"`, `"encoding-version": "0.2.0"` in their metadata
+  - In zarr, scalar strings MUST be stored as a fixed length unicode dtype
+  - In HDF5, scalar strings MUST be stored as a variable length utf-8 encoded string dtype
 
 (categorical-arrays)=
 ## Categorical arrays
@@ -432,12 +464,12 @@ codes <zarr.core.Array '/obs/development_stage/codes' (164114,) int8 read-only>
 (categorical)=
 ### Categorical array specification (v0.2.0)
 
-* Categorical arrays MUST be stored as a group
-* The group's metadata MUST contain the encoding metadata `"encoding-type": "categorical"`, `"encoding-version": "0.2.0"`
-* The group's metadata MUST contain the boolean valued field `"ordered"`, which indicates whether the categories are ordered
-* The group MUST contain an integer valued array named `"codes"` whose maximum value is the number of categories - 1
-    * The `"codes"` array MAY contain signed integer values. If so, the code `-1` denotes a missing value
-* The group MUST contain an array called `"categories"`
+- Categorical arrays MUST be stored as a group
+- The group's metadata MUST contain the encoding metadata `"encoding-type": "categorical"`, `"encoding-version": "0.2.0"`
+- The group's metadata MUST contain the boolean valued field `"ordered"`, which indicates whether the categories are ordered
+- The group MUST contain an integer valued array named `"codes"` whose maximum value is the number of categories - 1
+  - The `"codes"` array MAY contain signed integer values. If so, the code `-1` denotes a missing value
+- The group MUST contain an array called `"categories"`
 
 (string-arrays)=
 ## String arrays
@@ -477,10 +509,10 @@ Arrays of strings are handled differently than numeric arrays since numpy doesn'
 (string-array)=
 ### String array specifications (v0.2.0)
 
-* String arrays MUST be stored in arrays
-* The arrays's metadata MUST contain the encoding metadata `"encoding-type": "string-array"`, `"encoding-version": "0.2.0"`
-* In `zarr`, string arrays MUST be stored using `numcodecs`' `VLenUTF8` codec
-* In `HDF5`, string arrays MUST be stored using the variable length string data type, with a utf-8 encoding
+- String arrays MUST be stored in arrays
+- The arrays's metadata MUST contain the encoding metadata `"encoding-type": "string-array"`, `"encoding-version": "0.2.0"`
+- In `zarr`, string arrays MUST be stored using `numcodecs`' `VLenUTF8` codec
+- In `HDF5`, string arrays MUST be stored using the variable length string data type, with a utf-8 encoding
 
 (nullable-arrays)=
 ## Nullable integers, booleans, and strings
@@ -545,29 +577,29 @@ nullable_integer/values <zarr.core.Array '/nullable_integer/values' (4,) int64>
 (nullable-integer)=
 ### Nullable integer specifications (v0.1.0)
 
-* Nullable integers MUST be stored as a group
-* The group’s attributes MUST contain the encoding metadata `"encoding-type": "nullable-integer"`, `"encoding-version": "0.1.0"`
-* The group MUST contain an integer valued array under the key `"values"`
-* The group MUST contain an boolean valued array under the key `"mask"`
+- Nullable integers MUST be stored as a group
+- The group’s attributes MUST contain the encoding metadata `"encoding-type": "nullable-integer"`, `"encoding-version": "0.1.0"`
+- The group MUST contain an integer valued array under the key `"values"`
+- The group MUST contain an boolean valued array under the key `"mask"`
 
 (nullable-boolean)=
 ### Nullable boolean specifications (v0.1.0)
 
-* Nullable booleans MUST be stored as a group
-* The group’s attributes MUST contain the encoding metadata `"encoding-type": "nullable-boolean"`, `"encoding-version": "0.1.0"`
-* The group MUST contain an boolean valued array under the key `"values"`
-* The group MUST contain an boolean valued array under the key `"mask"`
-* The `"values"` and `"mask"` arrays MUST be the same shape
+- Nullable booleans MUST be stored as a group
+- The group’s attributes MUST contain the encoding metadata `"encoding-type": "nullable-boolean"`, `"encoding-version": "0.1.0"`
+- The group MUST contain an boolean valued array under the key `"values"`
+- The group MUST contain an boolean valued array under the key `"mask"`
+- The `"values"` and `"mask"` arrays MUST be the same shape
 
 (nullable-string-array)=
 ### Nullable string specifications (v0.1.0)
 
-* Nullable strings MUST be stored as a group
-* The group’s attributes MUST contain the encoding metadata `"encoding-type": "nullable-string-array"`, `"encoding-version": "0.1.0"`
-* The group’s attributes MAY contain `"na-value"` as an indicator for missing value semantics with the possible value `"NA"` or `"NaN"` described in [](#missing-value-semantics), and the default being `"NA"`
-* The group MUST contain a string valued array under the key `"values"`
-* The group MUST contain a boolean valued array under the key `"mask"`
-* The `"values"` and `"mask"` arrays MUST be the same shape
+- Nullable strings MUST be stored as a group
+- The group’s attributes MUST contain the encoding metadata `"encoding-type": "nullable-string-array"`, `"encoding-version": "0.1.0"`
+- The group’s attributes MAY contain `"na-value"` as an indicator for missing value semantics with the possible value `"NA"` or `"NaN"` described in [](#missing-value-semantics), and the default being `"NA"`
+- The group MUST contain a string valued array under the key `"values"`
+- The group MUST contain a boolean valued array under the key `"mask"`
+- The `"values"` and `"mask"` arrays MUST be the same shape
 
 (missing-value-semantics)=
 ### Missing value semantics

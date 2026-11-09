@@ -7,13 +7,14 @@ import sys
 from collections.abc import Hashable
 from dataclasses import KW_ONLY, dataclass, field
 from functools import cached_property
-from typing import TYPE_CHECKING, ClassVar, overload
+from typing import TYPE_CHECKING, ClassVar, Protocol, overload, runtime_checkable
 
 if sys.version_info < (3, 15):
     from typing_extensions import sentinel
 
 import numpy as np
 import pandas as pd
+from scverse_misc import Deprecation, future_abstractmethod
 
 from .. import AnnData
 from .._core.views import ArrayView
@@ -238,6 +239,16 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
         The first two both have defined `shape`-like properties (or :class:`awkward.Array`), but :attr:`~anndata.AnnData.layers` or similar do not.
         """
 
+    @future_abstractmethod(Deprecation("0.14.0"))
+    def set(self, data: D, idx: I | NO_IDX, value: object, /) -> None:
+        """Set the indexed array or element in the AnnData object at `idx`.
+
+        When `idx` is :class:`~anndata.acc.NO_IDX`, replace the full element one level up (see :meth:`get`),
+        otherwise assign into the existing element in-place.
+        """
+        msg = f"{type(self).__name__} does not support setting values."
+        raise NotImplementedError(msg)
+
     def _maybe_flatten(
         self, idx: I, a: AlignedArray | pd.api.extensions.ExtensionArray
     ) -> Array:
@@ -329,6 +340,16 @@ class LayerAcc[R: AdRef[Idx2D, AnnData]](RefAcc[R, Idx2D, AnnData]):
         # To keep things as lazy as possible, we don't reuse the full-array branch here
         arr = adata[idx].X if self.k is None else adata[idx].layers[self.k]
         return self._maybe_flatten(idx, arr)
+
+    def set(self, adata: AnnData, idx: Idx2D | NO_IDX, value: object, /) -> None:
+        if idx is NO_IDX:
+            if self.k is None:
+                adata.X = value
+            else:
+                adata.layers[self.k] = value
+            return
+        full = _check_settable(self.get(adata))
+        full[_positional_idx(adata, idx, ("obs", "var"))] = value
 
 
 @dataclass(frozen=True)
@@ -447,6 +468,16 @@ class MetaAcc[R: AdRef[str | None, MuData | AnnData]](
                 msg = f"Unsupported {self.dim} container"
                 raise TypeError(msg)
 
+    def set(
+        self, data: MuData | AnnData, k: str | NO_IDX | None, value: object, /
+    ) -> None:
+        if k is NO_IDX:
+            setattr(data, self.dim, value)
+        elif k is None:
+            setattr(data, f"{self.dim}_names", value)
+        else:
+            getattr(data, self.dim)[k] = value
+
 
 @dataclass(frozen=True)
 class MultiAcc[R: AdRef[int, MuData | AnnData]](RefAcc[R, int, MuData | AnnData]):
@@ -524,6 +555,16 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](RefAcc[R, int, MuData | AnnData]
         i += n_cols * (i < 0)
         # TODO: remove slicing when dropping scipy <1.14
         return self._maybe_flatten(i, full[:, i : i + 1])
+
+    def set(self, data: MuData | AnnData, i: int | NO_IDX, value: object, /) -> None:
+        if i is NO_IDX:
+            getattr(data, f"{self.dim}m")[self.k] = value
+            return
+        full = _check_settable(self.get(data))
+        if not -full.shape[1] <= i < full.shape[1]:
+            msg = f"Column index `{i}` is out of range for {self} with {full.shape[1]} columns."
+            raise IndexError(msg)
+        full[:, i] = value
 
 
 @dataclass(frozen=True)
@@ -639,6 +680,15 @@ class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](RefAcc[R, Idx2D, MuData | AnnD
                 msg = f"Invalid index: {idx}"
                 raise TypeError(msg)
         return self._maybe_flatten(idx, sub)
+
+    def set(
+        self, data: MuData | AnnData, idx: Idx2D | NO_IDX, value: object, /
+    ) -> None:
+        if idx is NO_IDX:
+            getattr(data, f"{self.dim}p")[self.k] = value
+            return
+        full = _check_settable(self.get(data))
+        full[_positional_idx(data, idx, (self.dim, self.dim))] = value
 
 
 @dataclass(frozen=True)
@@ -975,6 +1025,30 @@ def _expand_idx2d_list(idx: Idx2DList) -> list[Idx2D]:
         case _:  # pragma: no cover
             msg = "Should have checked _is_idx2d_list before."
             raise AssertionError(msg)
+
+
+@runtime_checkable
+class _Settable(Protocol):
+    @property
+    def shape(self) -> tuple[int, ...]: ...
+    def __setitem__(self, idx: tuple[int | slice, ...], value: object, /) -> None: ...
+
+
+def _check_settable(a: AlignedArray, /) -> _Settable:
+    if not isinstance(a, _Settable):
+        msg = f"Cannot assign into {type(a).__name__}."
+        raise TypeError(msg)
+    return a
+
+
+def _positional_idx(
+    data: MuData | AnnData, idx: Idx2D, dims: tuple[str, str], /
+) -> tuple[int | slice, ...]:
+    """Turn the names in a 2D index into positions along `dims`."""
+    return tuple(
+        getattr(data, dim).index.get_loc(i) if isinstance(i, str) else i
+        for i, dim in zip(idx, dims, strict=True)
+    )
 
 
 if not TYPE_CHECKING:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
