@@ -353,9 +353,10 @@ def remove_unused_categories(df: pd.DataFrame, col: Hashable) -> None:
     Checking usage with :func:`numpy.bincount` first is much faster than always calling
     :meth:`pandas.Series.cat.remove_unused_categories`, which sorts all codes.
     """
-    codes = df[col].cat.codes.to_numpy()
+    # use the array directly: `.cat.codes` would build a new Series, which costs as much as the check
+    cat: pd.Categorical = df[col].array
     # shift by 1 to count missing values (code -1) separately
-    counts = np.bincount(codes + 1, minlength=len(df[col].cat.categories) + 1)
+    counts = np.bincount(cat.codes + 1, minlength=len(cat.categories) + 1)
     if counts[1:].all():
         return
     with pandas_no_chained_assignment_warning():

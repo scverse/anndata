@@ -70,7 +70,13 @@ from .index import (
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset
 from .storage import _non_2d_message, coerce_array
-from .views import DictView, _resolve_idxs, as_view, remove_unused_categories
+from .views import (
+    DataFrameView,
+    DictView,
+    _resolve_idxs,
+    as_view,
+    remove_unused_categories,
+)
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
@@ -98,7 +104,7 @@ if TYPE_CHECKING:
     from ..typing import AlignedArray, Index, Index1D, Storable, _Index, _Index1DNorm
     from .aligned_df import IntoAlignedDf
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
-    from .index import SubsetIdx
+    from .index import NumpyIdx1D, SubsetIdx
     from .sparse_dataset import BackedSparseMatrix
 
     type IntoAlignedMapping = Mapping[str, AlignedArray] | NDArray[np.void] | None
@@ -358,16 +364,19 @@ class AnnData:  # noqa: PLW1641
 
         # views on attributes of adata_ref
         # pandas cannot be indexed with an `IndexManager` or an array-API array
-        var_sub = adata_ref.var.iloc[_as_numpy_idx(self._vidx)]
-        obs_sub = adata_ref.obs.iloc[_as_numpy_idx(self._oidx)]
+        vidx_np, oidx_np = _as_numpy_idx(self._vidx), _as_numpy_idx(self._oidx)
+        var_sub = adata_ref.var.iloc[vidx_np]
+        obs_sub = adata_ref.obs.iloc[oidx_np]
+        _pass_on_unique(adata_ref.var.index, var_sub.index, vidx_np)
+        _pass_on_unique(adata_ref.obs.index, obs_sub.index, oidx_np)
         # fix categories
         uns = copy(adata_ref._uns)
         if settings.remove_unused_categories:
             self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
             self._remove_unused_categories(adata_ref.var, var_sub, uns)
-        # set attributes
-        self._obs = as_view(obs_sub, view_args=(self, "obs"))
-        self._var = as_view(var_sub, view_args=(self, "var"))
+        # set attributes; categories are fixed already, so skip `as_view_df` doing it again
+        self._obs = _df_view(obs_sub, view_args=(self, "obs"))
+        self._var = _df_view(var_sub, view_args=(self, "var"))
         self._uns = uns
 
         # set raw, easy, as it’s immutable anyways...
@@ -2077,9 +2086,31 @@ def _subset_anndata(a: AnnData, subset_idx: SubsetIdx) -> AnnData:
     return a._getitem(subset_idx)
 
 
+def _df_view(df: pd.DataFrame | Dataset2D, view_args) -> DataFrameView | Dataset2D:
+    return (
+        DataFrameView(df, view_args=view_args)
+        if isinstance(df, pd.DataFrame)
+        else as_view(df, view_args=view_args)
+    )
+
+
 def _has_duplicates(index: pd.Index) -> bool:
-    # `has_duplicates` is cached on the index (and passed on to slices of it),
-    # so only build a new index if there are missing values to exclude
     if index.hasnans:
-        index = index[index.notna()]
-    return index.has_duplicates
+        return index[index.notna()].has_duplicates
+    # keep only the answer on the index (shared with its copies), not pandas' lookup table,
+    # which costs ~90 bytes per name and slows down slicing: check a throw-away view,
+    # unless the index already has a table (slicing it would build another one)
+    cache = index._cache  # type: ignore[attr-defined]
+    if "is_unique" not in cache:
+        cache["is_unique"] = (index if "_engine" in cache else index[:]).is_unique
+    return not cache["is_unique"]
+
+
+def _pass_on_unique(index: pd.Index, sub: pd.Index, idx: NumpyIdx1D) -> None:
+    """Mark `sub = index[idx]` as unique if `index` is known to be and `idx` can’t repeat a name.
+
+    Copies of a view then don’t have to check its names for duplicates again.
+    """
+    cache = index._cache  # type: ignore[attr-defined]
+    if (isinstance(idx, slice) or idx.dtype == bool) and cache.get("is_unique"):
+        sub._cache["is_unique"] = True  # type: ignore[attr-defined]
