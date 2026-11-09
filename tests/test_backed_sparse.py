@@ -179,8 +179,9 @@ def test_backed_indexing_with_list_uses_out_of_core(
 
     # The symmetric case: a list indexer on the major axis of a CSC dataset.
     _, _, csc_disk, _ = ondisk_equivalent_adata
+    csc = cast(CSCDataset, csc_disk.X)
     cols = [0, 1, 2]
-    assert_equal(csc_disk.X[:, cols], csc_disk.X[:, np.asarray(cols)])
+    assert_equal(csc[:, cols], csc[:, np.asarray(cols)])
     assert spy.call_count == 0
 
 
