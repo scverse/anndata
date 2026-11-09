@@ -202,7 +202,7 @@ def _subset_masked(
     return a[subset_idx]
 
 
-@_as_view_dispatch.register
+@_as_view_dispatch.register(XDataArray)
 def _view_pd_boolean_array(a: XDataArray, view_args: ViewArgs) -> XDataArray:
     return a
 
