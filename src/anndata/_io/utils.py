@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
+from .._write_compat import WriteCompat
 from ..acc import A
 from ..utils import warn
 
@@ -28,7 +29,9 @@ if TYPE_CHECKING:
         _GroupStorageType,
         _WriteInternal,
     )
+    from .._write_compat import WriteConfig
     from ..acc import AdAcc, AdRef, MapAcc, RefAcc
+    from ..types import WriteCompatStr
     from ..typing import RWAble
     from .specs.registry import Writer
 
@@ -171,6 +174,7 @@ def write_use(
     }),
     A: AdAcc = A,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+    compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
 ) -> None:
     """Write only the parts of `adata` referenced by `use` into the existing anndata group `f`."""
     from .specs import read_elem, write_elem
@@ -201,6 +205,7 @@ def write_use(
             key,
             elem,
             dataset_kwargs=dataset_kwargs,
+            compat=compat,
         )
 
 
