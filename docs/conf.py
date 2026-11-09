@@ -165,6 +165,7 @@ nitpick_ignore = [  # APIs without an intersphinx entry
     ("py:class", "anndata.utils.Default"),
     # TODO: remove zappy support; the zappy repo is archived
     ("py:class", "anndata.compat.ZappyArray"),
+    ("py:class", "'0.1.0'})"),  # https://github.com/sphinx-doc/sphinx/issues/14159
     #### type variables (in generic bases, PEP 695 ones are rendered as `typing.*`)
     *(t for v in "DIMR" for t in [("py:class", v), ("py:obj", f"typing.{v}")]),
 ]
