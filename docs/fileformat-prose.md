@@ -310,7 +310,7 @@ feature_is_filtered <zarr.core.Array '/var/feature_is_filtered' (40145,) bool re
 ### Dataframe Specification (v0.3.0)
 
 The index and columns are stored as {ref}`indexed keys <indexed-keys>`
-following the [zarr dataframe convention][df-conv],
+following closely, but not declaring, the [zarr dataframe convention][df-conv],
 with the names array `"columns"` and the prefix `"column"`.
 
 - A dataframe MUST be stored as a group
@@ -320,7 +320,6 @@ with the names array `"columns"` and the prefix `"column"`.
   - MAY contain `"df:index"`, the position of the index in `"columns"`.
     Without it, a reader MUST use a range index `0` … `n_rows - 1`.
     When there is an index, anndata writes it at position `0`
-  - in `zarr`, MUST contain the convention’s `"zarr_conventions"` entry
 - The group MUST contain the string array `"columns"`, holding the index name (if any) and the column names
 - An unnamed index MUST be named `""` (the empty string)
 - `"column_{i}"` MUST hold the data for `columns[i]`, each an array with equivalent first dimensions
