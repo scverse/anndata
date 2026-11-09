@@ -95,9 +95,11 @@ def _on_disk_x(
     return elem
 
 
-class AlignedMappingBase[I: (OneDIdx, TwoDIdx), K: (str, str | None), V: _AlignedAny](
-    MutableMapping[K, V], ABC
-):
+class AlignedMappingBase[
+    I: (OneDIdx, TwoDIdx),
+    K: (str, str | None),
+    V: (_AlignedAny, AlignedArray),
+](MutableMapping[K, V], ABC):
     """\
     An abstract base class for Mappings containing array-like values aligned
     to either one or both AnnData axes.
@@ -200,7 +202,7 @@ class AlignedView[
     P: AlignedMappingBase,
     I: (OneDIdx, TwoDIdx),
     K: (str, str | None),
-    V: _AlignedAny,
+    V: (_AlignedAny, AlignedArray),
 ](AlignedMappingBase[I, K, V]):
     is_view: ClassVar[Literal[True]] = True
 
@@ -267,9 +269,11 @@ class AlignedView[
         return len(self.parent_mapping)
 
 
-class AlignedActual[I: (OneDIdx, TwoDIdx), K: (str, str | None), V: _AlignedAny](
-    AlignedMappingBase[I, K, V]
-):
+class AlignedActual[
+    I: (OneDIdx, TwoDIdx),
+    K: (str, str | None),
+    V: (_AlignedAny, AlignedArray),
+](AlignedMappingBase[I, K, V]):
     is_view: ClassVar[Literal[False]] = False
 
     _data: MutableMapping[K, V]
@@ -317,7 +321,9 @@ class AlignedActual[I: (OneDIdx, TwoDIdx), K: (str, str | None), V: _AlignedAny]
         return len(self._data)
 
 
-class AxisArraysBase[V: _AlignedAny](AlignedMappingBase[OneDIdx, str, V]):
+class AxisArraysBase[V: (_AlignedAny, AlignedArray)](
+    AlignedMappingBase[OneDIdx, str, V]
+):
     """\
     Mapping of key→array-like,
     where array-like is aligned to an axis of parent AnnData.

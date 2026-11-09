@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from copy import deepcopy
-from functools import reduce, singledispatch
+from functools import partial, reduce, singledispatch
 from importlib.util import find_spec
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, overload
 
 import numpy as np
 import pandas as pd
@@ -32,10 +32,10 @@ from .access import ElementRef
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable, Iterable, Sequence
-    from typing import Any, ClassVar
+    from collections.abc import Callable, Hashable, Iterable
+    from typing import ClassVar
 
-    from numpy.typing import NDArray
+    from numpy.typing import ArrayLike, NDArray
 
     from anndata import AnnData
 
@@ -78,7 +78,7 @@ else:
     _SupportsSetItem = object
 
 
-type ViewArgs = tuple["AnnData", str] | tuple["AnnData", str, tuple[str, ...]]
+type ViewArgs = tuple["AnnData", str] | tuple["AnnData", str, tuple[str | None, ...]]
 """`ElementRef` args; its `keys` defaults to `()`."""
 
 
@@ -128,7 +128,7 @@ _UFuncMethod = Literal["__call__", "reduce", "reduceat", "accumulate", "outer", 
 class ArrayView(_SetItemMixin, np.ndarray):
     def __new__(
         cls,
-        input_array: Sequence[Any],
+        input_array: ArrayLike,
         view_args: ViewArgs | None = None,
     ):
         arr = np.asanyarray(input_array).view(cls)
@@ -274,7 +274,7 @@ class CupySparseCSCView(_ViewMixin, CupyCSCMatrix):
 class CupyArrayView(_ViewMixin, CupyArray):
     def __new__(
         cls,
-        input_array: Sequence[Any],
+        input_array: ArrayLike,
         view_args: ViewArgs | None = None,
     ):
         import cupy as cp
@@ -325,8 +325,51 @@ class DataFrameView(_ViewMixin, pd.DataFrame):
             super().__setattr__(key, value)
 
 
+# `singledispatch` can’t carry the overloads, so they live on this thin wrapper
+@overload
+def as_view(obj: np.ndarray, view_args: ViewArgs, /) -> ArrayView: ...
+@overload
+def as_view(obj: DaskArray, view_args: ViewArgs, /) -> DaskArrayView: ...
+@overload
+def as_view(
+    obj: pd.DataFrame,
+    view_args: ViewArgs,
+    /,
+    *,
+    remove_unused_categories: bool | None = None,
+) -> DataFrameView: ...
+@overload
+def as_view(
+    obj: Dataset2D,
+    view_args: ViewArgs,
+    /,
+    *,
+    remove_unused_categories: bool | None = None,
+) -> Dataset2D: ...
+@overload
+def as_view(obj: sparse.csr_matrix, view_args: ViewArgs, /) -> SparseCSRMatrixView: ...
+@overload
+def as_view(obj: sparse.csc_matrix, view_args: ViewArgs, /) -> SparseCSCMatrixView: ...
+@overload
+def as_view(obj: sparse.csr_array, view_args: ViewArgs, /) -> SparseCSRArrayView: ...
+@overload
+def as_view(obj: sparse.csc_array, view_args: ViewArgs, /) -> SparseCSCArrayView: ...
+@overload
+def as_view(obj: dict, view_args: ViewArgs, /) -> DictView: ...
+@overload
+def as_view(obj: CupyArray, view_args: ViewArgs, /) -> CupyArrayView: ...
+@overload
+def as_view(obj: CupyCSRMatrix, view_args: ViewArgs, /) -> CupySparseCSRView: ...
+@overload
+def as_view(obj: CupyCSCMatrix, view_args: ViewArgs, /) -> CupySparseCSCView: ...
+@overload
+def as_view[T](obj: T, view_args: ViewArgs, /) -> T: ...
+def as_view(obj: object, view_args: ViewArgs, /, **kwargs: bool | None) -> object:
+    return _as_view_dispatch(obj, view_args, **kwargs)
+
+
 @singledispatch
-def as_view(obj, view_args):
+def _as_view_dispatch(obj: object, view_args: ViewArgs, /) -> object:
     if has_xp_base(obj):
         # TODO: Determine if we need some sort of specific view object for array-api, or some sort of wrapper that just warns loudly?
         # Likely not - we will just make it clear that any view-specific behavior is offloaded onto the array-api.
@@ -335,16 +378,6 @@ def as_view(obj, view_args):
     else:  # pragma: no cover
         msg = f"No view type has been registered for {type(obj)}"
         raise NotImplementedError(msg)
-
-
-@as_view.register(np.ndarray)
-def as_view_array(array, view_args):
-    return ArrayView(array, view_args=view_args)
-
-
-@as_view.register(DaskArray)
-def as_view_dask_array(array, view_args):
-    return DaskArrayView(array, view_args=view_args)
 
 
 def remove_unused_categories(df: pd.DataFrame, col: Hashable) -> None:
@@ -363,65 +396,50 @@ def remove_unused_categories(df: pd.DataFrame, col: Hashable) -> None:
         df[col] = df[col].cat.remove_unused_categories()
 
 
-@as_view.register(pd.DataFrame)
-def as_view_df(df, view_args):
-    if settings.remove_unused_categories:
+@_as_view_dispatch.register
+def as_view_df(
+    df: pd.DataFrame,
+    view_args: ViewArgs,
+    /,
+    *,
+    remove_unused_categories: bool | None = None,
+) -> DataFrameView:
+    if remove_unused_categories is None:
+        remove_unused_categories = settings.remove_unused_categories
+    if remove_unused_categories:
+        from .views import remove_unused_categories as ruc  # shadowed above
+
         for col in df.columns:
             if isinstance(df[col].dtype, pd.CategoricalDtype):
-                remove_unused_categories(df, col)
+                ruc(df, col)
     return DataFrameView(df, view_args=view_args)
 
 
-@as_view.register(sparse.csr_matrix)
-def as_view_csr_matrix(mtx, view_args):
-    return SparseCSRMatrixView(mtx, view_args=view_args)
+def _as_view_wrap[T](
+    obj: object, view_args: ViewArgs, /, *, view_cls: Callable[..., T]
+) -> T:
+    return view_cls(obj, view_args=view_args)
 
 
-@as_view.register(sparse.csc_matrix)
-def as_view_csc_matrix(mtx, view_args):
-    return SparseCSCMatrixView(mtx, view_args=view_args)
+for _cls, _view_cls in [
+    (np.ndarray, ArrayView),
+    (DaskArray, DaskArrayView),
+    (sparse.csr_matrix, SparseCSRMatrixView),
+    (sparse.csc_matrix, SparseCSCMatrixView),
+    (sparse.csr_array, SparseCSRArrayView),
+    (sparse.csc_array, SparseCSCArrayView),
+    (dict, DictView),
+    (CupyArray, CupyArrayView),
+    (CupyCSRMatrix, CupySparseCSRView),
+    (CupyCSCMatrix, CupySparseCSCView),
+]:
+    _as_view_dispatch.register(_cls, partial(_as_view_wrap, view_cls=_view_cls))
 
 
-@as_view.register(sparse.csr_array)
-def as_view_csr_array(mtx, view_args):
-    return SparseCSRArrayView(mtx, view_args=view_args)
-
-
-@as_view.register(sparse.csc_array)
-def as_view_csc_array(mtx, view_args):
-    return SparseCSCArrayView(mtx, view_args=view_args)
-
-
-@as_view.register(dict)
-def as_view_dict(d, view_args):
-    return DictView(d, view_args=view_args)
-
-
-@as_view.register(ZappyArray)
-def as_view_zappy(z, view_args):
-    # Previous code says ZappyArray works as view,
-    # but as far as I can tell they’re immutable.
-    return z
-
-
-@as_view.register(CupyArray)
-def as_view_cupy(array, view_args):
-    return CupyArrayView(array, view_args=view_args)
-
-
-@as_view.register(CupyCSRMatrix)
-def as_view_cupy_csr(mtx, view_args):
-    return CupySparseCSRView(mtx, view_args=view_args)
-
-
-@as_view.register(CupyCSCMatrix)
-def as_view_cupy_csc(mtx, view_args):
-    return CupySparseCSCView(mtx, view_args=view_args)
-
-
-@as_view.register(Dataset2D)
-def _(a: Dataset2D, view_args):
-    return a
+# Previous code says ZappyArray works as view, but as far as I can tell they’re immutable.
+# `Dataset2D` gets `remove_unused_categories` like `pd.DataFrame`, but ignores it.
+for _cls in [ZappyArray, Dataset2D]:
+    _as_view_dispatch.register(_cls, lambda obj, view_args, /, **_: obj)
 
 
 if find_spec("awkward") or TYPE_CHECKING:
@@ -430,7 +448,7 @@ if find_spec("awkward") or TYPE_CHECKING:
     from ..compat import awkward as ak
 
     # Registry to store weak references from AwkwardArrayViews to their parent AnnData container
-    _registry: weakref.WeakValueDictionary[int, AnnData] = weakref.WeakValueDictionary()
+    _registry: weakref.WeakValueDictionary[str, AnnData] = weakref.WeakValueDictionary()
     _PARAM_NAME = "_view_args"
 
     class AwkwardArrayView(_ViewMixin, AwkArray):
@@ -462,9 +480,9 @@ if find_spec("awkward") or TYPE_CHECKING:
             array = ak.with_parameter(array, "__list__", None)
             return array
 
-    @as_view.register(AwkArray)
-    def as_view_awkarray(array, view_args):
-        parent, attrname, keys = view_args
+    @_as_view_dispatch.register
+    def as_view_awkarray(array: AwkArray, view_args: ViewArgs, /) -> AwkArray:
+        parent, attrname, keys = ElementRef(*view_args)
         parent_key = f"target-{id(parent)}"
         _registry[parent_key] = parent
         # TODO: See https://github.com/scverse/anndata/pull/647#discussion_r963494798_ for more details and

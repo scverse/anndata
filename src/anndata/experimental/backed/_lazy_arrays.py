@@ -9,7 +9,7 @@ import pandas as pd
 import zarr
 
 from anndata._core.index import _subset_dispatch
-from anndata._core.views import as_view
+from anndata._core.views import _as_view_dispatch
 from anndata._io.specs.lazy_methods import get_chunksize
 
 from ..._io.utils import pandas_nullable_dtype
@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from pandas._libs.missing import NAType
     from pandas.core.dtypes.dtypes import BaseMaskedDtype
 
+    from ..._core.views import ViewArgs
     from ...typing import _Index1DNorm
 
     if TYPE_CHECKING:  # Double nesting so Sphinx can import the parent block
@@ -201,8 +202,8 @@ def _subset_masked(
     return a[subset_idx]
 
 
-@as_view.register(XDataArray)
-def _view_pd_boolean_array(a: XDataArray, view_args):
+@_as_view_dispatch.register
+def _view_pd_boolean_array(a: XDataArray, view_args: ViewArgs) -> XDataArray:
     return a
 
 

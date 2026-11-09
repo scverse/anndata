@@ -71,7 +71,6 @@ from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset
 from .storage import _non_2d_message, coerce_array
 from .views import (
-    DataFrameView,
     DictView,
     _resolve_idxs,
     as_view,
@@ -375,8 +374,8 @@ class AnnData:  # noqa: PLW1641
             self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
             self._remove_unused_categories(adata_ref.var, var_sub, uns)
         # set attributes; categories are fixed already, so skip `as_view_df` doing it again
-        self._obs = _df_view(obs_sub, view_args=(self, "obs"))
-        self._var = _df_view(var_sub, view_args=(self, "var"))
+        self._obs = as_view(obs_sub, (self, "obs"), remove_unused_categories=False)
+        self._var = as_view(var_sub, (self, "var"), remove_unused_categories=False)
         self._uns = uns
 
         # set raw, easy, as it’s immutable anyways...
@@ -2084,14 +2083,6 @@ def _infer_shape(
 def _subset_anndata(a: AnnData, subset_idx: SubsetIdx) -> AnnData:
     """`AnnData` normalises its own indices, so pass them through untouched."""
     return a._getitem(subset_idx)
-
-
-def _df_view(df: pd.DataFrame | Dataset2D, view_args) -> DataFrameView | Dataset2D:
-    return (
-        DataFrameView(df, view_args=view_args)
-        if isinstance(df, pd.DataFrame)
-        else as_view(df, view_args=view_args)
-    )
 
 
 def _has_duplicates(index: pd.Index) -> bool:
