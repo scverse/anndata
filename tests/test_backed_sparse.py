@@ -164,6 +164,20 @@ def test_backed_indexing(
     assert_equal(csr_mem[:, var_idx].X, dense_disk[:, var_idx].X)
 
 
+def test_backed_indexing_with_list_uses_out_of_core(
+    mocker: MockerFixture,
+    ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
+):
+    """A list indexer must not materialize the whole matrix (gh-2736)."""
+    _, csr_disk, _, _ = ondisk_equivalent_adata
+    assert isinstance(csr_disk.X, CSRDataset)
+
+    spy = mocker.spy(BaseCompressedSparseDataset, "to_memory")
+    lst = [0, 1, 2]
+    assert_equal(csr_disk.X[lst], csr_disk.X[np.asarray(lst)])
+    assert spy.call_count == 0
+
+
 def test_backed_ellipsis_indexing(
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
     ellipsis_index: Index,
