@@ -177,6 +177,12 @@ def test_backed_indexing_with_list_uses_out_of_core(
     assert_equal(csr_disk.X[lst], csr_disk.X[np.asarray(lst)])
     assert spy.call_count == 0
 
+    # The symmetric case: a list indexer on the major axis of a CSC dataset.
+    _, _, csc_disk, _ = ondisk_equivalent_adata
+    cols = [0, 1, 2]
+    assert_equal(csc_disk.X[:, cols], csc_disk.X[:, np.asarray(cols)])
+    assert spy.call_count == 0
+
 
 def test_backed_ellipsis_indexing(
     ondisk_equivalent_adata: tuple[AnnData, AnnData, AnnData, AnnData],
