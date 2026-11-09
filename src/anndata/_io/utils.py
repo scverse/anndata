@@ -164,17 +164,19 @@ def write_use(
     adata: AnnData,
     use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc],
     *,
+    validate_store_attributes: Mapping[str, str] = MappingProxyType({
+        "encoding-type": "anndata",
+        "encoding-version": "0.1.0",
+    }),
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> None:
     """Write only the parts of `adata` referenced by `use` into the existing anndata group `f`."""
     from .specs import read_elem, write_elem
 
-    if (
-        f.attrs.get("encoding-type"),
-        f.attrs.get("encoding-version"),
-    ) != ("anndata", "0.1.0"):
-        msg = "Cannot write a subelement of an AnnData object to a store that is not an AnnData store."
-        raise ValueError(msg)
+    for attrname, attrval_expected in validate_store_attributes.items():
+        if (attrval := f.attrs.get(attrname)) != attrval_expected:
+            msg = f"Store validation failed: Expected attribute {attrname!r} to have value {attrval_expected!r}, got {attrval!r}."
+            raise ValueError(msg)
     for dim in ("obs", "var"):
         group = cast("_GroupStorageType", f[dim])
         on_disk = read_elem(
