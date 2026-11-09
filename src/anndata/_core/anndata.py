@@ -7,6 +7,7 @@ from __future__ import annotations
 from collections import OrderedDict, defaultdict
 from collections.abc import Mapping, MutableMapping, Sequence
 from copy import copy, deepcopy
+from dataclasses import dataclass
 from functools import singledispatchmethod
 from pathlib import Path
 from textwrap import dedent
@@ -366,8 +367,8 @@ class AnnData:  # noqa: PLW1641
         vidx_np, oidx_np = _as_numpy_idx(self._vidx), _as_numpy_idx(self._oidx)
         var_sub = adata_ref.var.iloc[vidx_np]
         obs_sub = adata_ref.obs.iloc[oidx_np]
-        _pass_on_unique(adata_ref.var.index, var_sub.index, vidx_np)
-        _pass_on_unique(adata_ref.obs.index, obs_sub.index, oidx_np)
+        _IndexCache(adata_ref.var.index).pass_on_unique(var_sub.index, vidx_np)
+        _IndexCache(adata_ref.obs.index).pass_on_unique(obs_sub.index, oidx_np)
         # fix categories
         uns = copy(adata_ref._uns)
         if settings.remove_unused_categories:
@@ -1642,9 +1643,15 @@ class AnnData:  # noqa: PLW1641
     obs_names_make_unique.__doc__ = utils.make_index_unique.__doc__
 
     def _check_uniqueness(self) -> None:
-        if settings.restrict_index_types and _has_duplicates(self.obs.index):
+        if (
+            settings.restrict_index_types
+            and _IndexCache(self.obs.index).has_duplicates()
+        ):
             utils.warn_names_duplicates("obs")
-        if settings.restrict_index_types and _has_duplicates(self.var.index):
+        if (
+            settings.restrict_index_types
+            and _IndexCache(self.var.index).has_duplicates()
+        ):
             utils.warn_names_duplicates("var")
 
     def __contains__(self, key: AdRef | RefAcc | MapAcc) -> bool:
@@ -2085,23 +2092,34 @@ def _subset_anndata(a: AnnData, subset_idx: SubsetIdx) -> AnnData:
     return a._getitem(subset_idx)
 
 
-def _has_duplicates(index: pd.Index) -> bool:
-    if index.hasnans:
-        return index[index.notna()].has_duplicates
-    # keep only the answer on the index (shared with its copies), not pandas' lookup table,
-    # which costs ~90 bytes per name and slows down slicing: check a throw-away view,
-    # unless the index already has a table (slicing it would build another one)
-    cache = index._cache  # type: ignore[attr-defined]
-    if "is_unique" not in cache:
-        cache["is_unique"] = (index if "_engine" in cache else index[:]).is_unique
-    return not cache["is_unique"]
+@dataclass(frozen=True, slots=True)
+class _IndexCache:
+    """Access to the private cache of a :class:`pandas.Index` (shared with its copies)."""
 
+    index: pd.Index
 
-def _pass_on_unique(index: pd.Index, sub: pd.Index, idx: NumpyIdx1D) -> None:
-    """Mark `sub = index[idx]` as unique if `index` is known to be and `idx` can’t repeat a name.
+    @property
+    def cache(self) -> dict[str, object]:
+        return vars(self.index)["_cache"]
 
-    Copies of a view then don’t have to check its names for duplicates again.
-    """
-    cache = index._cache  # type: ignore[attr-defined]
-    if (isinstance(idx, slice) or idx.dtype == bool) and cache.get("is_unique"):
-        sub._cache["is_unique"] = True  # type: ignore[attr-defined]
+    def has_duplicates(self) -> bool:
+        if self.index.hasnans:
+            return self.index[self.index.notna()].has_duplicates
+        # keep only the answer on the index (shared with its copies), not pandas' lookup table,
+        # which costs ~90 bytes per name and slows down slicing: check a throw-away view,
+        # unless the index already has a table (slicing it would build another one)
+        cache = self.cache
+        if "is_unique" not in cache:
+            idx = self.index if "_engine" in cache else self.index[:]
+            cache["is_unique"] = idx.is_unique
+        return not cache["is_unique"]
+
+    def pass_on_unique(self, sub: pd.Index, idx: NumpyIdx1D) -> None:
+        """Mark `sub = index[idx]` as unique if `index` is known to be and `idx` can’t repeat a name.
+
+        Copies of a view then don’t have to check its names for duplicates again.
+        """
+        if (isinstance(idx, slice) or idx.dtype == bool) and self.cache.get(
+            "is_unique"
+        ):
+            _IndexCache(sub).cache["is_unique"] = True
