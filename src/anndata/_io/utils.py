@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
+from ..acc import A
 from ..utils import warn
 
 if TYPE_CHECKING:
@@ -27,7 +28,7 @@ if TYPE_CHECKING:
         _GroupStorageType,
         _WriteInternal,
     )
-    from ..acc import AdRef, MapAcc, RefAcc
+    from ..acc import AdAcc, AdRef, MapAcc, RefAcc
     from ..typing import RWAble
     from .specs.registry import Writer
 
@@ -168,6 +169,7 @@ def write_use(
         "encoding-type": "anndata",
         "encoding-version": "0.1.0",
     }),
+    A: AdAcc = A,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> None:
     """Write only the parts of `adata` referenced by `use` into the existing anndata group `f`."""
@@ -177,19 +179,20 @@ def write_use(
         if (attrval := f.attrs.get(attrname)) != attrval_expected:
             msg = f"Store validation failed: Expected attribute {attrname!r} to have value {attrval_expected!r}, got {attrval!r}."
             raise ValueError(msg)
+
+    uses = use if isinstance(use, Sequence) else [use]
     for dim in ("obs", "var"):
         group = cast("_GroupStorageType", f[dim])
         on_disk = read_elem(
             cast("StorageType", group[cast("str", group.attrs["_index"])])
         )
         if not pd.Index(cast("np.ndarray", on_disk)).equals(
-            getattr(adata, f"{dim}_names")
+            adata[getattr(A, dim)].index
         ):
             msg = f"Cannot write {use}: {dim}_names in the store do not match the AnnData object."
             raise ValueError(msg)
 
     # resolve everything first so an invalid accessor fails before anything is written
-    uses = use if isinstance(use, Sequence) else [use]
     for parent, key, elem in [_resolve_use(f, adata, u) for u in uses]:
         if parent is not None and parent not in f:
             write_elem(f, parent, {})

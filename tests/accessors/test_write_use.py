@@ -208,7 +208,7 @@ def test_write_not_anndata_store(
         h5py.File(diskfmt_store, "w").close()
     else:
         zarr.open_group(diskfmt_store, mode="w")
-    with pytest.raises(ValueError, match=r"not an AnnData store"):
+    with pytest.raises(ValueError, match="Store validation failed"):
         _write(adata, diskfmt_store, diskfmt, use=A.X)
 
 
