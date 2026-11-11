@@ -143,11 +143,16 @@ def read_sparse_as_dask(
         path_or_sparse_dataset = Path(filename(elem))
         dtype = elem["data"].dtype
     else:
+        from anndata._io.zarr import fast_zarr_context
+
         path_or_sparse_dataset = ad.io.sparse_dataset(elem, should_cache_indptr=False)
-        # Open the arrays once here so they are shipped to the tasks with their (fast) codec pipeline
-        # instead of being reopened in every task (where the pipeline choice would race across threads).
-        for attr in ("_data", "_indices", "_indptr"):
-            getattr(path_or_sparse_dataset, attr)
+        # Open the arrays once here, so they are shipped to the tasks instead of being reopened in each,
+        # with a faster codec pipeline, which zarr binds to an array when opening it (and keeps when pickling it).
+        # Only the tasks use it: it decodes a shard’s chunks one after another, which suits a task but slows down
+        # large reads from a whole `sparse_dataset`.
+        with fast_zarr_context(prefer_zarrs=False):
+            for attr in ("_data", "_indices", "_indptr"):
+                getattr(path_or_sparse_dataset, attr)
         dtype = path_or_sparse_dataset.dtype
     elem_name = get_elem_name(elem)
     attrs: Mapping[str, Any] = elem.attrs

@@ -103,16 +103,7 @@ def _index_in_memory(
 
 
 def _group_array(group: _GroupStorageType, key: str) -> _ArrayStorageType:
-    if isinstance(group, zarr.Group):
-        from .._io.zarr import fast_zarr_context
-
-        # zarr binds the codec pipeline when an array is opened (and keeps it when pickled),
-        # so arrays opened here keep reading with the faster pipeline after the context exits.
-        with fast_zarr_context(prefer_zarrs=False):
-            arr = group[key]
-    else:
-        arr = group[key]
-    if not isinstance(arr, zarr.Array | h5py.Dataset):
+    if not isinstance(arr := group[key], zarr.Array | h5py.Dataset):
         msg = f"Expected {key!r} of {group} to be an array, got {type(arr)}"
         raise ValueError(msg)
     return arr
@@ -420,6 +411,12 @@ def is_sparse_indexing_overridden(
     )
 
 
+# Where a `BaseCompressedSparseDataset` caches, in its `__dict__`,
+# its open backing arrays (per name and zarr buffer mode) and its `indptr` values (per buffer mode)
+_ARRAY_CACHE = "_arrays"
+_INDPTR_CACHE = "_indptr_values"
+
+
 class BaseCompressedSparseDataset[GroupT: _GroupStorageType](
     abc._AbstractCSDataset, ABC
 ):
@@ -608,8 +605,8 @@ class BaseCompressedSparseDataset[GroupT: _GroupStorageType](
         indices[orig_data_size:] = append_indices
 
         # Clear cached arrays
-        self.__dict__.pop("_arrays", None)
-        self.__dict__.pop("_indptr_values", None)
+        self.__dict__.pop(_ARRAY_CACHE, None)
+        self.__dict__.pop(_INDPTR_CACHE, None)
 
     def _array(self, key: Literal["data", "indices", "indptr"]) -> _ArrayStorageType:
         """Open (and cache) a backing array.
@@ -618,7 +615,7 @@ class BaseCompressedSparseDataset[GroupT: _GroupStorageType](
         because the codec pipeline chosen when an array is opened must support the mode it is read in.
         """
         cache: dict[tuple[str, bool], _ArrayStorageType]
-        cache = self.__dict__.setdefault("_arrays", {})
+        cache = self.__dict__.setdefault(_ARRAY_CACHE, {})
         if (cache_key := (key, is_gpu())) not in cache:
             cache[cache_key] = _group_array(self.group, key)
         return cache[cache_key]
@@ -632,7 +629,7 @@ class BaseCompressedSparseDataset[GroupT: _GroupStorageType](
         """
         if not self._should_cache_indptr:
             return self._array("indptr")
-        cache: dict[bool, DenseType] = self.__dict__.setdefault("_indptr_values", {})
+        cache: dict[bool, DenseType] = self.__dict__.setdefault(_INDPTR_CACHE, {})
         if (gpu := is_gpu()) not in cache:
             cache[gpu] = _read_dense(self._array("indptr"), ...)
         return cache[gpu]
@@ -663,15 +660,10 @@ class BaseCompressedSparseDataset[GroupT: _GroupStorageType](
             indptr=self._indptr,
             shape=self.shape,
         )
-        indices = _read_dense(self._indices, ...)
-        # Compact on-disk index types (e.g. uint16 for < 65,536 columns) are fine to store,
-        # but scipy and cuSPARSE only operate on signed 32 or 64 bit indices.
-        if (idx_dtype := np.result_type(indices.dtype, np.int32)) != indices.dtype:
-            indices = indices.astype(idx_dtype)
         return backed_class._construct(
             (
                 _read_dense(self._data, ...),
-                indices,
+                _read_dense(self._indices, ...),
                 _read_dense(self._indptr, ...),
             ),
             shape=self.shape,

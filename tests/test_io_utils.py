@@ -253,11 +253,11 @@ def test_write_chunk_size(tmp_path, output_format):
 
 
 @pytest.mark.skipif(not has_fused, reason="No fused pipeline available")
-def test_sparse_dataset_fast_pipeline(monkeypatch, tmp_path):
+def test_read_elem_lazy_fast_pipeline(monkeypatch, tmp_path):
     from anndata._io.specs import lazy_methods
     from anndata.experimental import read_elem_lazy
 
-    # zarrs is slower than the fused pipeline for integer selections, so sparse datasets prefer fused
+    # zarrs is slower than the fused pipeline for integer selections, so lazily read sparse matrices prefer fused
     fake_module = types.ModuleType("zarrs")
     fake_module.__spec__ = importlib.machinery.ModuleSpec("zarrs", loader=None)
     monkeypatch.setitem(sys.modules, "zarrs", fake_module)
@@ -277,11 +277,12 @@ def test_sparse_dataset_fast_pipeline(monkeypatch, tmp_path):
     g = zarr.open_group(tmp_path / "test.zarr", mode="w")
     ad.io.write_elem(g, "X", sparse.random(10, 5, density=0.5, format="csr"))
     pipeline_before = zarr.config.get("codec_pipeline.path")
+    # the fused pipeline decodes a shard’s chunks one after another, so whole sparse datasets keep the configured one
     backed = ad.io.sparse_dataset(g["X"])
     assert {
         type(arr._async_array.codec_pipeline).__name__
         for arr in [backed._data, backed._indices]
-    } == {"FusedCodecPipeline"}
+    } == {pipeline_before.rsplit(".", 1)[-1]}
     lazy = read_elem_lazy(g["X"], chunks=(5, -1)).compute()
     assert task_pipelines == {"FusedCodecPipeline"}
     # the global config is left untouched
