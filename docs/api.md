@@ -86,6 +86,7 @@ You might have more success by assembling the {class}`AnnData` object yourself f
 Writing a complete {class}`AnnData` object to disk in anndata’s native formats `.h5ad` and `zarr`.
 (These functions are also exported as {func}`io.write_h5ad` and {func}`io.write_zarr`.)
 
+<!-- panache-ignore-format-start -->
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -112,6 +113,7 @@ Writing a complete {class}`AnnData` object to disk in anndata’s native formats
    generated/anndata.io.write_h5ad
    generated/anndata.io.write_zarr
 ```
+<!-- panache-ignore-format-end -->
 
 Writing individual portions ({attr}`~AnnData.obs`, {attr}`~AnnData.varm` etc.) of the {class}`AnnData` object.
 
@@ -239,6 +241,7 @@ Types used by the former:
 
 ## Extensions
 
+<!-- panache-ignore-format-start -->
 ```{eval-rst}
 .. autosummary::
    :toctree: generated/
@@ -246,6 +249,7 @@ Types used by the former:
    register_anndata_namespace
 
 ```
+<!-- panache-ignore-format-end -->
 
 Types used by the former:
 

@@ -1,0 +1,7 @@
+#:schema https://panache.bz/panache.schema.json
+flavor = "myst"
+
+[format]
+wrap = "preserve"
+smart-punctuation = "unicode"
+tab-stops = "preserve"
