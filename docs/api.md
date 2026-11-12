@@ -170,10 +170,12 @@ In particular, for pytorch-based models.
    experimental.AnnLoader
 ```
 
+<!-- panache-ignore-format-start -->
 :::{class} experimental.AnnCollectionView
 
 A view of {class}`experimental.AnnCollection` with most of the same functions and attributes.
 :::
+<!-- panache-ignore-format-end -->
 
 ```{note}
 `AnnLoader` is deprecated and will be removed in 0.14.
