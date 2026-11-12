@@ -191,6 +191,20 @@ def test_create_from_df():
     assert df.index.tolist() == ad.obs_names.tolist()
 
 
+def test_create_from_df_writeable():
+    """X created from a DataFrame is writeable (#2717)."""
+    df = pd.DataFrame(np.ones((3, 2)), index=["a", "b", "c"], columns=["A", "B"])
+    adata = AnnData(df)
+    assert adata.X.flags.writeable
+    adata.X[0, 0] = 2
+    assert adata.X[0, 0] == 2
+
+    adata.X = df
+    assert adata.X.flags.writeable
+    adata.layers["df"] = df
+    assert adata.layers["df"].flags.writeable
+
+
 @pytest.mark.parametrize("attr", ["X", "obs", "obsm"])
 def test_error_create_from_multiindex_df(attr):
     df = get_multiindex_columns_df((100, 20))
