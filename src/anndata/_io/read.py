@@ -72,12 +72,14 @@ def read_excel(
         File name to read from.
     sheet
         Name of sheet in Excel file.
+    dtype
+        Numpy data type.
     """
     # rely on pandas for reading an excel file
     from pandas import read_excel
 
     df = read_excel(fspath(filename), sheet)
-    X = df.to_numpy()[:, 1:]
+    X = df.iloc[:, 1:].to_numpy(dtype=dtype)
     row = dict(
         row_names=pandas_as_str(df.iloc[:, 0])
         if settings.restrict_index_types
