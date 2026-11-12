@@ -630,6 +630,7 @@ def test_read_excel(dtype) -> None:
             category=DeprecationWarning,
         )
         adata = ad.io.read_excel(HERE / "data/excel.xlsx", "Sheet1", dtype=dtype)
+    assert isinstance(adata.X, np.ndarray)
     assert adata.X.dtype == np.dtype(dtype)
     assert adata.X.tolist() == X_list
 
