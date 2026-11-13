@@ -10,6 +10,7 @@ import zarr
 
 from anndata._core.file_backing import AnnDataFileManager
 from anndata._io.specs.registry import read_elem, read_elem_lazy
+from anndata._io.utils import mapping_items
 from anndata._types import AnnDataElem
 from testing.anndata._doctest import doctest_needs
 
@@ -170,7 +171,7 @@ def read_lazy(
         elif iospec.encoding_type == "dict":
             return {
                 k: read_dispatched(v, callback=callback)
-                for k, v in dict(_as_group(elem)).items()
+                for k, v in mapping_items(_as_group(elem))
             }
         return func(elem)
 

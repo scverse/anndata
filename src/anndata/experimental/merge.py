@@ -31,6 +31,8 @@ from .._core.merge import (
 )
 from .._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .._io.specs import read_elem, write_elem
+from .._io.utils import IndexedLayout, mapping_items, read_df_index
+from .._write_compat import WriteConfig
 from . import read_dispatched, read_elem_lazy
 
 if TYPE_CHECKING:
@@ -187,23 +189,23 @@ def read_as_backed(group: StorageType):
         elif iospec.encoding_type == "array":
             return elem
         elif iospec.encoding_type == "dict":
-            return {k: read_as_backed(v) for k, v in dict(elem).items()}
+            return {k: read_as_backed(v) for k, v in mapping_items(elem)}
         else:
             return func(elem)
 
     return read_dispatched(group, callback=callback)
 
 
+def _keep_indexed(groups: Collection[zarr.Group | h5py.Group]) -> WriteConfig:
+    """Store the output’s keys/column names in an array if any input did, as they might need it."""
+    indexed = any(IndexedLayout.of(g) is not None for g in groups)
+    return WriteConfig(indexed_keys=indexed)
+
+
 def _df_index(group: zarr.Group | h5py.Group, key: str) -> pd.Index:
-    df = _subgroup(group, key)
-    if not isinstance(index_key := df.attrs["_index"], str):
-        msg = f"Expected `_index` of {key!r} to be a string, got {index_key!r}."
-        raise TypeError(msg)
-    index = read_elem(df[index_key])
-    if not isinstance(index, np.ndarray | pd.api.extensions.ExtensionArray):
-        msg = f"Expected index of {key!r} to be an array, got {type(index)}."
-        raise TypeError(msg)
-    return pd.Index(index)
+    index = read_df_index(_subgroup(group, key))
+    # AnnData turns these into strings
+    return index.astype(str) if isinstance(index, pd.RangeIndex) else index
 
 
 ###################
@@ -300,21 +302,26 @@ def _write_concat_mappings(  # noqa: PLR0913, PLR0917
     index: pd.Index | None = None,
     reindexers: Sequence[AnyReindexer] | None = None,
     fill_value: Scalar | None = None,
+    *,
+    compat: WriteConfig,
 ):
     """
     Write a list of mappings to a zarr/h5 group.
     """
+    layout = IndexedLayout.DICT if compat.indexed_keys else None
     mapping_group = output_group.create_group(output_path)
     mapping_group.attrs.update({
         "encoding-type": "dict",
-        "encoding-version": "0.1.0",
+        "encoding-version": layout.encoding_version if layout else "0.1.0",
     })
-    for k in keys:
+    if layout:
+        write_elem(mapping_group, layout.names_key, np.array(list(keys), dtype=object))
+    for i, k in enumerate(keys):
         elems = [m[k] for m in mappings]
         _write_concat_sequence(
             elems,
             output_group=mapping_group,
-            output_path=k,
+            output_path=layout.child_key(i) if layout else k,
             axis=axis,
             index=index,
             reindexers=reindexers,
@@ -433,14 +440,17 @@ def _write_alt_mapping(
     merge: Callable,
     reindexers: Sequence[AnyReindexer],
 ):
+    subgroups = [_subgroup(g, f"{alt_axis_name}m") for g in groups]
     alt_mapping = merge([
-        {
-            k: r(read_elem(v), axis=0)
-            for k, v in dict(_subgroup(g, f"{alt_axis_name}m")).items()
-        }
-        for r, g in zip(reindexers, groups, strict=True)
+        {k: r(read_elem(v), axis=0) for k, v in mapping_items(sg)}
+        for r, sg in zip(reindexers, subgroups, strict=True)
     ])
-    write_elem(output_group, f"{alt_axis_name}m", alt_mapping)
+    write_elem(
+        output_group,
+        f"{alt_axis_name}m",
+        alt_mapping,
+        compat=_keep_indexed(subgroups),
+    )
 
 
 def _write_alt_annot(
@@ -454,7 +464,12 @@ def _write_alt_annot(
     alt_annot = merge_dataframes(
         [_read_df(g, alt_axis_name) for g in groups], alt_indices, merge
     )
-    write_elem(output_group, alt_axis_name, alt_annot)
+    write_elem(
+        output_group,
+        alt_axis_name,
+        alt_annot,
+        compat=_keep_indexed([_subgroup(g, alt_axis_name) for g in groups]),
+    )
 
 
 def _write_axis_annot(  # noqa: PLR0917
@@ -472,7 +487,12 @@ def _write_axis_annot(  # noqa: PLR0917
     concat_annot.index = concat_indices
     if label is not None:
         concat_annot[label] = label_col
-    write_elem(output_group, axis_name, concat_annot)
+    write_elem(
+        output_group,
+        axis_name,
+        concat_annot,
+        compat=_keep_indexed([_subgroup(g, axis_name) for g in groups]),
+    )
 
 
 def _write_alt_pairwise(
@@ -482,14 +502,17 @@ def _write_alt_pairwise(
     merge: Callable,
     reindexers: Sequence[AnyReindexer],
 ):
+    subgroups = [_subgroup(g, f"{alt_axis_name}p") for g in groups]
     alt_pairwise = merge([
-        {
-            k: r(r(read_elem_lazy(v), axis=0), axis=1)
-            for k, v in dict(_subgroup(g, f"{alt_axis_name}p")).items()
-        }
-        for r, g in zip(reindexers, groups, strict=True)
+        {k: r(r(read_elem_lazy(v), axis=0), axis=1) for k, v in mapping_items(sg)}
+        for r, sg in zip(reindexers, subgroups, strict=True)
     ])
-    write_elem(output_group, f"{alt_axis_name}p", alt_pairwise)
+    write_elem(
+        output_group,
+        f"{alt_axis_name}p",
+        alt_pairwise,
+        compat=_keep_indexed(subgroups),
+    )
 
 
 def concat_on_disk(  # noqa: PLR0913
@@ -804,4 +827,5 @@ def _concat_on_disk_inner(  # noqa: PLR0913
             index=m_index,
             reindexers=m_reindexers,
             fill_value=fill_value,
+            compat=_keep_indexed([_subgroup(g, m) for g in groups]),
         )
