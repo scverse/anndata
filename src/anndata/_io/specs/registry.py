@@ -367,8 +367,7 @@ class LazyReader(Reader):
         return read_func(elem, **kwargs)
 
 
-# Sync fallback reads block a thread until zarr’s loop finishes their I/O.
-# On the loop’s default executor they could take every thread that I/O needs, so they get their own.
+# Own pool: blocked fallback reads must not take the threads that zarr’s I/O needs.
 _fallback_executor = ThreadPoolExecutor(thread_name_prefix="anndata-async-fallback")
 
 
@@ -399,8 +398,7 @@ class AsyncReader:
                     type(elem), iospec, reader=self
                 )
                 return await read_func(elem)
-            # Encodings without an async reader run the sync reader in a thread.
-            # Its zarr calls go back to zarr’s loop, which is free while we await here.
+            # No async reader: run the sync one in a thread; zarr’s loop is free while we await.
             sync_elem = (
                 zarr.Group(elem)
                 if isinstance(elem, zarr.AsyncGroup)
