@@ -219,49 +219,119 @@ def test_dims_item_unsupported() -> None:
         A.uns["a"].dims(None)  # type: ignore[arg-type]
 
 
+@pytest.fixture
+def written(adata: AnnData, tmp_path: Path) -> Path:
+    """Write `adata`, then change things in memory, only one of which a test writes."""
+    path = tmp_path / "a.h5ad"
+    adata.write_h5ad(path)
+    adata[A.uns["foo"]["bar"]["baz"]] = 7
+    adata[A.uns["foo"]["bar"]["added"]] = 8
+    adata[A.uns["foo"]["qux"]] = 9
+    adata[A.uns["nested"].AD.obs["x"]] = [5, 6]
+    adata[A.uns["nested"].AD.X] = np.ones((2, 3))
+    adata[A.uns["df"].DF["c"]] = [4, 5, 6]
+    adata[A.varm["df"].DF["a"]] = 0.0
+    adata[A.varm["df"].DF["b"]] = 0.0
+    # not in the store
+    adata[A.uns["new"]] = adata[A.uns["nested"]].copy()
+    adata[A.uns["new_df"]] = pd.DataFrame(dict(c=[1]))
+    adata[A.uns["foo"]["new"]] = dict(x=1)
+    return path
+
+
 @pytest.mark.parametrize(
-    ("use", "new", "expected_foo"),
+    ("use", "expected_foo"),
     [
+        pytest.param(A.uns["foo"]["bar"]["baz"], dict(bar=dict(baz=7)), id="leaf"),
         pytest.param(
-            A.uns["foo"]["bar"]["baz"], 7, dict(bar=dict(baz=7, old=1)), id="leaf"
-        ),
-        # `foo/new` is missing on disk, so all of `foo['new']` is written
-        pytest.param(
-            A.uns["foo"]["new"]["x"],
-            1,
-            dict(bar=dict(baz=2, old=1), new=dict(x=1, y=2)),
-            id="missing-group",
-        ),
-        # `foo/bar/baz` is no dict on disk, so all of `foo['bar']['baz']` is written
-        pytest.param(
-            A.uns["foo"]["bar"]["baz"]["deep"],
-            3,
-            dict(bar=dict(baz=dict(deep=3, other=4), old=1)),
-            id="not-a-group",
+            A.uns["foo"]["bar"]["added"],
+            dict(bar=dict(baz=2, added=8)),
+            id="new-leaf",
         ),
     ],
 )
 def test_write_use(
-    adata: AnnData, tmp_path: Path, use: ItemAcc, new: int, expected_foo: dict
+    adata: AnnData, written: Path, use: ItemAcc, expected_foo: dict
 ) -> None:
     import anndata as ad
 
-    adata.uns["foo"]["bar"]["old"] = 1
-    path = tmp_path / "a.h5ad"
-    adata.write_h5ad(path)
-
-    # change things in memory, only some of which `use` refers to
-    adata.uns["foo"]["bar"]["old"] = -1
-    adata.uns["foo"]["new"] = dict(y=2)
-    if use.path[-1] == "deep":
-        adata.uns["foo"]["bar"]["baz"] = dict(other=4)
-    adata[use] = new
-    adata.write_h5ad(path, use=use)
-    assert ad.read_h5ad(path).uns["foo"] == expected_foo
+    adata.write_h5ad(written, use=use)
+    assert ad.read_h5ad(written).uns["foo"] == expected_foo
 
 
-def test_write_use_nested_unsupported(adata: AnnData, tmp_path: Path) -> None:
-    path = tmp_path / "a.h5ad"
-    adata.write_h5ad(path)
-    with pytest.raises(ValueError, match=r"nested"):
-        adata.write_h5ad(path, use=A.varm["df"].DF)
+@pytest.mark.parametrize(
+    ("use", "group", "encoding"),
+    [
+        pytest.param(A.uns["foo"]["new"]["x"], "uns/foo/new", "dict", id="uns-dict"),
+        pytest.param(
+            A.uns["foo"]["bar"]["baz"]["x"], "uns/foo/bar/baz", "dict", id="uns-scalar"
+        ),
+        pytest.param(A.uns["new"].AD.obs["x"], "uns/new", "anndata", id="ad"),
+        pytest.param(A.uns["new_df"].DF["c"], "uns/new_df", "dataframe", id="df"),
+    ],
+)
+def test_write_use_missing(
+    adata: AnnData, written: Path, use: AdRef | RefAcc, group: str, encoding: str
+) -> None:
+    """Only fixed attributes like `uns` get created, nothing that’s just in memory."""
+    with pytest.raises(ValueError, match=rf"no '{encoding}' element at '{group}'"):
+        adata.write_h5ad(written, use=use)
+
+
+@pytest.mark.parametrize(
+    ("use", "changed", "unchanged"),
+    [
+        pytest.param(
+            A.uns["nested"].AD.obs["x"],
+            [A.uns["nested"].AD.obs["x"]],
+            [A.uns["nested"].AD.X],
+            id="ad-col",
+        ),
+        pytest.param(
+            A.uns["nested"].AD.X,
+            [A.uns["nested"].AD.X],
+            [A.uns["nested"].AD.obs["x"]],
+            id="ad-x",
+        ),
+        pytest.param(
+            A.varm["df"].DF["a"],
+            [A.varm["df"].DF["a"]],
+            [A.varm["df"].DF["b"]],
+            id="df-col",
+        ),
+        pytest.param(
+            A.varm["df"].DF,
+            [A.varm["df"].DF["a"], A.varm["df"].DF["b"]],
+            [],
+            id="df-whole",
+        ),
+        pytest.param(A.uns["df"].DF["c"], [A.uns["df"].DF["c"]], [], id="uns-df-col"),
+    ],
+)
+def test_write_use_cast(
+    adata: AnnData,
+    written: Path,
+    use: AdRef | RefAcc,
+    changed: list[AdRef],
+    unchanged: list[AdRef],
+) -> None:
+    import anndata as ad
+
+    before = ad.read_h5ad(written)
+    adata.write_h5ad(written, use=use)
+    after = ad.read_h5ad(written)
+    for ref in changed:
+        np.testing.assert_array_equal(after[ref], adata[ref])
+    for ref in unchanged:
+        np.testing.assert_array_equal(after[ref], before[ref])
+
+
+def test_write_use_cast_index(adata: AnnData, written: Path) -> None:
+    with pytest.raises(ValueError, match=r"name of the varm/df index"):
+        adata.write_h5ad(written, use=A.varm["df"].DF["_index"])
+
+
+def test_write_use_cast_names_mismatch(adata: AnnData, written: Path) -> None:
+    adata.uns["nested"].obs_names = ["d0", "d1"]
+    with pytest.raises(ValueError, match=r"obs_names in the store do not match"):
+        adata.write_h5ad(written, use=A.uns["nested"].AD.obs["x"])
