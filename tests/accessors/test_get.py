@@ -19,6 +19,7 @@ from anndata.compat import (
     XDataset,
     XVariable,
 )
+from anndata.experimental.backed import Dataset2D
 from anndata.tests.helpers import (
     DASK_CAN_SPARRAY,
     as_cupy,
@@ -58,8 +59,16 @@ ND_PATHS: list[tuple[AdRef, Callable[[AnnData], InMemoryArray]]] = [
 DF_PATHS: list[tuple[AdRef, Callable[[AnnData], InMemoryArray]]] = [
     (A.obs["type"], lambda ad: ad.obs["type"]),
     (A.obs.index, lambda ad: ad.obs.index),
-    # TODO: copy entries from above that can also hold dataframes?
+    (A.varm["df"][:, 0], lambda ad: _varm_df(ad)["a"]),  # #2722
+    (A.varm["df"][:, -1], lambda ad: _varm_df(ad)["b"]),
 ]
+
+
+def _varm_df(adata: AnnData) -> pd.DataFrame | Dataset2D:
+    df = adata.varm["df"]
+    assert isinstance(df, pd.DataFrame | Dataset2D)
+    return df
+
 
 DASK_TYPES = [
     # TODO: check inner type
@@ -129,10 +138,10 @@ def convert_ndarrays(
 
     for k, v in adata.layers.items():
         adata.layers[k] = conv(v)
-    for k, v in adata.varm.items():
-        adata.varm[k] = conv(v)
-    for k, v in adata.obsm.items():
-        adata.obsm[k] = conv(v)
+    for m in (adata.obsm, adata.varm):
+        for k, v in m.items():
+            if not isinstance(v, pd.DataFrame):
+                m[k] = conv(v)
     for k, v in adata.obsp.items():
         adata.obsp[k] = conv(v)
     for k, v in adata.varp.items():
@@ -144,6 +153,10 @@ def convert_dataframes(
 ) -> None:
     adata.obs = df_conv(adata.obs)
     adata.var = df_conv(adata.var)
+    for m in (adata.obsm, adata.varm):
+        for k, v in m.items():
+            if isinstance(v, pd.DataFrame):
+                m[k] = df_conv(v)
 
 
 def _expected2np(expected: InMemoryArray, ad_ref: AdRef, /) -> np.ndarray:

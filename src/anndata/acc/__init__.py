@@ -511,6 +511,10 @@ class MultiAcc[R: AdRef[int]](RefAcc[R, int, MuData | AnnData]):
             )
             raise IndexError(msg)
         i += n_cols * (i < 0)
+        if isinstance(full, pd.DataFrame):
+            return full.iloc[:, i].array
+        if isinstance(full, Dataset2D):
+            return full[full.columns[i]].variable
         # TODO: remove slicing when dropping scipy <1.14
         return self._maybe_flatten(i, full[:, i : i + 1])
 
