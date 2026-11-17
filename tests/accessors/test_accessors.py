@@ -49,6 +49,7 @@ PATHS: list[tuple[AdRef, AdRefSer]] = [
     (A.layers["a"]["cell-77", :], ["layers", "a", "cell-77", None]),
     (A.obsm["umap"][0], ["obsm", "umap", 0]),
     (A.obsm["umap"][1], ["obsm", "umap", 1]),
+    (A.varm["df"][:, 0], ["varm", "df", 0]),
     (A.varp["cons"][:, :], ["varp", "cons", None, None]),
     (A.varp["cons"]["gene-46", :], ["varp", "cons", "gene-46", None]),
     (A.varp["cons"][:, "gene-46"], ["varp", "cons", None, "gene-46"]),
@@ -312,7 +313,6 @@ def test_in(adata: AnnData, ref_or_acc: AdRef | MapAcc) -> None:
         A.obsm["umap"][:, 3],
         A.obsm["umap"][:, -3],
         A.obsm["b"],
-        A.varm,
         A.obsp,
         A.varp["cons"]["cell-1", :],  # not a var name
         A.varp["cons"][:, "cell-2"],  # not a var name either
