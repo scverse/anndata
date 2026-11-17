@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 import zarr
 import zarr.api.asynchronous as za
+from scipy import sparse
 from zarr.core.sync import _get_loop, sync
 from zarr.storage import LocalStore, WrapperStore
 
@@ -21,6 +22,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine
     from pathlib import Path
     from typing import Any
+
+pytestmark = pytest.mark.zarr_io
 
 
 @pytest.mark.parametrize(
@@ -101,3 +104,14 @@ def test_anndata_ignores_unrelated_children(tmp_path: Path) -> None:
     (path / "junk" / "zarr.json").write_text("not json")
     g = zarr.open_group(path, mode="r", use_consolidated=False)
     assert_equal(read_elem(g), asyncio.run(read_elem_async(g)))
+
+
+def test_sparse_legacy_shape(tmp_path: Path) -> None:
+    """Like the sync reader, accept `h5sparse_shape` in place of `shape`."""
+    g = zarr.open_group(tmp_path / "x.zarr", mode="w")
+    ad.io.write_elem(g, "m", sparse.random(5, 4, density=0.5, format="csr"))
+    attrs = dict(g["m"].attrs)
+    attrs["h5sparse_shape"] = attrs.pop("shape")
+    g["m"].attrs.clear()
+    g["m"].attrs.update(attrs)
+    assert_equal(read_elem(g["m"]), asyncio.run(read_elem_async(g["m"])))

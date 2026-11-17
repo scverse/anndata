@@ -130,6 +130,29 @@ def _memory_format(format: Literal["csr", "csc"]) -> type[SparseMatrixType]:
     return ss.csr_matrix if format == "csr" else ss.csc_matrix
 
 
+def _construct(
+    format: Literal["csr", "csc"],
+    arg1: tuple[DenseType, DenseType, DenseType] | tuple[int, int],
+    /,
+    *,
+    shape: tuple[int, int] | None = None,
+    dtype: np.dtype | None = None,
+) -> SparseMatrixType:
+    """Create an in-memory matrix of `format` from buffers or a shape."""
+    # `_memory_format` and the buffers’ backend both follow `is_gpu()`, which mypy can’t see
+    return _memory_format(format)(arg1, shape=shape, dtype=dtype)  # type: ignore[arg-type]
+
+
+def _shape_from_attrs(attrs: Mapping[str, Any]) -> tuple[int, int]:
+    """Shape of a sparse matrix, read off its group’s attributes."""
+    shape = _read_attr(attrs, "shape", None)
+    if shape is None:
+        # TODO warn
+        shape = _read_attr(attrs, "h5sparse_shape")
+    n_obs, n_vars = cast("Iterable[int]", shape)
+    return int(n_obs), int(n_vars)
+
+
 @dataclass
 class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
     """\
@@ -158,8 +181,7 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
         dtype: np.dtype | None = None,
     ) -> SparseMatrixType:
         """Create an in-memory matrix of :attr:`memory_format` from buffers or a shape."""
-        # `memory_format` and the buffers’ backend both follow `is_gpu()`, which mypy can’t see
-        return self.memory_format(arg1, shape=shape, dtype=dtype)  # type: ignore[arg-type]
+        return _construct(self.format, arg1, shape=shape, dtype=dtype)
 
     @property
     def np_module(self) -> ModuleType:
@@ -447,12 +469,7 @@ class BaseCompressedSparseDataset[GroupT: _GroupStorageType](
     @property
     def shape(self) -> tuple[int, int]:
         """Shape of the matrix read off disk."""
-        shape = _read_attr(self.group.attrs, "shape", None)
-        if shape is None:
-            # TODO warn
-            shape = _read_attr(self.group.attrs, "h5sparse_shape")
-        n_obs, n_vars = cast("Iterable[int]", shape)
-        return int(n_obs), int(n_vars)
+        return _shape_from_attrs(self.group.attrs)
 
     def __repr__(self) -> str:
         name = type(self).__name__.removeprefix("_")

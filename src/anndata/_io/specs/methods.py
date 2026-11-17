@@ -399,20 +399,6 @@ def write_anndata(
         )
 
 
-ANNDATA_ELEMS = (
-    "X",
-    "obs",
-    "var",
-    "obsm",
-    "varm",
-    "obsp",
-    "varp",
-    "layers",
-    "uns",
-    "raw",
-)
-
-
 @_REGISTRY.register_read(h5py.Group, IOSpec("anndata", "0.1.0"))
 @_REGISTRY.register_read(h5py.Group, IOSpec("raw", "0.1.0"))
 @_REGISTRY.register_read(h5py.File, IOSpec("anndata", "0.1.0"))
@@ -421,7 +407,18 @@ ANNDATA_ELEMS = (
 @_REGISTRY.register_read(zarr.Group, IOSpec("raw", "0.1.0"))
 def read_anndata(elem: _GroupStorageType | h5py.File, *, _reader: Reader) -> AnnData:
     d = {}
-    for k in ANNDATA_ELEMS:
+    for k in [
+        "X",
+        "obs",
+        "var",
+        "obsm",
+        "varm",
+        "obsp",
+        "varp",
+        "layers",
+        "uns",
+        "raw",
+    ]:
         if k in elem:
             d[k] = _reader.read_elem(elem[k])
     # Older / non-conforming files may contain higher-dimensional `X` or

@@ -14,11 +14,12 @@ import pandas as pd
 from zarr import AsyncArray, AsyncGroup
 
 from anndata import AnnData
-from anndata._core.sparse_dataset import _memory_format
+from anndata._core.sparse_dataset import _construct, _shape_from_attrs
+from anndata._types import AnnDataElem
 from anndata.compat import _read_attr
+from anndata.utils import get_literal_members
 
 from .methods import (
-    ANNDATA_ELEMS,
     _dataframe_from_parts,
     _dataframe_keys,
     _nullable_string_from_parts,
@@ -96,7 +97,8 @@ async def read_mapping(elem: AsyncGroup, *, _reader: AsyncReader) -> dict[str, A
 @_ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("anndata", "0.1.0"))
 @_ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("raw", "0.1.0"))
 async def read_anndata(elem: AsyncGroup, *, _reader: AsyncReader) -> AnnData:
-    return AnnData(**await _read_members(elem, _reader, ANNDATA_ELEMS))
+    keys: tuple[AnnDataElem, ...] = get_literal_members(AnnDataElem)
+    return AnnData(**await _read_members(elem, _reader, keys))
 
 
 async def _read_sparse(
@@ -111,11 +113,12 @@ async def _read_sparse(
     data, indices, indptr = await asyncio.gather(
         *map(read_dense, ["data", "indices", "indptr"])
     )
-    n_obs, n_vars = _read_attr(elem.attrs, "shape")
-    shape = (int(n_obs), int(n_vars))
-    mtx_type = _memory_format(format)
-    # `_memory_format` and the buffers’ backend both follow `is_gpu()`, which mypy can’t see
-    return mtx_type((data, indices, indptr), shape=shape, dtype=data.dtype)  # type: ignore[arg-type]
+    return _construct(
+        format,
+        (data, indices, indptr),
+        shape=_shape_from_attrs(elem.attrs),
+        dtype=data.dtype,
+    )
 
 
 _ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("csr_matrix", "0.1.0"))(

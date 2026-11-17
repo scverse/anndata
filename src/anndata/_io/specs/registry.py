@@ -539,7 +539,7 @@ async def read_elem_async(
     or `data`, `indices`, and `indptr` of a sparse matrix) run concurrently.
     Gather several calls to also read several elements or stores concurrently.
 
-    A store’s async resources (e.g. an :mod:`s3fs` session) are bound to the event loop
+    A store’s async resources (e.g. an `s3fs` session) are bound to the event loop
     that opened the store, so the read runs on that loop:
 
     - :class:`zarr.Group` and :class:`zarr.Array` are opened through zarr’s own event loop.
@@ -588,7 +588,8 @@ async def read_elem_async(
     if isinstance(elem, zarr.Group):
         coro = reader.read_elem(elem._async_group)
     elif isinstance(elem, zarr.Array):
-        coro = reader.read_elem(elem.async_array)
+        # `async_array` is public only from zarr 3.1.4
+        coro = reader.read_elem(elem._async_array)
     else:
         msg = f"`read_elem_async` reads zarr groups and arrays, not {type(elem)}."
         raise TypeError(msg)
