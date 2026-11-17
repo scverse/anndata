@@ -220,6 +220,16 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData, E = object, V = object]
         That is `data` itself, or the element :attr:`~anndata.acc.RefAcc.scope` refers to in `data`.
         Call this in :meth:`~anndata.acc.RefAcc.get`, :meth:`~anndata.acc.RefAcc.set`, and :meth:`~anndata.acc.RefAcc.isin` so your subclass works when nested.
 
+        Examples
+        --------
+        >>> from anndata import AnnData
+        >>> from anndata.acc import A
+        >>> adata = AnnData(shape=(3, 2), uns={"n": AnnData(shape=(5, 4))})
+        >>> A.obs.container(adata) is adata
+        True
+        >>> A.uns["n"].AD.obs.container(adata) is adata.uns["n"]
+        True
+
         Raises
         ------
         TypeError
