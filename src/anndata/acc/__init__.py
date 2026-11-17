@@ -33,10 +33,13 @@ from ..compat import (
     CupySparseMatrix,
     DaskArray,
     SupportsArrayApiBase,
+    XVariable,
 )
-from ..typing import AlignedArray, _is_in_memory
+from ..typing import AlignedArray, InMemoryArray, _is_in_memory
 
 if TYPE_CHECKING:
+    from typing import TypeAlias
+
     from mudata import MuData
 else:
     MuData = type("MuData", (), {"__module__": "mudata"})
@@ -53,8 +56,6 @@ if TYPE_CHECKING:
         PairwiseArrays,
         PairwiseArraysView,
     )
-    from ..compat import XVariable
-    from ..typing import InMemoryArray
 
 
 type Axes = Collection[Literal["obs", "var"]]
@@ -70,7 +71,7 @@ type Idx2DList = (
 )
 type IdxMultiList = list[int] | pd.Index[int] | tuple[slice, list[int] | pd.Index[int]]
 
-type Array = InMemoryArray | pd.api.extensions.ExtensionArray | XVariable
+Array: TypeAlias = InMemoryArray | pd.api.extensions.ExtensionArray | XVariable  # noqa: UP040  # private, so autodoc must expand it
 
 type AccJson = Sequence[str | int | AccJson | None]
 """JSON form of an accessor, see :meth:`AdAcc.to_json`."""
@@ -184,7 +185,7 @@ class MapAcc[R: RefAcc](abc.ABC):
 
     ref_acc_cls: type[R]
     scope: ScopeAcc | None
-    """Accessor for the element whose `.AD` cast the mapping is in, see :attr:`RefAcc.scope`."""
+    """Accessor for the element whose `.AD` cast the mapping is in, see :attr:`anndata.acc.RefAcc.scope`."""
 
     @abc.abstractmethod
     def __getitem__(self, k: str, /) -> R:
@@ -211,7 +212,7 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData, E = object, V = object]
     parent: RefAcc | None = None
     """Accessor for the element this accessor’s element is nested in, e.g. `A.uns['a']` for `A.uns['a'].AD.obs`.
 
-    If `None`, this accessor refers into the object passed to :meth:`get`/:meth:`set`/:meth:`isin` itself.
+    If `None`, this accessor refers into the object passed to :meth:`~anndata.acc.RefAcc.get`/:meth:`~anndata.acc.RefAcc.set`/:meth:`~anndata.acc.RefAcc.isin` itself.
     """
 
     @property
@@ -226,13 +227,13 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData, E = object, V = object]
     def container(self, data: D, /) -> MuData | AnnData:
         """Get the AnnData object this accessor indexes into.
 
-        That is `data` itself, or the element :attr:`scope` refers to in `data`.
-        Call this in :meth:`get`, :meth:`set`, and :meth:`isin` so your subclass works when nested.
+        That is `data` itself, or the element :attr:`~anndata.acc.RefAcc.scope` refers to in `data`.
+        Call this in :meth:`~anndata.acc.RefAcc.get`, :meth:`~anndata.acc.RefAcc.set`, and :meth:`~anndata.acc.RefAcc.isin` so your subclass works when nested.
 
         Raises
         ------
         TypeError
-            If the element :attr:`scope` refers to isn’t an AnnData object.
+            If the element :attr:`~anndata.acc.RefAcc.scope` refers to isn’t an AnnData object.
         """
         return _resolve(self.scope, data)
 
@@ -276,7 +277,7 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData, E = object, V = object]
     def isin(self, data: D, idx: I | None = None, /) -> bool:
         """Check if the referenced array is in the AnnData object.
 
-        Only called if :attr:`parent` is `None` or in `data`, so :meth:`container` won’t fail because of a missing parent.
+        Only called if :attr:`~anndata.acc.RefAcc.parent` is `None` or in `data`, so :meth:`~anndata.acc.RefAcc.container` won’t fail because of a missing parent.
         To check an accessor including its parents, use `acc in data`.
         """
 
@@ -298,7 +299,7 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData, E = object, V = object]
     def set(self, data: D, idx: I | NO_IDX, value: object, /) -> None:
         """Set the indexed array or element in the AnnData object at `idx`.
 
-        When `idx` is :class:`~anndata.acc.NO_IDX`, replace the full element one level up (see :meth:`get`),
+        When `idx` is :class:`~anndata.acc.NO_IDX`, replace the full element one level up (see :meth:`~anndata.acc.RefAcc.get`),
         otherwise assign into the existing element in-place.
         """
         msg = f"{type(self).__name__} does not support setting values."
@@ -480,9 +481,9 @@ class DFAcc[R: AdRef](RefAcc[R, str | None, MuData | AnnData, DataFrameLike, Arr
     def frame(self, data: MuData | AnnData, /) -> DataFrameLike:
         """Get the data frame this accessor refers to.
 
-        :meth:`get`, :meth:`set`, and :meth:`isin` use this,
+        :meth:`~anndata.acc.RefAcc.get`, :meth:`~anndata.acc.RefAcc.set`, and :meth:`~anndata.acc.RefAcc.isin` use this,
         so subclasses only need to override this to refer to another frame
-        (e.g. :class:`MetaAcc` returns `.obs`/`.var` of :meth:`~RefAcc.container`).
+        (e.g. :class:`MetaAcc` returns `.obs`/`.var` of :meth:`~anndata.acc.RefAcc.container`).
 
         Raises
         ------

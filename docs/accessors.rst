@@ -149,13 +149,7 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
         which is set when it refers into an element nested in the AnnData object,
         e.g. `A.uns["a"].AD.obs.parent == A.uns["a"]`.
         Its :attr:`~RefAcc.scope` is the element whose `.AD` cast it’s in.
-        Such elements are :class:`ScopeAcc`\ s (like :class:`ItemAcc`):
-
-        ..  autosummary::
-            :toctree: generated/
-            :template: class-minimal
-
-            ScopeAcc
+        Such elements are :class:`ScopeAcc`\ s (like :class:`ItemAcc`).
 
     mapping accessor
         :class:`!MapAcc` subclasses can be indexed with a string to create :term:`reference accessor`\ s,
@@ -185,6 +179,7 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
         GraphAcc
         DFAcc
         ItemAcc
+        ScopeAcc
 
     ..  autosummary::
         :toctree: generated/
@@ -202,6 +197,7 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
     generated/anndata.acc.GraphAcc
     generated/anndata.acc.DFAcc
     generated/anndata.acc.ItemAcc
+    generated/anndata.acc.ScopeAcc
     generated/anndata.acc.Idx2D
     generated/anndata.acc.AccJson
     generated/anndata.acc.NO_IDX
