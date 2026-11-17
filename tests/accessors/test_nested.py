@@ -120,6 +120,18 @@ def test_scope(acc: RefAcc, scope: RefAcc | None) -> None:
     assert acc.scope == scope
 
 
+@pytest.mark.parametrize(
+    ("ref", "match"),
+    [
+        pytest.param(A.uns["foo"].AD.obs["x"], r"dict, not an AnnData", id="ad"),
+        pytest.param(A.uns["nested"].DF["x"], r"AnnData, not a data frame", id="df"),
+    ],
+)
+def test_cast_invalid(adata: AnnData, ref: AdRef, match: str) -> None:
+    with pytest.raises(TypeError, match=match):
+        adata[ref]
+
+
 def test_get(adata: AnnData) -> None:
     assert adata[A.uns["foo"]["bar"][1]] == 2
     assert adata[A.uns["nested"]] is adata.uns["nested"]

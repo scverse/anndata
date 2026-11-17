@@ -223,13 +223,18 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData, E = object, V = object]
         # only `.DF` casts have a parent that isn’t a scope, and they override this
         return cast("ScopeAcc | None", self.parent)
 
-    def container(self, data: D, /) -> Any:  # noqa: ANN401
-        """Get the object this accessor indexes into.
+    def container(self, data: D, /) -> MuData | AnnData:
+        """Get the AnnData object this accessor indexes into.
 
-        That is `data` itself, or the element :attr:`parent` refers to in `data`.
+        That is `data` itself, or the element :attr:`scope` refers to in `data`.
         Call this in :meth:`get`, :meth:`set`, and :meth:`isin` so your subclass works when nested.
+
+        Raises
+        ------
+        TypeError
+            If the element :attr:`scope` refers to isn’t an AnnData object.
         """
-        return data if self.parent is None else self.parent.get(data)
+        return _resolve(self.scope, data)
 
     def process_idx(self, idx: Any, /) -> I:  # noqa: ANN401  # subclasses may override `idx` however they want
         self.dims(idx)
@@ -375,6 +380,12 @@ class LayerAcc[R: AdRef[Idx2D, AnnData]](
     def idx_repr(self, idx: Idx2D) -> str:
         return f"[{idx[0]!r}, {idx[1]!r}]"
 
+    def container(self, data: AnnData, /) -> AnnData:
+        if not isinstance(inner := super().container(data), AnnData):
+            msg = f"{self!r} can only refer into AnnData objects, not {type(inner).__name__}."
+            raise TypeError(msg)
+        return inner
+
     def isin(self, adata: AnnData, idx: Idx2D | None = None) -> bool:
         adata = self.container(adata)
         if adata.X is None if self.k is None else self.k not in adata.layers:
@@ -472,8 +483,17 @@ class DFAcc[R: AdRef](RefAcc[R, str | None, MuData | AnnData, DataFrameLike, Arr
         :meth:`get`, :meth:`set`, and :meth:`isin` use this,
         so subclasses only need to override this to refer to another frame
         (e.g. :class:`MetaAcc` returns `.obs`/`.var` of :meth:`~RefAcc.container`).
+
+        Raises
+        ------
+        TypeError
+            If the element :attr:`~RefAcc.parent` refers to isn’t a data frame.
         """
-        return self.container(data)
+        frame = None if self.parent is None else self.parent.get(data)
+        if not isinstance(frame, pd.DataFrame | Dataset2D):
+            msg = f"{self.parent!r} is {type(frame).__name__}, not a data frame, so `.DF` can’t index into it."
+            raise TypeError(msg)
+        return frame
 
     def process_idx(self, k: object, /) -> str | None:
         if k is not None and not isinstance(k, str):
@@ -1351,8 +1371,24 @@ def _root(scope: ScopeAcc | None, /) -> str:
     return "A" if scope is None else repr(scope.AD)
 
 
-def _resolve(scope: ScopeAcc | None, data: MuData | AnnData, /) -> Any:  # noqa: ANN401
-    return data if scope is None else scope.get(data)
+def _resolve(scope: ScopeAcc | None, data: MuData | AnnData, /) -> MuData | AnnData:
+    """Get the AnnData object `scope` refers to in `data`, validating the `.AD` cast."""
+    if scope is None:
+        return data
+    if not _is_anndata_like(elem := scope.get(data)):
+        msg = f"{scope!r} is {type(elem).__name__}, not an AnnData object, so `.AD` can’t index into it."
+        raise TypeError(msg)
+    return elem
+
+
+def _is_anndata_like(x: object, /) -> TypeGuard[MuData | AnnData]:
+    if isinstance(x, AnnData):
+        return True
+    # `MuData` is a placeholder at runtime, since importing mudata here would be circular.
+    # A MuData object can only exist if mudata was imported, so look it up there.
+    return (mudata := sys.modules.get("mudata")) is not None and isinstance(
+        x, mudata.MuData
+    )
 
 
 def _positional_idx(
