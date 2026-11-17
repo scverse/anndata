@@ -95,9 +95,9 @@ def _idx_2d_ser(idx: Idx2D) -> tuple[str | None, str | None]:
 
 def _unscoped[A: RefAcc](acc: A) -> A:
     """Get `acc` as if it were relative to the `.AD` cast it’s in."""
-    # a parent that isn’t the scope is a frame accessor in the same scope (`.DF` cast)
-    parent = None if acc.parent is acc.scope else _unscoped(acc.parent)  # type: ignore[type-var]
-    return replace(acc, parent=parent)
+    if isinstance(acc, DFAcc) and acc.frame_acc is not None:
+        return replace(acc, scope=None, frame_acc=_unscoped(acc.frame_acc))
+    return replace(acc, scope=None)
 
 
 def to_json(ref: AdRef | RefAcc) -> list[str | int | AccJson | None]:  # noqa: PLR0911
@@ -117,7 +117,7 @@ def to_json(ref: AdRef | RefAcc) -> list[str | int | AccJson | None]:  # noqa: P
             return [*to_json(acc), *_idx_2d_ser(idx)]
         case AdRef(MetaAcc(dim), idx):
             return [dim, idx]
-        case AdRef(DFAcc(parent=MultiAcc() | ItemAcc() as frame), col):
+        case AdRef(DFAcc(frame_acc=MultiAcc() | ItemAcc() as frame), col):
             return [*to_json(frame), ["DF", col]]
         case AdRef(MultiAcc() as acc, i):
             return [*to_json(acc), i]
@@ -127,7 +127,7 @@ def to_json(ref: AdRef | RefAcc) -> list[str | int | AccJson | None]:  # noqa: P
             return [f"{dim}m", k]
         case GraphAcc(dim, k):
             return [f"{dim}p", k]
-        case DFAcc(parent=MultiAcc() | ItemAcc() as frame):
+        case DFAcc(frame_acc=MultiAcc() | ItemAcc() as frame):
             return [*to_json(frame), ["DF"]]
         case ItemAcc(path=path):
             return ["uns", list(path)]

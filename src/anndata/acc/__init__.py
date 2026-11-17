@@ -12,7 +12,6 @@ from typing import (
     ClassVar,
     Never,
     Protocol,
-    cast,
     overload,
     runtime_checkable,
 )
@@ -209,20 +208,11 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData, E = object, V = object]
 
     _: KW_ONLY
     ref_class: type[R]
-    parent: RefAcc | None = None
-    """Accessor for the element this accessor’s element is nested in, e.g. `A.uns['a']` for `A.uns['a'].AD.obs`.
+    scope: ScopeAcc | None = None
+    """Accessor for the element whose `.AD` cast this accessor is in, e.g. `A.uns['a']` for `A.uns['a'].AD.obsm['x'].DF`.
 
     If `None`, this accessor refers into the object passed to :meth:`~anndata.acc.RefAcc.get`/:meth:`~anndata.acc.RefAcc.set`/:meth:`~anndata.acc.RefAcc.isin` itself.
     """
-
-    @property
-    def scope(self) -> ScopeAcc | None:
-        """Accessor for the element whose `.AD` cast this accessor is in, e.g. `A.uns['a']` for `A.uns['a'].AD.obsm['x'].DF`.
-
-        `None` if this accessor isn’t nested in an `.AD` cast.
-        """
-        # only `.DF` casts have a parent that isn’t a scope, and they override this
-        return cast("ScopeAcc | None", self.parent)
 
     def container(self, data: D, /) -> MuData | AnnData:
         """Get the AnnData object this accessor indexes into.
@@ -277,7 +267,7 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData, E = object, V = object]
     def isin(self, data: D, idx: I | None = None, /) -> bool:
         """Check if the referenced array is in the AnnData object.
 
-        Only called if :attr:`~anndata.acc.RefAcc.parent` is `None`, or in `data` with the type this accessor casts it to (`.AD`/`.DF`), so :meth:`~anndata.acc.RefAcc.container` won’t fail.
+        Only called if :attr:`~anndata.acc.RefAcc.scope` (or :attr:`~anndata.acc.DFAcc.frame_acc`) is `None`, or in `data` with the type this accessor casts it to (`.AD`/`.DF`), so :meth:`~anndata.acc.RefAcc.container` won’t fail.
         To check an accessor including its parents, use `acc in data`.
         """
 
@@ -440,7 +430,7 @@ class LayerMapAcc[R: AdRef](MapAcc[LayerAcc]):
         if not isinstance(k, str | None):
             msg = f"Unsupported layer {k!r}"
             raise TypeError(msg)
-        return self.ref_acc_cls(k, ref_class=self.ref_class, parent=self.scope)
+        return self.ref_acc_cls(k, ref_class=self.ref_class, scope=self.scope)
 
     def __repr__(self) -> str:
         return f"{_root(self.scope)}.layers"
@@ -453,8 +443,7 @@ class LayerMapAcc[R: AdRef](MapAcc[LayerAcc]):
 class DFAcc[R: AdRef](RefAcc[R, str | None, MuData | AnnData, DataFrameLike, Array]):
     r"""Reference accessor for columns of a data frame in an AnnData object.
 
-    Created by casting another accessor to a data frame (`.DF`),
-    in which case its :attr:`~RefAcc.parent` is the accessor for the data frame itself.
+    Created by casting another accessor to a data frame (`.DF`), which becomes its :attr:`frame_acc`.
     :class:`MetaAcc` (`A.obs`/`A.var`) is a subclass.
 
     Examples
@@ -468,15 +457,19 @@ class DFAcc[R: AdRef](RefAcc[R, str | None, MuData | AnnData, DataFrameLike, Arr
 
     """
 
+    _: KW_ONLY
+    frame_acc: RefAcc | None = None
+    """Accessor for the data frame this `.DF` cast refers into, e.g. `A.obsm['df']` for `A.obsm['df'].DF`."""
+
+    def __post_init__(self) -> None:
+        if self.frame_acc is not None and self.scope != self.frame_acc.scope:
+            msg = f"A `.DF` cast must be in the same scope as {self.frame_acc!r}."
+            raise ValueError(msg)
+
     @property
     def index(self) -> R:
         """Index :class:`AdRef`, e.g. `A.obs.index` or `A.uns['df'].DF.index`."""
         return self[None]
-
-    @property
-    def scope(self) -> ScopeAcc | None:
-        # a `.DF` cast is in the same scope as the frame it casts
-        return None if self.parent is None else self.parent.scope
 
     def frame(self, data: MuData | AnnData, /) -> DataFrameLike:
         """Get the data frame this accessor refers to.
@@ -488,11 +481,11 @@ class DFAcc[R: AdRef](RefAcc[R, str | None, MuData | AnnData, DataFrameLike, Arr
         Raises
         ------
         TypeError
-            If the element :attr:`~RefAcc.parent` refers to isn’t a data frame.
+            If the element :attr:`frame_acc` refers to isn’t a data frame.
         """
-        frame = None if self.parent is None else self.parent.get(data)
+        frame = None if self.frame_acc is None else self.frame_acc.get(data)
         if not _is_frame(frame):
-            msg = f"{self.parent!r} is {type(frame).__name__}, not a data frame, so `.DF` can’t index into it."
+            msg = f"{self.frame_acc!r} is {type(frame).__name__}, not a data frame, so `.DF` can’t index into it."
             raise TypeError(msg)
         return frame
 
@@ -518,10 +511,10 @@ class DFAcc[R: AdRef](RefAcc[R, str | None, MuData | AnnData, DataFrameLike, Arr
 
     def dims(self, k: str | None, /) -> Axes:
         # only frames in `obsm`/`varm` are aligned to a dimension
-        return {self.parent.dim} if isinstance(self.parent, MultiAcc) else set()
+        return {self.frame_acc.dim} if isinstance(self.frame_acc, MultiAcc) else set()
 
     def __repr__(self) -> str:
-        return f"{self.parent!r}.DF"
+        return f"{self.frame_acc!r}.DF"
 
     def idx_repr(self, k: str | None) -> str:
         return ".index" if k is None else f"[{k!r}]"
@@ -558,10 +551,10 @@ class DFAcc[R: AdRef](RefAcc[R, str | None, MuData | AnnData, DataFrameLike, Arr
         self, data: MuData | AnnData, k: str | NO_IDX | None, value: object, /
     ) -> None:
         if k is NO_IDX:
-            if self.parent is None:
-                msg = f"{self!r} has no parent to set the data frame in."
+            if self.frame_acc is None:
+                msg = f"{self!r} has no `frame_acc` to set the data frame in."
                 raise TypeError(msg)
-            self.parent.set(data, NO_IDX, value)
+            self.frame_acc.set(data, NO_IDX, value)
             return
         frame: Any = self.frame(data)  # value is validated by the frame itself
         if k is None:
@@ -590,8 +583,6 @@ class MetaAcc[R: AdRef[str | None, MuData | AnnData]](DFAcc[R]):
 
     dim: Literal["obs", "var"]
     """Axis this accessor refers to, e.g. `A.obs.dim == 'obs'`."""
-
-    scope = RefAcc.scope  # not a `.DF` cast
 
     def frame(self, data: MuData | AnnData, /) -> DataFrameLike:
         return getattr(self.container(data), self.dim)
@@ -666,7 +657,7 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](
     @property
     def DF(self) -> DFAcc[R]:
         """Treat the array as a data frame, to refer to its columns by name, e.g. `A.obsm['x'].DF['c']`."""
-        return DFAcc(ref_class=self.ref_class, parent=self)
+        return DFAcc(ref_class=self.ref_class, scope=self.scope, frame_acc=self)
 
     def __repr__(self) -> str:
         return f"{_root(self.scope)}.{self.dim}m[{self.k!r}]"
@@ -736,9 +727,7 @@ class MultiMapAcc[R: AdRef](MapAcc[MultiAcc]):
         if not isinstance(k, str):
             msg = f"Unsupported {self.dim}m key {k!r}"
             raise TypeError(msg)
-        return self.ref_acc_cls(
-            self.dim, k, ref_class=self.ref_class, parent=self.scope
-        )
+        return self.ref_acc_cls(self.dim, k, ref_class=self.ref_class, scope=self.scope)
 
     def __repr__(self) -> str:
         return f"{_root(self.scope)}.{self.dim}m"
@@ -868,9 +857,7 @@ class GraphMapAcc[R: AdRef](MapAcc[GraphAcc]):
         if not isinstance(k, str):
             msg = f"Unsupported {self.dim}p key {k!r}"
             raise TypeError(msg)
-        return self.ref_acc_cls(
-            self.dim, k, ref_class=self.ref_class, parent=self.scope
-        )
+        return self.ref_acc_cls(self.dim, k, ref_class=self.ref_class, scope=self.scope)
 
     def __repr__(self) -> str:
         return f"{_root(self.scope)}.{self.dim}p"
@@ -945,7 +932,7 @@ class ItemAcc[R: AdRef](ScopeAcc[R, MuData | AnnData]):
     @property
     def DF(self) -> DFAcc[R]:
         """Treat the item as a data frame, e.g. `A.uns['a'].DF['col']`."""
-        return DFAcc(ref_class=self.ref_class, parent=self)
+        return DFAcc(ref_class=self.ref_class, scope=self.scope, frame_acc=self)
 
     def dims(self, idx: Never, /) -> Axes:
         msg = f"{self!r} doesn’t contain arrays aligned to a dimension. Cast it, e.g. with `.AD` or `.DF`."
@@ -1005,7 +992,7 @@ class UnsMapAcc[R: AdRef](MapAcc[ItemAcc]):
         if not isinstance(k, str):
             msg = f"Unsupported uns key {k!r}"
             raise TypeError(msg)
-        return self.ref_acc_cls((k,), ref_class=self.ref_class, parent=self.scope)
+        return self.ref_acc_cls((k,), ref_class=self.ref_class, scope=self.scope)
 
     def __repr__(self) -> str:
         return f"{_root(self.scope)}.uns"
@@ -1131,14 +1118,14 @@ class AdAcc[R: AdRef]:
 
     def __post_init__(self) -> None:
         r, s = self.ref_class, self.scope
-        x = self.layer_cls(None, ref_class=r, parent=s)
+        x = self.layer_cls(None, ref_class=r, scope=s)
         layers = LayerMapAcc(ref_class=r, ref_acc_cls=self.layer_cls, scope=s)
         uns = UnsMapAcc(ref_class=r, ref_acc_cls=self.item_cls, scope=s)
         object.__setattr__(self, "X", x)
         object.__setattr__(self, "layers", layers)
         object.__setattr__(self, "uns", uns)
         for dim in ("obs", "var"):
-            meta = self.meta_cls(dim, ref_class=r, parent=s)
+            meta = self.meta_cls(dim, ref_class=r, scope=s)
             multi = MultiMapAcc(dim, ref_class=r, ref_acc_cls=self.multi_cls, scope=s)
             graphs = GraphMapAcc(dim, ref_class=r, ref_acc_cls=self.graph_cls, scope=s)
             object.__setattr__(self, dim, meta)
@@ -1383,10 +1370,10 @@ def _resolve(scope: ScopeAcc | None, data: MuData | AnnData, /) -> MuData | AnnD
     return elem
 
 
-def _parent_in(acc: RefAcc | MapAcc, data: MuData | AnnData, /) -> bool:
+def _cast_in(acc: RefAcc | MapAcc, data: MuData | AnnData, /) -> bool:
     """Check if the element `acc` is cast from is in `data` and has the right type."""
     match acc:
-        case DFAcc(parent=RefAcc() as frame) if frame is not acc.scope:  # `.DF`
+        case DFAcc(frame_acc=RefAcc() as frame):  # `.DF`
             return frame in data and _is_frame(frame.get(data))
         case _ if (scope := acc.scope) is not None:  # `.AD`
             return scope in data and _is_anndata_like(scope.get(data))

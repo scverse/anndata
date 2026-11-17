@@ -277,7 +277,7 @@ def _resolve_use(  # noqa: PLR0911, PLR0912
     )
 
     match use:
-        case DFAcc(parent=RefAcc() as frame) if frame is not use.scope:  # `.DF`
+        case DFAcc(frame_acc=RefAcc() as frame):  # `.DF`
             return _resolve_use(f, adata, frame)
         case ItemAcc(path=path):
             for i in range(1, len(path)):  # `uns` itself is a fixed attribute
@@ -287,7 +287,7 @@ def _resolve_use(  # noqa: PLR0911, PLR0912
             return None, "uns", dict(use.get(adata))
         case AdRef(acc=MetaAcc(dim=dim) as acc, idx=str() as col):
             return _frame_col(f, adata, acc, dim, col)
-        case AdRef(acc=DFAcc(parent=RefAcc() as frame) as acc, idx=str() as col):
+        case AdRef(acc=DFAcc(frame_acc=RefAcc() as frame) as acc, idx=str() as col):
             # `.DF`: write into the frame where it is in the store
             frame_parent, frame_key, _ = _resolve_use(f, adata, frame)
             group = "/".join(filter(None, [frame_parent, frame_key]))

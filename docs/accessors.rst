@@ -137,7 +137,7 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
                 - :attr:`~AdAcc.obsp`\ `[key]`, :attr:`~AdAcc.varp`\ `[key]`
                 - `A.obsp["e"][:, "c1"]`, `A.vbsp["e"]["g0", :]`
             -   - :class:`DFAcc` (base class of :class:`MetaAcc`)
-                - :attr:`~RefAcc.parent`
+                - :attr:`~DFAcc.frame_acc`
                 - :attr:`MultiAcc.DF`, :attr:`ItemAcc.DF`
                 - `A.obsm["d"].DF["c"]`, `A.uns["df"].DF["c"]`
             -   - :class:`ItemAcc`
@@ -145,10 +145,7 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
                 - :attr:`~AdAcc.uns`\ `[key]`
                 - none, but can be cast: `A.uns["a"].AD.obs["c"]`, `A.uns["a"].DF["c"]`
 
-        Every :term:`reference accessor` has a :attr:`~RefAcc.parent`,
-        which is set when it refers into an element nested in the AnnData object,
-        e.g. `A.uns["a"].AD.obs.parent == A.uns["a"]`.
-        Its :attr:`~RefAcc.scope` is the element whose `.AD` cast it’s in.
+        Every :term:`reference accessor` has a :attr:`~RefAcc.scope`: the element whose `.AD` cast it’s in, e.g. `A.uns["a"].AD.obs.scope == A.uns["a"]`, or `None` at the top level.
         Such elements are :class:`ScopeAcc`\ s (like :class:`ItemAcc`).
 
     mapping accessor
