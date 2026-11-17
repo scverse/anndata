@@ -108,8 +108,11 @@ def _unscoped[A: RefAcc](acc: A) -> A:
 def to_json(ref: AdRef | RefAcc) -> list[str | int | AccJson | None]:  # noqa: PLR0911
     acc = ref.acc if isinstance(ref, AdRef) else ref
     if (scope := acc.scope) is not None:
-        inner = _unscoped(acc)
-        local = to_json(type(ref)(inner, ref.idx) if isinstance(ref, AdRef) else inner)
+        local = to_json(
+            type(ref)(_unscoped(ref.acc), ref.idx)
+            if isinstance(ref, AdRef)
+            else _unscoped(ref)
+        )
         while scope is not None:  # wrap from the innermost `.AD` outwards
             local = [*to_json(_unscoped(scope)), ["AD", local]]
             scope = scope.scope

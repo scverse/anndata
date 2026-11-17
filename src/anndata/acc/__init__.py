@@ -34,7 +34,7 @@ from ..compat import (
     DaskArray,
     SupportsArrayApiBase,
 )
-from ..typing import _is_in_memory
+from ..typing import AlignedArray, _is_in_memory
 
 if TYPE_CHECKING:
     from mudata import MuData
@@ -54,7 +54,7 @@ if TYPE_CHECKING:
         PairwiseArraysView,
     )
     from ..compat import XVariable
-    from ..typing import AlignedArray, InMemoryArray
+    from ..typing import InMemoryArray
 
 
 type Axes = Collection[Literal["obs", "var"]]
@@ -126,7 +126,7 @@ class AdRef[I: Hashable, D: MuData | AnnData]:
 
     """
 
-    acc: RefAcc[Self, I, D]
+    acc: RefAcc[Self, I, D, object, Array]
     r"""The accessor containing information about this array.
 
     See :term:`reference accessor`\ s for all possible types this can assume.
@@ -140,7 +140,7 @@ class AdRef[I: Hashable, D: MuData | AnnData]:
 
     __match_args__: ClassVar = ("acc", "idx")
 
-    def __init__(self, acc: RefAcc[Self, I, D], idx: I) -> None:
+    def __init__(self, acc: RefAcc[Self, I, D, object, Array], idx: I) -> None:
         self.acc = acc
         self.idx = idx
 
@@ -198,7 +198,9 @@ class MapAcc[R: RefAcc](abc.ABC):
 
 
 @dataclass(frozen=True)
-class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
+class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData, E = object, V = object](
+    abc.ABC
+):
     r"""Abstract base class for reference accessors.
 
     See :term:`reference accessor`\ s for all existing subclasses.
@@ -233,7 +235,11 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
         self.dims(idx)
         return idx
 
-    def __getitem__(self, idx: Any, /) -> R:  # noqa: ANN401  # subclasses may override `idx` however they want
+    def __getitem__(  # only accessors with array values (`V`) create references
+        self: RefAcc[R, I, D, object, Array],
+        idx: Any,  # noqa: ANN401  # subclasses may override `idx` however they want
+        /,
+    ) -> R:
         """Get a reference to an array.
 
         Parameters
@@ -270,11 +276,11 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
         """
 
     @overload
-    def get(self, data: D, /) -> AlignedArray: ...
+    def get(self, data: D, /) -> E: ...
     @overload
-    def get(self, data: D, idx: I, /) -> Array: ...
+    def get(self, data: D, idx: I, /) -> V: ...
     @abc.abstractmethod
-    def get(self, data: D, idx: I | NO_IDX = NO_IDX, /) -> AlignedArray | Array:
+    def get(self, data: D, idx: I | NO_IDX = NO_IDX, /) -> E | V:
         """Get the indexed array or element from the AnnData object at `idx`.
 
         When `idx` is omitted (i.e., `idx` is :class:`~anndata.acc.NO_IDX`), return the full array one level up instead.
@@ -313,7 +319,9 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
 
 
 @dataclass(frozen=True)
-class LayerAcc[R: AdRef[Idx2D, AnnData]](RefAcc[R, Idx2D, AnnData]):
+class LayerAcc[R: AdRef[Idx2D, AnnData]](
+    RefAcc[R, Idx2D, AnnData, AlignedArray, Array]
+):
     r"""Reference accessor for arrays in layers (`A.`\ :attr:`~AdAcc.layers`).
 
     Examples
@@ -430,7 +438,7 @@ class LayerMapAcc[R: AdRef](MapAcc[LayerAcc]):
 
 
 @dataclass(frozen=True)
-class DFAcc[R: AdRef](RefAcc[R, str | None, MuData | AnnData]):
+class DFAcc[R: AdRef](RefAcc[R, str | None, MuData | AnnData, DataFrameLike, Array]):
     r"""Reference accessor for columns of a data frame in an AnnData object.
 
     Created by casting another accessor to a data frame (`.DF`),
@@ -586,7 +594,9 @@ class MetaAcc[R: AdRef[str | None, MuData | AnnData]](DFAcc[R]):
 
 
 @dataclass(frozen=True)
-class MultiAcc[R: AdRef[int, MuData | AnnData]](RefAcc[R, int, MuData | AnnData]):
+class MultiAcc[R: AdRef[int, MuData | AnnData]](
+    RefAcc[R, int, MuData | AnnData, AlignedArray, Array]
+):
     r"""Reference accessor for arrays from multi-dimensional containers (`A.`\ :attr:`~AdAcc.obsm`/`A.`\ :attr:`~AdAcc.varm`).
 
     Examples
@@ -717,7 +727,9 @@ class MultiMapAcc[R: AdRef](MapAcc[MultiAcc]):
 
 
 @dataclass(frozen=True)
-class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](RefAcc[R, Idx2D, MuData | AnnData]):
+class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](
+    RefAcc[R, Idx2D, MuData | AnnData, AlignedArray, Array]
+):
     r"""Reference accessor for arrays from graph containers (`A.`\ :attr:`~AdAcc.obsp`/`A.`\ :attr:`~AdAcc.varp`).
 
     Examples
@@ -847,7 +859,7 @@ class GraphMapAcc[R: AdRef](MapAcc[GraphAcc]):
 
 
 @dataclass(frozen=True)
-class ScopeAcc[R: AdRef, D: MuData | AnnData](RefAcc[R, Never, D]):
+class ScopeAcc[R: AdRef, D: MuData | AnnData, E = object](RefAcc[R, Never, D, E, E]):
     r"""Abstract base class for accessors to elements that contain an AnnData-like object.
 
     Accessors for arrays in that object (created via :attr:`AD`)
@@ -861,6 +873,10 @@ class ScopeAcc[R: AdRef, D: MuData | AnnData](RefAcc[R, Never, D]):
 
         Its :func:`repr` is used as the prefix of nested accessors’ :func:`repr`\\ s.
         """
+
+    @abc.abstractmethod
+    def get(self, data: D, idx: NO_IDX = NO_IDX, /) -> E:
+        """Get the referenced element."""
 
 
 @dataclass(frozen=True)
@@ -927,7 +943,7 @@ class ItemAcc[R: AdRef](ScopeAcc[R, MuData | AnnData]):
             return False
         return True
 
-    def get(self, data: MuData | AnnData, idx: NO_IDX = NO_IDX, /) -> Any:  # noqa: ANN401
+    def get(self, data: MuData | AnnData, idx: NO_IDX = NO_IDX, /) -> object:
         if idx is not NO_IDX:
             msg = f"{self!r} can only be used to get the whole item."
             raise TypeError(msg)
