@@ -176,7 +176,30 @@ def write_use(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
     compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
 ) -> None:
-    """Write only the parts of `adata` referenced by `use` into the existing anndata group `f`."""
+    """Write only the parts of `adata` referenced by `use` into the existing anndata group `f`.
+
+    Parameters
+    ----------
+    f
+        An on-disk storage.
+    adata
+        The :class:`~anndata.AnnData` object.
+    use
+        Accessors for the parts that should be written to disk.
+    validate_store_attributes
+        Attributes that a valid on-disk store must have. These will be verified prior to writing and writing
+        will abort if the on-disk attributes do not match the ones passed here. This is mostly useful for
+        libraries implementing custom on-disk formats on top of anndata, end users should use the default.
+    A
+        A :class:`~anndata.acc.AdAcc` instance to use for accessing additional attributes of `adata` during
+        validation. This is mosstly useful for libraries building on top of anndata, end users should use
+        the default.
+    dataset_kwargs
+        Keyword arguments to pass to the stores dataset creation function.
+        E.g. for zarr this would be `chunks`, `compressor`.
+    compat
+        Which anndata version’s write behavior to target, see :class:`~anndata.WriteCompat`.
+    """
     from .specs import read_elem, write_elem
 
     for attrname, attrval_expected in validate_store_attributes.items():
