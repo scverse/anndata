@@ -266,7 +266,16 @@ def test_io_spec_compressed_scalars(
 
 @pytest.mark.parametrize(
     "ref",
-    [A.obsm["pca"][0], A.obsm["pca"], A.X[:, "gene-5"], A.obs["ct"], A.obs.index],
+    [
+        A.obsm["pca"][0],
+        A.obsm["pca"],
+        A.X[:, "gene-5"],
+        A.obs["ct"],
+        A.obs.index,
+        A.uns["a"][0],
+        A.obsm["df"].DF["c"],
+        A.uns["n"].AD.uns["m"].AD.obs["x"],
+    ],
     ids=str,
 )
 def test_accessor_roundtrip(store: _GroupStorageType, ref: object) -> None:

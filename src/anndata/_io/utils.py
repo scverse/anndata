@@ -199,7 +199,7 @@ def write_use(
         )
 
 
-def _resolve_use(  # noqa: PLR0911
+def _resolve_use(  # noqa: PLR0911, PLR0912
     f: _GroupStorageType, adata: AnnData, use: AdRef | RefAcc | MapAcc
 ) -> tuple[str | None, str, RWAble]:
     """Get the parent group, key, and element to write for `use`."""
@@ -207,14 +207,32 @@ def _resolve_use(  # noqa: PLR0911
         AdRef,
         GraphAcc,
         GraphMapAcc,
+        ItemAcc,
         LayerAcc,
         LayerMapAcc,
+        MapAcc,
         MetaAcc,
         MultiAcc,
         MultiMapAcc,
+        RefAcc,
+        UnsMapAcc,
     )
 
     match use:
+        case (
+            AdRef(acc=RefAcc(parent=RefAcc()))
+            | RefAcc(parent=RefAcc())
+            | MapAcc(scope=RefAcc())
+        ):
+            msg = f"Cannot write {use}: writing nested elements is not supported."
+            raise ValueError(msg)
+        case ItemAcc(path=(str() as k,)):
+            return "uns", k, use.get(adata)
+        case ItemAcc():
+            msg = f"Cannot write {use}: only top-level `uns` items can be written."
+            raise ValueError(msg)
+        case UnsMapAcc():
+            return None, "uns", dict(use.get(adata))
         case AdRef(acc=MetaAcc(dim=dim) as acc, idx=str() as col):
             if col in {"_index", cast("_GroupStorageType", f[dim]).attrs["_index"]}:
                 msg = f"Cannot write column {col!r}: it is the name of the {dim} index."

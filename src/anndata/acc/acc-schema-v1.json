@@ -49,6 +49,16 @@
                     ]
                 },
                 {
+                    "title": "Column of a data frame in a multi-dimensional annotation (obsm/varm …DF)",
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "prefixItems": [
+                        { "enum": ["obsm", "varm"] },
+                        { "type": "string" },
+                        { "$ref": "#/$defs/df-cast" }
+                    ]
+                },
+                {
                     "title": "Graph vector (obsp/varp)",
                     "minItems": 4,
                     "maxItems": 4,
@@ -70,17 +80,45 @@
                             ]
                         }
                     ]
+                },
+                {
+                    "title": "Column of a data frame in unstructured annotation (uns …DF)",
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "prefixItems": [
+                        { "const": "uns" },
+                        { "$ref": "#/$defs/uns-path" },
+                        { "$ref": "#/$defs/df-cast" }
+                    ]
+                },
+                {
+                    "title": "Reference into an AnnData object in unstructured annotation (uns …AD)",
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "prefixItems": [
+                        { "const": "uns" },
+                        { "$ref": "#/$defs/uns-path" },
+                        {
+                            "type": "array",
+                            "minItems": 2,
+                            "maxItems": 2,
+                            "prefixItems": [
+                                { "const": "AD" },
+                                { "$ref": "#/$defs/ref" }
+                            ]
+                        }
+                    ]
                 }
             ]
         },
         "acc": {
-            "title": "Reference accessor for a whole container (LayerAcc/MultiAcc/GraphAcc)",
+            "title": "Reference accessor for a whole container (LayerAcc/MultiAcc/GraphAcc/ItemAcc/DFAcc)",
             "type": "array",
-            "minItems": 2,
-            "maxItems": 2,
             "oneOf": [
                 {
                     "title": "Whole layer or X (layers)",
+                    "minItems": 2,
+                    "maxItems": 2,
                     "prefixItems": [
                         { "const": "layers" },
                         { "type": ["string", "null"] }
@@ -88,6 +126,8 @@
                 },
                 {
                     "title": "Whole multi-dimensional annotation (obsm/varm)",
+                    "minItems": 2,
+                    "maxItems": 2,
                     "prefixItems": [
                         { "enum": ["obsm", "varm"] },
                         { "type": "string" }
@@ -95,12 +135,75 @@
                 },
                 {
                     "title": "Whole graph (obsp/varp)",
+                    "minItems": 2,
+                    "maxItems": 2,
                     "prefixItems": [
                         { "enum": ["obsp", "varp"] },
                         { "type": "string" }
                     ]
+                },
+                {
+                    "title": "Whole data frame in a multi-dimensional annotation (obsm/varm …DF)",
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "prefixItems": [
+                        { "enum": ["obsm", "varm"] },
+                        { "type": "string" },
+                        { "const": ["DF"] }
+                    ]
+                },
+                {
+                    "title": "Whole data frame in unstructured annotation (uns …DF)",
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "prefixItems": [
+                        { "const": "uns" },
+                        { "$ref": "#/$defs/uns-path" },
+                        { "const": ["DF"] }
+                    ]
+                },
+                {
+                    "title": "Item in unstructured annotation (uns)",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "prefixItems": [
+                        { "const": "uns" },
+                        { "$ref": "#/$defs/uns-path" }
+                    ]
+                },
+                {
+                    "title": "Container in an AnnData object in unstructured annotation (uns …AD)",
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "prefixItems": [
+                        { "const": "uns" },
+                        { "$ref": "#/$defs/uns-path" },
+                        {
+                            "type": "array",
+                            "minItems": 2,
+                            "maxItems": 2,
+                            "prefixItems": [
+                                { "const": "AD" },
+                                { "$ref": "#/$defs/acc" }
+                            ]
+                        }
+                    ]
                 }
             ]
+        },
+        "uns-path": {
+            "title": "Path to an item in uns: a key followed by keys or list indices",
+            "type": "array",
+            "minItems": 1,
+            "prefixItems": [{ "type": "string" }],
+            "items": { "type": ["string", "integer"] }
+        },
+        "df-cast": {
+            "title": "Column (or index if null) of the data frame cast from the preceding item",
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [{ "const": "DF" }, { "type": ["string", "null"] }]
         }
     },
     "oneOf": [{ "$ref": "#/$defs/ref" }, { "$ref": "#/$defs/acc" }]

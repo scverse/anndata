@@ -3,13 +3,13 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, overload
 
-from . import GraphMapAcc, LayerMapAcc, MetaAcc, MultiMapAcc
+from . import GraphMapAcc, LayerMapAcc, MetaAcc, MultiMapAcc, UnsMapAcc
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import Literal
 
-    from . import AdAcc, AdRef, GraphAcc, Idx2D, LayerAcc, MultiAcc
+    from . import AdAcc, AdRef, GraphAcc, Idx2D, ItemAcc, LayerAcc, MultiAcc
 
 
 @overload
@@ -23,26 +23,26 @@ def parse[P: AdRef](
 @overload
 def parse[P: AdRef](
     a: AdAcc[P], spec: str, *, strict: Literal[True] = True, vec: Literal[False]
-) -> LayerAcc[P] | MultiAcc[P] | GraphAcc[P]: ...
+) -> LayerAcc[P] | MultiAcc[P] | GraphAcc[P] | ItemAcc[P]: ...
 @overload
 def parse[P: AdRef](
     a: AdAcc[P], spec: str, *, strict: Literal[False], vec: Literal[False]
-) -> LayerAcc[P] | MultiAcc[P] | GraphAcc[P] | None: ...
+) -> LayerAcc[P] | MultiAcc[P] | GraphAcc[P] | ItemAcc[P] | None: ...
 @overload
 def parse[P: AdRef](
     a: AdAcc[P], spec: str, *, strict: Literal[True] = True, vec: None = None
-) -> P | LayerAcc[P] | MultiAcc[P] | GraphAcc[P]: ...
+) -> P | LayerAcc[P] | MultiAcc[P] | GraphAcc[P] | ItemAcc[P]: ...
 @overload
 def parse[P: AdRef](
     a: AdAcc[P], spec: str, *, strict: Literal[False], vec: None = None
-) -> P | LayerAcc[P] | MultiAcc[P] | GraphAcc[P] | None: ...
+) -> P | LayerAcc[P] | MultiAcc[P] | GraphAcc[P] | ItemAcc[P] | None: ...
 @overload
 def parse[P: AdRef](
     a: AdAcc[P], spec: str, *, strict: bool = True, vec: bool | None = None
-) -> P | LayerAcc[P] | MultiAcc[P] | GraphAcc[P] | None: ...
+) -> P | LayerAcc[P] | MultiAcc[P] | GraphAcc[P] | ItemAcc[P] | None: ...
 def parse[P: AdRef](
     a: AdAcc[P], spec: str, *, strict: bool = True, vec: bool | None = None
-) -> P | LayerAcc[P] | MultiAcc[P] | GraphAcc[P] | None:
+) -> P | LayerAcc[P] | MultiAcc[P] | GraphAcc[P] | ItemAcc[P] | None:
     """Create accessor from string."""
     if strict:
         return _parse(a, spec, vec=vec)
@@ -54,7 +54,7 @@ def parse[P: AdRef](
 
 def _parse[P: AdRef](
     a: AdAcc[P], spec: str, *, vec: bool | None
-) -> P | LayerAcc[P] | MultiAcc[P] | GraphAcc[P]:
+) -> P | LayerAcc[P] | MultiAcc[P] | GraphAcc[P] | ItemAcc[P]:
     if spec.startswith("X"):
         _check_vec(spec, vec=vec, actual=(do_vec := "[" in spec))
 
@@ -83,12 +83,12 @@ def _parse[P: AdRef](
 
 
 def _parse_dotted[P: AdRef](
-    acc: LayerMapAcc[P] | GraphMapAcc[P] | MetaAcc[P] | MultiMapAcc[P],
+    acc: LayerMapAcc[P] | GraphMapAcc[P] | MetaAcc[P] | MultiMapAcc[P] | UnsMapAcc[P],
     rest: str,
     spec: str,
     *,
     vec: bool | None,
-) -> P | LayerAcc[P] | MultiAcc[P] | GraphAcc[P]:
+) -> P | LayerAcc[P] | MultiAcc[P] | GraphAcc[P] | ItemAcc[P]:
     match acc:
         case LayerMapAcc() | GraphMapAcc():
             _check_vec(spec, vec=vec, actual=(do_vec := "[" in rest))
@@ -99,6 +99,9 @@ def _parse_dotted[P: AdRef](
         case MultiMapAcc() as multi:
             _check_vec(spec, vec=vec, actual=(do_vec := "." in rest))
             return _parse_path_multi(multi, rest) if do_vec else multi[rest]
+        case UnsMapAcc() as uns:
+            _check_vec(spec, vec=vec, actual=False)
+            return _parse_path_uns(uns, rest)
     msg = f"Unhandled accessor {spec!r}. This is a bug!"  # pragma: no cover
     raise AssertionError(msg)  # pragma: no cover
 
@@ -129,6 +132,18 @@ def _parse_path_multi[P: AdRef](multi: MultiMapAcc[P], spec: str) -> P:
         raise ValueError(msg)
     key, i = m.groups("")  # "" just for typing
     return multi[key][int(i)]
+
+
+def _parse_path_uns[P: AdRef](uns: UnsMapAcc[P], spec: str) -> ItemAcc[P]:
+    # like `obsm.<k>.<i>`, the path continues after a key, so keys can’t contain periods
+    first, *path = spec.split(".")
+    if not all([first, *path]):
+        msg = f"Cannot parse uns accessor {spec!r}: should be `k1.k2.….kn`"
+        raise ValueError(msg)
+    item = uns[first]
+    for k in path:  # always keys: list indices aren’t expressible as strings
+        item = item[k]
+    return item
 
 
 def _parse_idx_2d(i: str, j: str, cls: type) -> Idx2D:

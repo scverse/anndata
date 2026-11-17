@@ -96,10 +96,11 @@ if TYPE_CHECKING:
         AdRef,
         Array,
         DataFrameLike,
+        DFAcc,
         GraphAcc,
+        ItemAcc,
         LayerAcc,
         MapAcc,
-        MetaAcc,
         MultiAcc,
         RefAcc,
     )
@@ -1114,7 +1115,9 @@ class AnnData:  # noqa: PLW1641
         return _normalize_indices(index, self.obs_names, self.var_names)
 
     @overload
-    def __getitem__(self, index: MetaAcc) -> DataFrameLike: ...
+    def __getitem__(self, index: DFAcc) -> DataFrameLike: ...
+    @overload
+    def __getitem__(self, index: ItemAcc) -> Any: ...  # noqa: ANN401
     @overload
     def __getitem__(self, index: LayerAcc | MultiAcc | GraphAcc) -> AlignedArray: ...
     @overload
@@ -1720,15 +1723,25 @@ class AnnData:  # noqa: PLW1641
             An accessor pointing to an array that might or might not be in `self`.
 
         """
-        from ..acc import AdRef, GraphMapAcc, LayerMapAcc, MapAcc, MultiMapAcc, RefAcc
+        from ..acc import (
+            AdRef,
+            GraphMapAcc,
+            LayerMapAcc,
+            MapAcc,
+            MultiMapAcc,
+            RefAcc,
+            UnsMapAcc,
+        )
 
         match key:
-            case LayerMapAcc():
-                return bool(self.layers)
-            case MultiMapAcc():
-                return bool(getattr(self, f"{key.dim}m"))
-            case GraphMapAcc():
-                return bool(getattr(self, f"{key.dim}p"))
+            case (
+                MapAcc(scope=RefAcc() as p)
+                | RefAcc(parent=RefAcc() as p)
+                | AdRef(acc=RefAcc(parent=RefAcc() as p))
+            ) if p not in self:
+                return False  # `isin` and `get` assume the parent exists
+            case LayerMapAcc() | MultiMapAcc() | GraphMapAcc() | UnsMapAcc():
+                return bool(key.get(self))
             case MapAcc():  # to check MapAccs, we need to know the attribute name
                 msg = f"Unknown MapAcc subclass {type(key)}."
                 raise TypeError(msg)

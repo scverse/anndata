@@ -317,7 +317,7 @@ pca/variance_ratio <zarr.core.Array '/uns/pca/variance_ratio' (50,) float64 read
 {mod}`anndata.acc` accessors –
 references to a vector or container within an `AnnData`, such as `A.obsm["pca"][0]` –
 are stored as their {meth}`~anndata.acc.AdAcc.to_json` form –
-a list of strings, integers and nulls
+a list of strings, integers, nulls, and nested lists of these
 described by [`acc-schema-v1.json`](acc-schema-v1.json){.external} –
 serialized to a JSON string.
 

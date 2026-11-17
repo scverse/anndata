@@ -13,7 +13,7 @@ from . import AdRef
 if TYPE_CHECKING:
     from importlib.metadata import EntryPoint
 
-    from . import AdAcc, RefAcc
+    from . import AccJson, AdAcc, RefAcc
 
 
 __all__ = ["load_acc", "to_json"]
@@ -69,7 +69,7 @@ def _check_name(ep: EntryPoint, dist: str | None) -> EntryPoint:
     return ep
 
 
-def to_json(elem: AdRef | RefAcc) -> tuple[str, list[str | int | None]]:
+def to_json(elem: AdRef | RefAcc) -> tuple[str, list[str | int | AccJson | None]]:
     """Serialize `elem` using the :class:`~anndata.acc.AdAcc` of the project defining it.
 
     Raises :exc:`TypeError` if that doesn’t round-trip, so nothing gets silently lost.

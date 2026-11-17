@@ -136,6 +136,26 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
                 - :attr:`~GraphAcc.dim`, :attr:`~GraphAcc.k`
                 - :attr:`~AdAcc.obsp`\ `[key]`, :attr:`~AdAcc.varp`\ `[key]`
                 - `A.obsp["e"][:, "c1"]`, `A.vbsp["e"]["g0", :]`
+            -   - :class:`DFAcc` (base class of :class:`MetaAcc`)
+                - :attr:`~RefAcc.parent`
+                - :attr:`MultiAcc.DF`, :attr:`ItemAcc.DF`
+                - `A.obsm["d"].DF["c"]`, `A.uns["df"].DF["c"]`
+            -   - :class:`ItemAcc`
+                - :attr:`~ItemAcc.path`
+                - :attr:`~AdAcc.uns`\ `[key]`
+                - none, but can be cast: `A.uns["a"].AD.obs["c"]`, `A.uns["a"].DF["c"]`
+
+        Every :term:`reference accessor` has a :attr:`~RefAcc.parent`,
+        which is set when it refers into an element nested in the AnnData object,
+        e.g. `A.uns["a"].AD.obs.parent == A.uns["a"]`.
+        Its :attr:`~RefAcc.scope` is the element whose `.AD` cast it’s in.
+        Such elements are :class:`ScopeAcc`\ s (like :class:`ItemAcc`):
+
+        ..  autosummary::
+            :toctree: generated/
+            :template: class-minimal
+
+            ScopeAcc
 
     mapping accessor
         :class:`!MapAcc` subclasses can be indexed with a string to create :term:`reference accessor`\ s,
@@ -152,6 +172,7 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
             LayerMapAcc
             MultiMapAcc
             GraphMapAcc
+            UnsMapAcc
 
 ..  this indented code makes autosummary generate the pages
     ..  autosummary::
@@ -162,11 +183,14 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
         MetaAcc
         MultiAcc
         GraphAcc
+        DFAcc
+        ItemAcc
 
     ..  autosummary::
         :toctree: generated/
 
         Idx2D
+        AccJson
         NO_IDX
 
 ..  toctree::
@@ -176,7 +200,10 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
     generated/anndata.acc.MetaAcc
     generated/anndata.acc.MultiAcc
     generated/anndata.acc.GraphAcc
+    generated/anndata.acc.DFAcc
+    generated/anndata.acc.ItemAcc
     generated/anndata.acc.Idx2D
+    generated/anndata.acc.AccJson
     generated/anndata.acc.NO_IDX
 
 Serialization
@@ -198,11 +225,17 @@ as the same lists without the trailing index:
 >>> A.from_json(["layers", None])
 A.X
 
+Items in `.uns` store their path as a nested list,
+and casts (`.AD`, `.DF`) add a trailing `[cast, payload]` pair:
+
+>>> A.to_json(A.uns["n"].AD.obs["x"])
+['uns', ['n'], ['AD', ['obs', 'x']]]
+
 Pass `vec=True` or `vec=False` to :meth:`~AdAcc.from_json`
 to accept only :term:`reference`\ s or only :term:`reference accessor`\ s,
 like :meth:`AdAcc.resolve` does for strings.
 :class:`MetaAcc` (i.e. :attr:`~AdAcc.obs`/:attr:`~AdAcc.var`) is the exception:
-only its :term:`reference`\ s are serializable, as it has no array of its own.
+only its :term:`reference`\ s are serializable.
 
 Both are described by `acc-schema-v1.json <acc-schema-v1.json>`_,
 as separate subschemas you can validate against independently
@@ -256,7 +289,10 @@ There are three layers of extensibility:
     >>> A.obs[["a", "b"]]
     A.obs[['a', 'b']]
 
-    Note that for implementing :meth:`RefAcc.get` when subclassing, you will need :class:`NO_IDX`.
+    Note that for implementing :meth:`RefAcc.get` when subclassing, you will need :class:`NO_IDX`,
+    and that :meth:`RefAcc.get`/:meth:`~RefAcc.set`/:meth:`~RefAcc.isin` should go through
+    :meth:`RefAcc.container` to work when nested (e.g. in `A.uns["a"].AD`).
+    To refer to another data frame, subclass :class:`DFAcc` and override :meth:`DFAcc.frame`.
 
 
 #.  subclass :class:`AdAcc` to add new accessors:
