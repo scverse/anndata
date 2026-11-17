@@ -231,7 +231,7 @@ Pass `vec=True` or `vec=False` to :meth:`~AdAcc.from_json`
 to accept only :term:`reference`\ s or only :term:`reference accessor`\ s,
 like :meth:`AdAcc.resolve` does for strings.
 :class:`MetaAcc` (i.e. :attr:`~AdAcc.obs`/:attr:`~AdAcc.var`) is the exception:
-only its :term:`reference`\ s are serializable.
+only its :term:`reference`\ s are serializable, as it has no array of its own.
 
 Both are described by `acc-schema-v1.json <acc-schema-v1.json>`_,
 as separate subschemas you can validate against independently

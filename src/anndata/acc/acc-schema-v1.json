@@ -192,11 +192,10 @@
             ]
         },
         "uns-path": {
-            "title": "Path to an item in uns: a key followed by keys or list indices",
+            "title": "Path to an item in uns: one or more keys",
             "type": "array",
             "minItems": 1,
-            "prefixItems": [{ "type": "string" }],
-            "items": { "type": ["string", "integer"] }
+            "items": { "type": "string" }
         },
         "df-cast": {
             "title": "Column (or index if null) of the data frame cast from the preceding item",

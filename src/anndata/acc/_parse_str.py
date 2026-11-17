@@ -141,7 +141,7 @@ def _parse_path_uns[P: AdRef](uns: UnsMapAcc[P], spec: str) -> ItemAcc[P]:
         msg = f"Cannot parse uns accessor {spec!r}: should be `k1.k2.….kn`"
         raise ValueError(msg)
     item = uns[first]
-    for k in path:  # always keys: list indices aren’t expressible as strings
+    for k in path:
         item = item[k]
     return item
 

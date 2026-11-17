@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from . import AdRef, DFAcc, GraphAcc, ItemAcc, LayerAcc, MetaAcc, MultiAcc
 from ._parse_str import _check_vec
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from typing import Any
 
     from . import AccJson, AdAcc, Idx2D, RefAcc
 
@@ -28,12 +27,8 @@ def _as_idx_2d(data: Sequence[object]) -> Idx2D | None:
             return None
 
 
-def _is_path(path: Sequence[object]) -> bool:
-    return all(isinstance(k, str | int) and not isinstance(k, bool) for k in path)
-
-
-def _item[R: AdRef](a: AdAcc[R], path: Sequence[Any]) -> ItemAcc[R]:
-    first, *rest = path  # types checked by caller
+def _item[R: AdRef](a: AdAcc[R], path: Sequence[object]) -> ItemAcc[R]:
+    first, *rest = cast("Sequence[str]", path)  # `__getitem__` validates the keys
     item = a.uns[first]
     for k in rest:
         item = item[k]
@@ -84,9 +79,9 @@ def _parse_json[R: AdRef](  # noqa: PLR0911
             return (a.obsp if dim == "obsp" else a.varp)[k]
         case ["obsp" | "varp" as dim, str(k), *idx] if idx_2d := _as_idx_2d(idx):
             return (a.obsp if dim == "obsp" else a.varp)[k][idx_2d]
-        case ["uns", [str(), *_] as path] if _is_path(path):
+        case ["uns", [*path]]:
             return _item(a, path)
-        case ["uns", [str(), *_] as path, [*cast]] if _is_path(path):
+        case ["uns", [*path], [*cast]]:
             return _cast(_item(a, path), cast)
         case _:
             msg = f"Cannot parse {data!r}"

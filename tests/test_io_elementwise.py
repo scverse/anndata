@@ -272,7 +272,7 @@ def test_io_spec_compressed_scalars(
         A.X[:, "gene-5"],
         A.obs["ct"],
         A.obs.index,
-        A.uns["a"][0],
+        A.uns["a"]["b"],
         A.obsm["df"].DF["c"],
         A.uns["n"].AD.uns["m"].AD.obs["x"],
     ],

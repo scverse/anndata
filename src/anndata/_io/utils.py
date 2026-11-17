@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import replace
 from functools import WRAPPER_ASSIGNMENTS, cache, wraps
 from itertools import pairwise
 from types import MappingProxyType
@@ -226,11 +227,15 @@ def _resolve_use(  # noqa: PLR0911, PLR0912
         ):
             msg = f"Cannot write {use}: writing nested elements is not supported."
             raise ValueError(msg)
-        case ItemAcc(path=(str() as k,)):
-            return "uns", k, use.get(adata)
-        case ItemAcc():
-            msg = f"Cannot write {use}: only top-level `uns` items can be written."
-            raise ValueError(msg)
+        case ItemAcc(path=path):
+            # write the whole subtree at the first level that isn’t a dict on disk
+            for i in range(1, len(path)):
+                group = "/".join(["uns", *path[:i]])
+                if group not in f or f[group].attrs.get("encoding-type") != "dict":
+                    path = path[:i]
+                    break
+            parent = "/".join(["uns", *path[:-1]])
+            return parent, path[-1], replace(use, path=path).get(adata)
         case UnsMapAcc():
             return None, "uns", dict(use.get(adata))
         case AdRef(acc=MetaAcc(dim=dim) as acc, idx=str() as col):

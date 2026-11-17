@@ -67,8 +67,8 @@ PATHS: list[tuple[AdRef, AdRefSer]] = [
     (A.uns["df"].DF.index, ["uns", ["df"], ["DF", None]]),
     (A.uns["n"].AD.obs["x"], ["uns", ["n"], ["AD", ["obs", "x"]]]),
     (
-        A.uns["n"][0].AD.obsm["df"].DF["c"],
-        ["uns", ["n", 0], ["AD", ["obsm", "df", ["DF", "c"]]]],
+        A.uns["n"]["o"].AD.obsm["df"].DF["c"],
+        ["uns", ["n", "o"], ["AD", ["obsm", "df", ["DF", "c"]]]],
     ),
     (
         A.uns["n"].AD.uns["m"].AD.X[:, "g"],
@@ -130,7 +130,7 @@ MATRICES: list[tuple[MatrixAcc, AdRefSer]] = [
     (A.obsp["conn"], ["obsp", "conn"]),
     (A.varp["cons"], ["varp", "cons"]),
     (A.uns["a"], ["uns", ["a"]]),
-    (A.uns["a"]["b"][0], ["uns", ["a", "b", 0]]),
+    (A.uns["a"]["b"], ["uns", ["a", "b"]]),
     (A.uns["n"].AD.obsm["p"], ["uns", ["n"], ["AD", ["obsm", "p"]]]),
     (A.uns["n"].AD.uns["m"], ["uns", ["n"], ["AD", ["uns", ["m"]]]]),
     (A.obsm["df"].DF, ["obsm", "df", ["DF"]]),
@@ -186,6 +186,7 @@ def test_to_json_unsupported(acc: MetaAcc) -> None:
     [
         pytest.param(["uns", []], id="empty-path"),
         pytest.param(["uns", [0]], id="int-first"),
+        pytest.param(["uns", ["a", 0]], id="int-in-path"),
         pytest.param(["uns", ["a", True]], id="bool-in-path"),
         pytest.param(["uns", ["a"], ["XX", "c"]], id="unknown-cast"),
         pytest.param(["obsm", "p", ["AD", ["obs", "x"]]], id="ad-cast-on-obsm"),

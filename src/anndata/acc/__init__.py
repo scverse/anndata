@@ -904,7 +904,7 @@ class ScopeAcc[R: AdRef, D: MuData | AnnData, E = object](RefAcc[R, Never, D, E,
 class ItemAcc[R: AdRef](ScopeAcc[R, MuData | AnnData]):
     r"""Accessor for (possibly nested) items in `.uns` (`A.`\ :attr:`~AdAcc.uns`\ `[k]`).
 
-    Indexing it descends further into the item (treating it as a mapping or sequence).
+    Indexing it with a key descends further into the item (treating it as a mapping).
     It can’t create :term:`reference`\ s itself, as items in `.uns` aren’t aligned to any dimension,
     but it can be cast into a type with arrays inside (`.AD`, `.DF`).
 
@@ -912,8 +912,8 @@ class ItemAcc[R: AdRef](ScopeAcc[R, MuData | AnnData]):
     --------
     >>> from anndata.acc import A, ItemAcc
     >>> assert isinstance(A.uns["foo"], ItemAcc)
-    >>> A.uns["foo"]["bar"][3]
-    A.uns['foo']['bar'][3]
+    >>> A.uns["foo"]["bar"]
+    A.uns['foo']['bar']
     >>> A.uns["baz"].AD.obs["x"]
     A.uns['baz'].AD.obs['x']
     >>> A.uns["df"].DF["col"]
@@ -921,18 +921,18 @@ class ItemAcc[R: AdRef](ScopeAcc[R, MuData | AnnData]):
 
     """
 
-    path: tuple[str | int, ...]
-    """Keys/indices leading to the item, e.g. `A.uns['a'][0].path == ('a', 0)`."""
+    path: tuple[str, ...]
+    """Keys leading to the item, e.g. `A.uns['a']['b'].path == ('a', 'b')`."""
 
-    def __getitem__(self, k: str | int, /) -> Self:  # type: ignore[override]  # descends instead of creating refs
+    def __getitem__(self, k: str, /) -> Self:  # type: ignore[override]  # descends instead of creating refs
         """Get an accessor for an item nested in this one, e.g. `A.uns['a']['b']`.
 
         Parameters
         ----------
         k
-            A key (if the item is a mapping) or an index (if it is a sequence).
+            The key of the nested item.
         """
-        if not isinstance(k, str | int) or isinstance(k, bool):
+        if not isinstance(k, str):
             msg = f"Unsupported uns key {k!r}"
             raise TypeError(msg)
         return replace(self, path=(*self.path, k))
@@ -1163,8 +1163,8 @@ class AdAcc[R: AdRef]:
         Items in `.uns` have their path in a list,
         and casts (`.AD`, `.DF`) add a trailing `[cast, payload]` pair:
 
-        >>> A.to_json(A.uns["a"]["b"][0])
-        ['uns', ['a', 'b', 0]]
+        >>> A.to_json(A.uns["a"]["b"])
+        ['uns', ['a', 'b']]
         >>> A.to_json(A.obsm["df"].DF["c"])
         ['obsm', 'df', ['DF', 'c']]
         >>> A.to_json(A.uns["n"].AD.obs["x"])
@@ -1286,7 +1286,6 @@ class AdAcc[R: AdRef]:
 
         Items in `.uns`, yielding an :class:`ItemAcc`.
         Like for `"obsm.<k>.<i>"`, the path is split at periods.
-        Each part is a key:
 
         >>> A.resolve("uns.neighbors", vec=False)
         A.uns['neighbors']
