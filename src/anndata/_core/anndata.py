@@ -1731,15 +1731,15 @@ class AnnData:  # noqa: PLW1641
             MultiMapAcc,
             RefAcc,
             UnsMapAcc,
+            _parent_in,
         )
 
         match key:
-            case (
-                MapAcc(scope=RefAcc() as p)
-                | RefAcc(parent=RefAcc() as p)
-                | AdRef(acc=RefAcc(parent=RefAcc() as p))
-            ) if p not in self:
-                return False  # `isin` and `get` assume the parent exists
+            # `isin` and `get` assume the parent exists and has the type it’s cast to
+            case MapAcc() | RefAcc() as acc if not _parent_in(acc, self):
+                return False
+            case AdRef(acc=acc) if not _parent_in(acc, self):
+                return False
             case LayerMapAcc() | MultiMapAcc() | GraphMapAcc() | UnsMapAcc():
                 return bool(key.get(self))
             case MapAcc():  # to check MapAccs, we need to know the attribute name

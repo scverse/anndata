@@ -134,6 +134,22 @@ def test_cast_invalid(adata: AnnData, ref: AdRef, match: str) -> None:
         adata[ref]
 
 
+@pytest.mark.parametrize(
+    "acc",
+    [
+        A.uns["foo"].AD.obs["x"],
+        A.uns["foo"].AD.uns["x"],
+        A.uns["foo"].AD.obsm,
+        A.uns["nested"].DF["x"],
+        A.uns["nested"].DF,
+    ],
+    ids=str,
+)
+def test_cast_invalid_not_in(adata: AnnData, acc: AdRef | RefAcc | MapAcc) -> None:
+    """Nothing is in an element of the wrong type."""
+    assert acc not in adata
+
+
 def test_get(adata: AnnData) -> None:
     assert adata[A.uns["foo"]["bar"]["baz"]] == 2
     assert adata[A.uns["nested"]] is adata.uns["nested"]
@@ -230,7 +246,6 @@ def test_write_use(
 ) -> None:
     import anndata as ad
 
-    del adata.uns["nested"]  # AnnData objects in `.uns` aren’t writable
     adata.uns["foo"]["bar"]["old"] = 1
     path = tmp_path / "a.h5ad"
     adata.write_h5ad(path)
@@ -246,7 +261,6 @@ def test_write_use(
 
 
 def test_write_use_nested_unsupported(adata: AnnData, tmp_path: Path) -> None:
-    del adata.uns["nested"]
     path = tmp_path / "a.h5ad"
     adata.write_h5ad(path)
     with pytest.raises(ValueError, match=r"nested"):

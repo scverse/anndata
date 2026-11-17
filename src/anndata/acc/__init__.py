@@ -277,7 +277,7 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData, E = object, V = object]
     def isin(self, data: D, idx: I | None = None, /) -> bool:
         """Check if the referenced array is in the AnnData object.
 
-        Only called if :attr:`~anndata.acc.RefAcc.parent` is `None` or in `data`, so :meth:`~anndata.acc.RefAcc.container` won’t fail because of a missing parent.
+        Only called if :attr:`~anndata.acc.RefAcc.parent` is `None`, or in `data` with the type this accessor casts it to (`.AD`/`.DF`), so :meth:`~anndata.acc.RefAcc.container` won’t fail.
         To check an accessor including its parents, use `acc in data`.
         """
 
@@ -491,7 +491,7 @@ class DFAcc[R: AdRef](RefAcc[R, str | None, MuData | AnnData, DataFrameLike, Arr
             If the element :attr:`~RefAcc.parent` refers to isn’t a data frame.
         """
         frame = None if self.parent is None else self.parent.get(data)
-        if not isinstance(frame, pd.DataFrame | Dataset2D):
+        if not _is_frame(frame):
             msg = f"{self.parent!r} is {type(frame).__name__}, not a data frame, so `.DF` can’t index into it."
             raise TypeError(msg)
         return frame
@@ -958,9 +958,11 @@ class ItemAcc[R: AdRef](ScopeAcc[R, MuData | AnnData]):
         return f"[{idx!r}]"
 
     def isin(self, data: MuData | AnnData, idx: None = None) -> bool:
+        item = self.container(data).uns
         try:
-            self.get(data)
-        except (KeyError, IndexError, TypeError):
+            for k in self.path:
+                item = item[k]
+        except (KeyError, IndexError, TypeError):  # missing, or not a mapping
             return False
         return True
 
@@ -1379,6 +1381,20 @@ def _resolve(scope: ScopeAcc | None, data: MuData | AnnData, /) -> MuData | AnnD
         msg = f"{scope!r} is {type(elem).__name__}, not an AnnData object, so `.AD` can’t index into it."
         raise TypeError(msg)
     return elem
+
+
+def _parent_in(acc: RefAcc | MapAcc, data: MuData | AnnData, /) -> bool:
+    """Check if the element `acc` is cast from is in `data` and has the right type."""
+    match acc:
+        case DFAcc(parent=RefAcc() as frame) if frame is not acc.scope:  # `.DF`
+            return frame in data and _is_frame(frame.get(data))
+        case _ if (scope := acc.scope) is not None:  # `.AD`
+            return scope in data and _is_anndata_like(scope.get(data))
+    return True
+
+
+def _is_frame(x: object, /) -> TypeGuard[DataFrameLike]:
+    return isinstance(x, pd.DataFrame | Dataset2D)
 
 
 def _is_anndata_like(x: object, /) -> TypeGuard[MuData | AnnData]:
