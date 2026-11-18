@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import os
 from collections.abc import Mapping
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import partial, singledispatch, wraps
 from types import MappingProxyType
@@ -367,23 +365,11 @@ class LazyReader(Reader):
         return read_func(elem, **kwargs)
 
 
-# Own pool: blocked fallback reads must not take the threads that zarr’s I/O needs.
-_fallback_executor = ThreadPoolExecutor(thread_name_prefix="anndata-async-fallback")
-
-
-def _reset_fallback_executor() -> None:
-    global _fallback_executor  # noqa: PLW0603
-    _fallback_executor = ThreadPoolExecutor(thread_name_prefix="anndata-async-fallback")
-
-
-if hasattr(os, "register_at_fork"):
-    os.register_at_fork(after_in_child=_reset_fallback_executor)
-
-
 class AsyncReader:
     """Reads zarr elements with coroutines on the running event loop.
 
-    Unlike :class:`Reader`, this takes no callback.
+    Unlike :class:`Reader`, this takes no callback,
+    and an encoding without an async reader is an error.
     """
 
     def __init__(self, registry: IORegistry) -> None:
@@ -393,20 +379,21 @@ class AsyncReader:
         """Read an element from a store. See exported function for more details."""
         iospec = get_spec(elem)
         try:
-            if self.registry.has_read(type(elem), iospec):
-                read_func: _ReadAsync = self.registry.get_read(
-                    type(elem), iospec, reader=self
+            if not self.registry.has_read(type(elem), iospec):
+                sync_type = (
+                    zarr.Group if isinstance(elem, zarr.AsyncGroup) else zarr.Array
                 )
-                return await read_func(elem)
-            # No async reader: run the sync one in a thread; zarr’s loop is free while we await.
-            sync_elem = (
-                zarr.Group(elem)
-                if isinstance(elem, zarr.AsyncGroup)
-                else zarr.Array(elem)
+                # Fails like `read_elem` for an encoding that no reader knows
+                _REGISTRY.get_read(sync_type, iospec, reader=Reader(_REGISTRY))
+                msg = (
+                    f"No async read method registered for {iospec}. "
+                    "Read this element with `anndata.io.read_elem`."
+                )
+                raise NotImplementedError(msg)
+            read_func: _ReadAsync = self.registry.get_read(
+                type(elem), iospec, reader=self
             )
-            return await asyncio.get_running_loop().run_in_executor(
-                _fallback_executor, read_elem, sync_elem
-            )
+            return await read_func(elem)
         except Exception as e:
             path, key = _get_display_path(elem).rsplit("/", 1)
             add_key_note(e, elem, path or "/", key, "read")
@@ -545,8 +532,6 @@ async def read_elem_async(
     - :class:`zarr.Group` and :class:`zarr.Array` are opened through zarr’s own event loop.
       When awaited from another loop (e.g. in Jupyter), the read is submitted to zarr’s loop.
     - :class:`zarr.AsyncGroup` and :class:`zarr.AsyncArray` are read on the running loop.
-      Encodings without an async reader fall back to zarr’s synchronous API in a thread,
-      which uses zarr’s loop.
 
     Read callbacks (see :func:`~anndata.experimental.read_dispatched`) are not supported.
 
@@ -558,6 +543,12 @@ async def read_elem_async(
     Returns
     -------
     The element, as returned by :func:`anndata.io.read_elem`.
+
+    Raises
+    ------
+    NotImplementedError
+        If `elem`, or an element inside it, has an encoding that only
+        :func:`anndata.io.read_elem` reads (e.g. an element without encoding metadata).
 
     Examples
     --------

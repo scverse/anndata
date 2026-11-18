@@ -1,6 +1,6 @@
 """Coroutine readers for zarr, see :func:`anndata.experimental.read_elem_async`.
 
-Encodings without a reader here fall back to the synchronous reader, see :class:`AsyncReader`.
+An encoding without a reader here is an error, see :class:`AsyncReader`.
 """
 
 from __future__ import annotations
@@ -23,11 +23,14 @@ from anndata._core.sparse_dataset import (
 from anndata._types import ANNDATA_ELEMS
 
 from .methods import (
+    _accessor_from_json,
+    _awkward_from_parts,
     _categorical_from_parts,
     _dataframe_from_parts,
     _dataframe_keys,
     _nullable_from_parts,
     _nullable_string_from_parts,
+    _recarray_from_raw,
 )
 from .registry import _ASYNC_REGISTRY, IOSpec
 
@@ -35,8 +38,11 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
     from typing import Any, Literal
 
+    from numpy import typing as npt
+
+    from anndata import acc
     from anndata._core.sparse_dataset import DenseType
-    from anndata.compat import CSArray, CSMatrix, CupyCSMatrix
+    from anndata.compat import AwkArray, CSArray, CSMatrix, CupyCSMatrix
     from anndata.typing import RWAble
 
     from .methods import _BaseMaskedArray
@@ -89,6 +95,20 @@ async def read_string(elem: AsyncArray, *, _reader: AsyncReader) -> str:
     return str(await elem.getitem(()))
 
 
+@_ASYNC_REGISTRY.register_read(AsyncArray, IOSpec("rec-array", "0.2.0"))
+async def read_recarray(
+    elem: AsyncArray, *, _reader: AsyncReader
+) -> np.recarray | npt.NDArray:
+    return _recarray_from_raw(np.asarray(await elem.getitem(())))
+
+
+@_ASYNC_REGISTRY.register_read(AsyncArray, IOSpec("accessor", "0.1.0"))
+async def read_accessor(
+    elem: AsyncArray, *, _reader: AsyncReader
+) -> acc.AdRef | acc.LayerAcc | acc.MultiAcc | acc.GraphAcc:
+    return _accessor_from_json(str(await elem.getitem(())), elem.attrs)
+
+
 @_ASYNC_REGISTRY.register_read(AsyncArray, IOSpec("null", "0.1.0"))
 async def read_null(elem: AsyncArray, *, _reader: AsyncReader) -> None:
     return None
@@ -97,6 +117,11 @@ async def read_null(elem: AsyncArray, *, _reader: AsyncReader) -> None:
 @_ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("dict", "0.1.0"))
 async def read_mapping(elem: AsyncGroup, *, _reader: AsyncReader) -> dict[str, Any]:
     return await _read_members(elem, _reader)
+
+
+@_ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("awkward-array", "0.1.0"))
+async def read_awkward(elem: AsyncGroup, *, _reader: AsyncReader) -> AwkArray:
+    return _awkward_from_parts(await _read_members(elem, _reader), elem.attrs)
 
 
 @_ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("anndata", "0.1.0"))

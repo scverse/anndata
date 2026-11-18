@@ -796,7 +796,10 @@ def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
 def read_recarray(
     d: _ArrayStorageType, *, _reader: Reader
 ) -> np.recarray | npt.NDArray:
-    value = np.asarray(d[()])
+    return _recarray_from_raw(np.asarray(d[()]))
+
+
+def _recarray_from_raw(value: np.ndarray) -> np.recarray | npt.NDArray:
     return _decode_structured_array(
         _from_fixed_length_strings(value), dtype=value.dtype
     )
@@ -1089,13 +1092,17 @@ def write_awkward(
 @_REGISTRY.register_read(h5py.Group, IOSpec("awkward-array", "0.1.0"))
 @_REGISTRY.register_read(zarr.Group, IOSpec("awkward-array", "0.1.0"))
 def read_awkward(elem: _GroupStorageType, *, _reader: Reader) -> AwkArray:
+    container = {k: _reader.read_elem(elem[k]) for k in elem}
+    return _awkward_from_parts(container, elem.attrs)
+
+
+def _awkward_from_parts(
+    container: Mapping[str, Any], attrs: Mapping[str, Any]
+) -> AwkArray:
     from anndata.compat import awkward as ak
 
-    attrs: Mapping[str, Any] = elem.attrs
     form = _read_attr(attrs, "form")
     length = _read_attr(attrs, "length")
-    container = {k: _reader.read_elem(elem[k]) for k in elem}
-
     return ak.from_buffers(form, int(length), container)
 
 
@@ -1643,11 +1650,17 @@ del store_type, acc_type
 def read_accessor(
     elem: _ArrayStorageType, *, _reader: Reader
 ) -> acc.AdRef | acc.LayerAcc | acc.MultiAcc | acc.GraphAcc:
+    read = read_hdf5_string if isinstance(elem, h5py.Dataset) else read_zarr_string
+    return _accessor_from_json(read(elem, _reader=_reader), elem.attrs)
+
+
+def _accessor_from_json(
+    text: str, attrs: Mapping[str, Any]
+) -> acc.AdRef | acc.LayerAcc | acc.MultiAcc | acc.GraphAcc:
     from anndata.acc._entry_points import load_acc
 
-    read = read_hdf5_string if isinstance(elem, h5py.Dataset) else read_zarr_string
-    adacc = load_acc(str(_read_attr(elem.attrs, "accessor-project")))
-    return adacc.from_json(json.loads(read(elem, _reader=_reader)))
+    adacc = load_acc(str(_read_attr(attrs, "accessor-project")))
+    return adacc.from_json(json.loads(text))
 
 
 # @_REGISTRY.register_write(np.bytes_, IOSpec("bytes", "0.2.0"))

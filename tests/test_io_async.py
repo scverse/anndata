@@ -14,6 +14,8 @@ from zarr.core.sync import _get_loop, sync
 from zarr.storage import LocalStore, WrapperStore
 
 import anndata as ad
+from anndata._io.specs.registry import IORegistryError
+from anndata.compat import awkward as ak
 from anndata.experimental import read_elem_async
 from anndata.io import read_elem
 from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
@@ -118,3 +120,32 @@ def test_sparse_legacy_attrs(tmp_path: Path) -> None:
     from_async = asyncio.run(read_elem_async(g["m"]))
     assert isinstance(from_async, sparse.csc_matrix)
     assert_equal(read_elem(g["m"]), from_async)
+
+
+def test_recarray_and_awkward(tmp_path: Path) -> None:
+    adata = gen_adata((5, 4), **GEN_ADATA_NO_XARRAY_ARGS)
+    adata.uns["rec"] = np.rec.fromarrays(
+        [np.array(["a", "b"]), np.arange(2)], names=["name", "score"]
+    )
+    adata.obsm["awk"] = ak.Array([[1], [2, 3], [], [4], [5, 6]])
+    adata.write_zarr(tmp_path / "x.zarr")
+    g = zarr.open_group(tmp_path / "x.zarr", mode="r")
+    assert_equal(read_elem(g), asyncio.run(read_elem_async(g)))
+
+
+def test_no_async_reader(tmp_path: Path) -> None:
+    """An element that only `read_elem` reads is an error, with the key in a note."""
+    g = zarr.open_group(tmp_path / "x.zarr", mode="w")
+    ad.io.write_elem(g, "uns", {"a": 1})
+    uns = g.require_group("uns")
+    uns.create_group("plain")
+    from_sync: Any = read_elem(uns)
+    assert from_sync["plain"] == {}
+    with pytest.raises(NotImplementedError, match=r"No async read method") as e:
+        asyncio.run(read_elem_async(uns))
+    assert any("'plain'" in note for note in e.value.__notes__)
+
+    a: Any = uns["a"]
+    a.attrs["encoding-type"] = "unknown"
+    with pytest.raises(IORegistryError, match=r"No read method registered"):
+        asyncio.run(read_elem_async(a))

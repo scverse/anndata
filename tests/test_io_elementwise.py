@@ -281,6 +281,8 @@ def test_accessor_roundtrip(store: _GroupStorageType, ref: object) -> None:
     assert _read_attr(store["ref"].attrs, "encoding-type") == "accessor"
     assert _read_attr(store["ref"].attrs, "accessor-project") == "anndata"
     assert read_elem(store["ref"]) == ref
+    if isinstance(store, zarr.Group):
+        assert asyncio.run(read_elem_async(store["ref"])) == ref
 
 
 @dataclass(frozen=True)
