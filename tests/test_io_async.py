@@ -106,12 +106,16 @@ def test_anndata_ignores_unrelated_children(tmp_path: Path) -> None:
     assert_equal(read_elem(g), asyncio.run(read_elem_async(g)))
 
 
-def test_sparse_legacy_shape(tmp_path: Path) -> None:
-    """Like the sync reader, accept `h5sparse_shape` in place of `shape`."""
+def test_sparse_legacy_attrs(tmp_path: Path) -> None:
+    """Like the sync reader, honor `h5sparse_shape` and `h5sparse_format`."""
     g = zarr.open_group(tmp_path / "x.zarr", mode="w")
-    ad.io.write_elem(g, "m", sparse.random(5, 4, density=0.5, format="csr"))
+    ad.io.write_elem(g, "m", sparse.random(5, 4, density=0.5, format="csc"))
     attrs = dict(g["m"].attrs)
     attrs["h5sparse_shape"] = attrs.pop("shape")
+    # The legacy format wins over the encoding type
+    attrs |= {"encoding-type": "csr_matrix", "h5sparse_format": "csc"}
     g["m"].attrs.clear()
     g["m"].attrs.update(attrs)
-    assert_equal(read_elem(g["m"]), asyncio.run(read_elem_async(g["m"])))
+    from_async = asyncio.run(read_elem_async(g["m"]))
+    assert isinstance(from_async, sparse.csc_matrix)
+    assert_equal(read_elem(g["m"]), from_async)

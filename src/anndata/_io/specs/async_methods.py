@@ -14,20 +14,25 @@ import pandas as pd
 from zarr import AsyncArray, AsyncGroup
 
 from anndata import AnnData
-from anndata._core.sparse_dataset import _construct, _shape_from_attrs
-from anndata._types import AnnDataElem
-from anndata.compat import _read_attr
-from anndata.utils import get_literal_members
+from anndata._core.sparse_dataset import (
+    _check_array,
+    _construct,
+    _format_from_attrs,
+    _shape_from_attrs,
+)
+from anndata._types import ANNDATA_ELEMS
 
 from .methods import (
+    _categorical_from_parts,
     _dataframe_from_parts,
     _dataframe_keys,
+    _nullable_from_parts,
     _nullable_string_from_parts,
 )
 from .registry import _ASYNC_REGISTRY, IOSpec
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
     from typing import Any, Literal
 
     from anndata._core.sparse_dataset import DenseType
@@ -48,7 +53,7 @@ async def _read_children(
 
 
 async def _read_members(
-    group: AsyncGroup, _reader: AsyncReader, keys: Iterable[str] | None = None
+    group: AsyncGroup, _reader: AsyncReader, keys: Sequence[str] | None = None
 ) -> dict[str, Any]:
     """Read all children of `group`, or the ones of `keys` that exist."""
     if keys is None:
@@ -97,36 +102,32 @@ async def read_mapping(elem: AsyncGroup, *, _reader: AsyncReader) -> dict[str, A
 @_ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("anndata", "0.1.0"))
 @_ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("raw", "0.1.0"))
 async def read_anndata(elem: AsyncGroup, *, _reader: AsyncReader) -> AnnData:
-    keys: tuple[AnnDataElem, ...] = get_literal_members(AnnDataElem)
-    return AnnData(**await _read_members(elem, _reader, keys))
+    return AnnData(**await _read_members(elem, _reader, ANNDATA_ELEMS))
 
 
-async def _read_sparse(
-    elem: AsyncGroup, *, _reader: AsyncReader, format: Literal["csr", "csc"]
+@_ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("csr_matrix", "0.1.0"))
+@_ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("csc_matrix", "0.1.0"))
+async def read_sparse(
+    elem: AsyncGroup, *, _reader: AsyncReader
 ) -> CSMatrix | CSArray | CupyCSMatrix:
+    # Like the sync reader, a legacy `h5sparse_format` wins over the encoding type
+    if (format := _format_from_attrs(elem.attrs, elem)) not in {"csr", "csc"}:
+        msg = f"Unknown encoding type {format}"
+        raise ValueError(msg)
+
     async def read_dense(k: str) -> DenseType:
-        if not isinstance(arr := await elem.getitem(k), AsyncArray):
-            msg = f"Expected {k!r} of {elem} to be an array, got {type(arr)}"
-            raise ValueError(msg)
-        return cast("DenseType", await arr.getitem(...))
+        _check_array(arr := await elem.getitem(k), elem, k, AsyncArray)
+        return cast("DenseType", await cast("AsyncArray", arr).getitem(...))
 
     data, indices, indptr = await asyncio.gather(
         *map(read_dense, ["data", "indices", "indptr"])
     )
     return _construct(
-        format,
+        cast("Literal['csr', 'csc']", format),
         (data, indices, indptr),
         shape=_shape_from_attrs(elem.attrs),
         dtype=data.dtype,
     )
-
-
-_ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("csr_matrix", "0.1.0"))(
-    partial(_read_sparse, format="csr")
-)
-_ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("csc_matrix", "0.1.0"))(
-    partial(_read_sparse, format="csc")
-)
 
 
 @_ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("dataframe", "0.2.0"))
@@ -141,18 +142,14 @@ async def read_dataframe(elem: AsyncGroup, *, _reader: AsyncReader) -> pd.DataFr
 @_ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("categorical", "0.2.0"))
 async def read_categorical(elem: AsyncGroup, *, _reader: AsyncReader) -> pd.Categorical:
     codes, categories = await _read_children(elem, ["codes", "categories"], _reader)
-    return pd.Categorical.from_codes(
-        codes=codes,
-        categories=categories,
-        ordered=bool(_read_attr(elem.attrs, "ordered")),
-    )
+    return _categorical_from_parts(codes, categories, elem.attrs)
 
 
 async def _read_nullable(
     elem: AsyncGroup, *, _reader: AsyncReader, array_type: _BaseMaskedArray
 ) -> pd.api.extensions.ExtensionArray:
     values, mask = await _read_children(elem, ["values", "mask"], _reader)
-    return array_type(values, mask=mask)
+    return _nullable_from_parts(values, mask, array_type)
 
 
 _ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("nullable-integer", "0.1.0"))(

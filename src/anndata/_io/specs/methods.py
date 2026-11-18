@@ -10,7 +10,7 @@ from functools import partial, wraps
 from importlib.metadata import version
 from itertools import product
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, cast
 
 import h5py
 import numpy as np
@@ -33,7 +33,7 @@ from anndata._io.utils import (
     check_key,
     zero_dim_array_as_scalar,
 )
-from anndata._types import StorageType
+from anndata._types import ANNDATA_ELEMS, StorageType
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
     AwkArray,
@@ -407,18 +407,7 @@ def write_anndata(
 @_REGISTRY.register_read(zarr.Group, IOSpec("raw", "0.1.0"))
 def read_anndata(elem: _GroupStorageType | h5py.File, *, _reader: Reader) -> AnnData:
     d = {}
-    for k in [
-        "X",
-        "obs",
-        "var",
-        "obsm",
-        "varm",
-        "obsp",
-        "varp",
-        "layers",
-        "uns",
-        "raw",
-    ]:
+    for k in ANNDATA_ELEMS:
         if k in elem:
             d[k] = _reader.read_elem(elem[k])
     # Older / non-conforming files may contain higher-dimensional `X` or
@@ -1290,10 +1279,21 @@ def write_categorical(
 @_REGISTRY.register_read(h5py.Group, IOSpec("categorical", "0.2.0"))
 @_REGISTRY.register_read(zarr.Group, IOSpec("categorical", "0.2.0"))
 def read_categorical(elem: _GroupStorageType, *, _reader: Reader) -> pd.Categorical:
+    return _categorical_from_parts(
+        _reader.read_elem(elem["codes"]),
+        _reader.read_elem(elem["categories"]),
+        elem.attrs,
+    )
+
+
+def _categorical_from_parts(
+    codes: np.ndarray, categories: np.ndarray, attrs: Mapping[str, Any]
+) -> pd.Categorical:
+    # pandas’ stubs describe fewer array types than `from_codes` accepts
     return pd.Categorical.from_codes(
-        codes=_reader.read_elem(elem["codes"]),
-        categories=_reader.read_elem(elem["categories"]),
-        ordered=bool(_read_attr(elem.attrs, "ordered")),
+        codes=cast("Any", codes),
+        categories=cast("Any", categories),
+        ordered=bool(_read_attr(attrs, "ordered")),
     )
 
 
@@ -1399,10 +1399,15 @@ class _BaseMaskedArray(Protocol):
 def _read_nullable(
     elem: _GroupStorageType, *, _reader: Reader, array_type: _BaseMaskedArray
 ) -> pd.api.extensions.ExtensionArray:
-    return array_type(
-        _reader.read_elem(elem["values"]),
-        mask=_reader.read_elem(elem["mask"]),
+    return _nullable_from_parts(
+        _reader.read_elem(elem["values"]), _reader.read_elem(elem["mask"]), array_type
     )
+
+
+def _nullable_from_parts(
+    values: np.ndarray, mask: np.ndarray, array_type: _BaseMaskedArray
+) -> pd.api.extensions.ExtensionArray:
+    return array_type(values, mask=mask)
 
 
 _REGISTRY.register_read(h5py.Group, IOSpec("nullable-integer", "0.1.0"))(

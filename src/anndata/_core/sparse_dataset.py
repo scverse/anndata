@@ -47,7 +47,7 @@ from .index import (
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from types import EllipsisType, ModuleType
+    from types import EllipsisType, ModuleType, UnionType
     from typing import Any, Literal
 
     from .._types import _ArrayStorageType, _GroupStorageType
@@ -102,11 +102,20 @@ def _index_in_memory(
     return cast("Any", mtx)[row, col]
 
 
-def _group_array(group: _GroupStorageType, key: str) -> _ArrayStorageType:
-    if not isinstance(arr := group[key], zarr.Array | h5py.Dataset):
+def _check_array(
+    arr: object,
+    group: object,
+    key: str,
+    kinds: type | UnionType = zarr.Array | h5py.Dataset,
+) -> None:
+    if not isinstance(arr, kinds):
         msg = f"Expected {key!r} of {group} to be an array, got {type(arr)}"
         raise ValueError(msg)
-    return arr
+
+
+def _group_array(group: _GroupStorageType, key: str) -> _ArrayStorageType:
+    _check_array(arr := group[key], group, key)
+    return cast("_ArrayStorageType", arr)
 
 
 def slice_len(s: slice, l: int) -> int:
@@ -395,13 +404,17 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
 
 
 def _get_group_format(group: _GroupStorageType) -> str:
-    if "h5sparse_format" in group.attrs:
+    return _format_from_attrs(group.attrs, group)
+
+
+def _format_from_attrs(attrs: Mapping[str, Any], group: object) -> str:
+    if "h5sparse_format" in attrs:
         # TODO: Warn about an old format
         # If this is only just going to be public, I could insist it's not like this
-        fmt = _read_attr(group.attrs, "h5sparse_format")
+        fmt = _read_attr(attrs, "h5sparse_format")
     else:
         # Should this be an extra field?
-        fmt = _read_attr(group.attrs, "encoding-type")
+        fmt = _read_attr(attrs, "encoding-type")
     if not isinstance(fmt, str):
         msg = f"Expected a string sparse format for {group}, got {fmt!r}"
         raise ValueError(msg)

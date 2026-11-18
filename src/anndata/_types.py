@@ -10,7 +10,7 @@ import h5py
 import zarr
 
 from . import typing
-from .utils import set_module
+from .utils import get_literal_members, set_module
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Mapping
@@ -35,6 +35,7 @@ else:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
 
 
 __all__ = [
+    "ANNDATA_ELEMS",
     "AnnDataElem",
     "Dataset2DIlocIndexer",
     "Read",
@@ -240,6 +241,7 @@ type AnnDataElem = Literal[
     "raw",
     "uns",
 ]
+ANNDATA_ELEMS: tuple[AnnDataElem, ...] = get_literal_members(AnnDataElem)
 
 type Join_T = Literal["inner", "outer"]
 

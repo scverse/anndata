@@ -10,13 +10,13 @@ import zarr
 
 from anndata._core.file_backing import AnnDataFileManager
 from anndata._io.specs.registry import read_elem, read_elem_lazy
-from anndata._types import AnnDataElem
+from anndata._types import ANNDATA_ELEMS
 from testing.anndata._doctest import doctest_needs
 
 from ..._core.anndata import AnnData
 from ..._core.xarray import requires_xarray
 from ..._settings import settings
-from ...utils import get_literal_members, warn
+from ...utils import warn
 from .. import read_dispatched
 
 if TYPE_CHECKING:
@@ -27,9 +27,6 @@ if TYPE_CHECKING:
 
     from anndata._io.specs.registry import IOSpec
     from anndata._types import Read, StorageType, _GroupStorageType
-
-
-ANNDATA_ELEMS: tuple[AnnDataElem, ...] = get_literal_members(AnnDataElem)
 
 
 def _as_group(elem: StorageType) -> _GroupStorageType:
