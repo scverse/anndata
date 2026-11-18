@@ -176,7 +176,8 @@ def test_error_cancels_other_reads(tmp_path: Path) -> None:
                     cancelled.append(key)
                     raise
             elif key.startswith("obs/missing/"):
-                await x_requested.wait()
+                # Fail, not hang, if the read of `X` never starts
+                await asyncio.wait_for(x_requested.wait(), timeout=10)
                 failed_after_x = True
             return await super().get(key, *args, **kwargs)
 
