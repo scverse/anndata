@@ -112,7 +112,6 @@ def test_sparse_legacy_attrs(tmp_path: Path) -> None:
     ad.io.write_elem(g, "m", sparse.random(5, 4, density=0.5, format="csc"))
     attrs = dict(g["m"].attrs)
     attrs["h5sparse_shape"] = attrs.pop("shape")
-    # The legacy format wins over the encoding type
     attrs |= {"encoding-type": "csr_matrix", "h5sparse_format": "csc"}
     g["m"].attrs.clear()
     g["m"].attrs.update(attrs)
