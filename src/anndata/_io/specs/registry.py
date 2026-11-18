@@ -12,8 +12,7 @@ import numpy as np
 import zarr
 
 from anndata._io.utils import (
-    _get_display_path,
-    add_key_note,
+    add_read_key_note,
     report_read_key_on_error,
     report_write_key_on_error,
 )
@@ -377,8 +376,8 @@ class AsyncReader:
 
     async def read_elem(self, elem: zarr.AsyncGroup | zarr.AsyncArray) -> RWAble:
         """Read an element from a store. See exported function for more details."""
-        iospec = get_spec(elem)
         try:
+            iospec = get_spec(elem)
             if not self.registry.has_read(type(elem), iospec):
                 sync_type = (
                     zarr.Group if isinstance(elem, zarr.AsyncGroup) else zarr.Array
@@ -395,8 +394,7 @@ class AsyncReader:
             )
             return await read_func(elem)
         except Exception as e:
-            path, key = _get_display_path(elem).rsplit("/", 1)
-            add_key_note(e, elem, path or "/", key, "read")
+            add_read_key_note(e, elem)
             raise
 
 

@@ -301,6 +301,11 @@ def add_key_note(
     e.add_note(msg)
 
 
+def add_read_key_note(e: BaseException, store: Storage) -> None:
+    path, key = _get_display_path(store).rsplit("/", 1)
+    add_key_note(e, store, path or "/", key, "read")
+
+
 def report_read_key_on_error(func):
     """\
     A decorator for hdf5/zarr element reading which makes keys involved in errors get reported.
@@ -332,8 +337,7 @@ def report_read_key_on_error(func):
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            path, key = _get_display_path(store).rsplit("/", 1)
-            add_key_note(e, store, path or "/", key, "read")
+            add_read_key_note(e, store)
             raise
 
     return func_wrapper
