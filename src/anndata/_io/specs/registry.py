@@ -103,7 +103,7 @@ class IORegistryError(Exception):
         cls,
         method: str,
         registry: Mapping,
-        src_typ: type[StorageType],
+        src_typ: type,
         spec: IOSpec,
     ) -> IORegistryError:
         # TODO: Improve error message if type exists, but version does not
@@ -388,8 +388,11 @@ class AsyncReader:
                 sync_type = (
                     zarr.Group if isinstance(elem, zarr.AsyncGroup) else zarr.Array
                 )
-                # Fails like `read_elem` for an encoding that no reader knows
-                _REGISTRY.get_read(sync_type, iospec, reader=Reader(_REGISTRY))
+                if not _REGISTRY.has_read(sync_type, iospec):
+                    name = "read"
+                    raise IORegistryError._from_read_parts(
+                        name, _REGISTRY.read, type(elem), iospec
+                    )
                 msg = (
                     f"No async read method registered for {iospec}. "
                     "Read this element with `anndata.io.read_elem`."
@@ -539,6 +542,9 @@ async def read_elem_async(
       When awaited from another loop (e.g. in Jupyter), the read is submitted to zarr’s loop.
     - :class:`zarr.AsyncGroup` and :class:`zarr.AsyncArray` are read on the running loop.
 
+    The result (e.g. a dataframe) is also constructed on that loop’s thread,
+    so the loop runs nothing else meanwhile.
+
     Read callbacks (see :func:`~anndata.experimental.read_dispatched`) are not supported.
 
     Parameters
@@ -554,7 +560,8 @@ async def read_elem_async(
     ------
     NotImplementedError
         If `elem`, or an element inside it, has an encoding that only
-        :func:`anndata.io.read_elem` reads (e.g. an element without encoding metadata).
+        :func:`anndata.io.read_elem` reads (e.g. an element without encoding metadata,
+        or a dataframe of encoding version 0.1.0).
 
     Examples
     --------

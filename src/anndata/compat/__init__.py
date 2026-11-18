@@ -201,7 +201,6 @@ else:
     )
 
 
-# https://github.com/scverse/anndata/issues/1749
 def zarr_async_node(
     elem: zarr.Group | zarr.Array,
 ) -> zarr.AsyncGroup | zarr.AsyncArray:
@@ -223,6 +222,7 @@ def zarr_loop() -> asyncio.AbstractEventLoop:
     return _get_loop()
 
 
+# https://github.com/scverse/anndata/issues/1749
 def is_cupy_importable() -> bool:
     try:
         import cupy  # noqa: F401

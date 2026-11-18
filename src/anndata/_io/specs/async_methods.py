@@ -70,7 +70,7 @@ async def _read_children(
     *,
     missing_ok: bool = False,
 ) -> dict[str, Any]:
-    """Read the children `keys` of `group`, or all of them, each as soon as it is found."""
+    """Read the children `keys` of `group`, each as soon as it is found, or all children."""
 
     async def read(k: str, node: AsyncArray | AsyncGroup | None = None) -> object:
         if node is None:
@@ -174,7 +174,8 @@ async def read_sparse(
 @_ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("dataframe", "0.2.0"))
 async def read_dataframe(elem: AsyncGroup, *, _reader: AsyncReader) -> pd.DataFrame:
     columns, idx_key = _dataframe_keys(elem.attrs)
-    parts = await _read_children(elem, _reader, [*columns, idx_key])
+    # The index can also be a column, read it once
+    parts = await _read_children(elem, _reader, [*dict.fromkeys([*columns, idx_key])])
     return _dataframe_from_parts(
         {k: parts[k] for k in columns}, parts[idx_key], columns, idx_key
     )
