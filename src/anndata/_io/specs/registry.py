@@ -529,6 +529,8 @@ async def read_elem_async(
     Reads of child elements (e.g. the columns of a dataframe,
     or `data`, `indices`, and `indptr` of a sparse matrix) run concurrently.
     Gather several calls to also read several elements or stores concurrently.
+    The function sets no limit on the number of store requests in flight,
+    so a remote store needs a limit in the store layer.
 
     A store’s async resources (e.g. an `s3fs` session) are bound to the event loop
     that opened the store, so the read runs on that loop:
