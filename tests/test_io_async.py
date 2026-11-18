@@ -14,7 +14,8 @@ from zarr.core.sync import sync
 from zarr.storage import LocalStore, WrapperStore
 
 import anndata as ad
-from anndata._io.specs.registry import IORegistryError
+from anndata._io.specs import _REGISTRY, IOSpec
+from anndata._io.specs.registry import _ASYNC_REGISTRY, IORegistryError
 from anndata.compat import awkward as ak
 from anndata.compat import zarr_loop
 from anndata.experimental import read_elem_async
@@ -154,14 +155,20 @@ def test_no_async_reader(tmp_path: Path) -> None:
 
 def test_error_cancels_other_reads(tmp_path: Path) -> None:
     """When one child fails, the reads of its siblings are cancelled."""
-    ad.AnnData(np.ones((3, 2))).write_zarr(tmp_path / "x.zarr")
-    obs = zarr.open_group(tmp_path / "x.zarr", mode="r+").require_group("obs")
-    obs.attrs["column-order"] = ["missing"]
+    path = tmp_path / "x.zarr"
+    ad.AnnData(np.ones((3, 2))).write_zarr(path)
+    # Without consolidated metadata, the lookup of the missing column asks the store
+    root = zarr.open_group(path, mode="r+", use_consolidated=False)
+    root.require_group("obs").attrs["column-order"] = ["missing"]
+    x_requested = asyncio.Event()
     cancelled: list[str] = []
+    failed_after_x = False
 
     class Store(WrapperStore):
         async def get(self, key: str, *args, **kwargs):
+            nonlocal failed_after_x
             if key.startswith("X/"):
+                x_requested.set()
                 # Stay pending until the error in `obs` cancels this read
                 try:
                     await asyncio.sleep(60)
@@ -169,12 +176,29 @@ def test_error_cancels_other_reads(tmp_path: Path) -> None:
                     cancelled.append(key)
                     raise
             elif key.startswith("obs/missing/"):
-                # Let the read of `X` start first
-                await asyncio.sleep(0.2)
+                await x_requested.wait()
+                failed_after_x = True
             return await super().get(key, *args, **kwargs)
 
-    store = Store(LocalStore(tmp_path / "x.zarr", read_only=True))
+    store = Store(LocalStore(path, read_only=True))
     g = zarr.open_group(store, mode="r", use_consolidated=False)
     with pytest.raises(KeyError):
         asyncio.run(read_elem_async(g))
+    assert failed_after_x
     assert cancelled
+
+
+def test_async_registry_covers_sync_zarr_readers() -> None:
+    """A new sync zarr reader needs an async reader, or an entry here."""
+    sync_type = {zarr.AsyncGroup: zarr.Group, zarr.AsyncArray: zarr.Array}
+    with_async = {(sync_type[typ], spec) for typ, spec, _ in _ASYNC_REGISTRY.read}
+    sync_only = {
+        (typ, spec)
+        for typ, spec, modifiers in _REGISTRY.read
+        if typ in {zarr.Group, zarr.Array} and not modifiers
+    } - with_async
+    assert sync_only == {
+        (zarr.Group, IOSpec("", "")),
+        (zarr.Array, IOSpec("", "")),
+        (zarr.Group, IOSpec("dataframe", "0.1.0")),
+    }
