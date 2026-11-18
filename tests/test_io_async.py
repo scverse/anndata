@@ -10,12 +10,13 @@ import pytest
 import zarr
 import zarr.api.asynchronous as za
 from scipy import sparse
-from zarr.core.sync import _get_loop, sync
+from zarr.core.sync import sync
 from zarr.storage import LocalStore, WrapperStore
 
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError
 from anndata.compat import awkward as ak
+from anndata.compat import zarr_loop
 from anndata.experimental import read_elem_async
 from anndata.io import read_elem
 from anndata.tests.helpers import GEN_ADATA_NO_XARRAY_ARGS, assert_equal, gen_adata
@@ -87,7 +88,7 @@ def test_loop_affinity(tmp_path: Path) -> None:
     elem = zarr.open_group(store, mode="r")["df"]
     loops.clear()
     assert_equal(df, asyncio.run(read_elem_async(elem)))
-    assert loops == {_get_loop()}
+    assert loops == {zarr_loop()}
 
     async def read_on_this_loop() -> asyncio.AbstractEventLoop:
         elem = await (await za.open_group(store, mode="r")).getitem("df")

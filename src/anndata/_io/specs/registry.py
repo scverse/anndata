@@ -26,7 +26,13 @@ from anndata._types import (
     _ReadLazyInternal,
 )
 from anndata._write_compat import WriteCompat
-from anndata.compat import DaskArray, _read_attr, has_xp
+from anndata.compat import (
+    DaskArray,
+    _read_attr,
+    has_xp,
+    zarr_async_node,
+    zarr_loop,
+)
 
 from ...utils import warn
 
@@ -569,23 +575,17 @@ async def read_elem_async(
     >>> [obs.shape for obs in obs_list]
     [(700, 8), (700, 8), (700, 8)]
     """
-    from zarr.core.sync import _get_loop
-
     reader = AsyncReader(_ASYNC_REGISTRY)
     if isinstance(elem, zarr.AsyncGroup | zarr.AsyncArray):
         return await reader.read_elem(elem)
-    if isinstance(elem, zarr.Group):
-        coro = reader.read_elem(elem._async_group)
-    elif isinstance(elem, zarr.Array):
-        # `async_array` is public only from zarr 3.1.4
-        coro = reader.read_elem(elem._async_array)
-    else:
+    if not isinstance(elem, zarr.Group | zarr.Array):
         msg = f"`read_elem_async` reads zarr groups and arrays, not {type(elem)}."
         raise TypeError(msg)
-    zarr_loop = _get_loop()
-    if asyncio.get_running_loop() is zarr_loop:
+    coro = reader.read_elem(zarr_async_node(elem))
+    loop = zarr_loop()
+    if asyncio.get_running_loop() is loop:
         return await coro
-    return await asyncio.wrap_future(asyncio.run_coroutine_threadsafe(coro, zarr_loop))
+    return await asyncio.wrap_future(asyncio.run_coroutine_threadsafe(coro, loop))
 
 
 def read_elem_lazy(
