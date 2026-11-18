@@ -33,7 +33,7 @@ from anndata._io.utils import (
     check_key,
     zero_dim_array_as_scalar,
 )
-from anndata._types import ANNDATA_ELEMS, StorageType
+from anndata._types import StorageType
 from anndata._warnings import OldFormatWarning
 from anndata.compat import (
     AwkArray,
@@ -407,7 +407,18 @@ def write_anndata(
 @_REGISTRY.register_read(zarr.Group, IOSpec("raw", "0.1.0"))
 def read_anndata(elem: _GroupStorageType | h5py.File, *, _reader: Reader) -> AnnData:
     d = {}
-    for k in ANNDATA_ELEMS:
+    for k in [
+        "X",
+        "obs",
+        "var",
+        "obsm",
+        "varm",
+        "obsp",
+        "varp",
+        "layers",
+        "uns",
+        "raw",
+    ]:
         if k in elem:
             d[k] = _reader.read_elem(elem[k])
     # Older / non-conforming files may contain higher-dimensional `X` or
