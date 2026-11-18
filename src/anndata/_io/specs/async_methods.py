@@ -35,7 +35,7 @@ from .methods import (
 from .registry import _ASYNC_REGISTRY, IOSpec
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Coroutine, Iterable, Sequence
     from typing import Any, Literal
 
     from numpy import typing as npt
@@ -43,39 +43,53 @@ if TYPE_CHECKING:
     from anndata import acc
     from anndata._core.sparse_dataset import DenseType
     from anndata.compat import AwkArray, CSArray, CSMatrix, CupyCSMatrix
-    from anndata.typing import RWAble
 
     from .methods import _BaseMaskedArray
     from .registry import AsyncReader
 
 
+async def _gather[T](coros: Iterable[Coroutine[Any, Any, T]]) -> list[T]:
+    """Like :func:`asyncio.gather`, but cancel the reads that are still pending when it ends."""
+    tasks = [asyncio.ensure_future(coro) for coro in coros]
+    try:
+        return list(await asyncio.gather(*tasks))
+    finally:
+        if pending := [task for task in tasks if not task.done()]:
+            for task in pending:
+                task.cancel()
+            await asyncio.gather(*pending, return_exceptions=True)
+
+
+_MISSING = object()
+
+
 async def _read_children(
-    group: AsyncGroup, keys: Iterable[str], _reader: AsyncReader
-) -> list[Any]:
-    async def read_child(k: str) -> RWAble:
-        return await _reader.read_elem(await group.getitem(k))
-
-    return await asyncio.gather(*map(read_child, keys))
-
-
-async def _read_members(
-    group: AsyncGroup, _reader: AsyncReader, keys: Sequence[str] | None = None
+    group: AsyncGroup,
+    _reader: AsyncReader,
+    keys: Sequence[str] | None = None,
+    *,
+    missing_ok: bool = False,
 ) -> dict[str, Any]:
-    """Read all children of `group`, or the ones of `keys` that exist."""
-    if keys is None:
-        members = {k: v async for k, v in group.members()}
-    else:
-        # Like the sync `k in elem`: look up only these keys, without listing the group
-        async def get(k: str) -> AsyncArray | AsyncGroup | None:
-            try:
-                return await group.getitem(k)
-            except KeyError:
-                return None
+    """Read the children `keys` of `group`, or all of them, each as soon as it is found."""
 
-        nodes = await asyncio.gather(*map(get, keys))
-        members = {k: v for k, v in zip(keys, nodes, strict=True) if v is not None}
-    values = await asyncio.gather(*map(_reader.read_elem, members.values()))
-    return dict(zip(members, values, strict=True))
+    async def read(k: str, node: AsyncArray | AsyncGroup | None = None) -> object:
+        if node is None:
+            try:
+                node = await group.getitem(k)
+            except KeyError:
+                if not missing_ok:
+                    raise
+                return _MISSING
+        return await _reader.read_elem(node)
+
+    if keys is None:
+        members = [m async for m in group.members()]
+        keys = [k for k, _ in members]
+        values = await _gather(read(k, node) for k, node in members)
+    else:
+        # Like the sync `elem[k]`: look up only these keys, without listing the group
+        values = await _gather(map(read, keys))
+    return {k: v for k, v in zip(keys, values, strict=True) if v is not _MISSING}
 
 
 @_ASYNC_REGISTRY.register_read(AsyncArray, IOSpec("array", "0.2.0"))
@@ -116,18 +130,20 @@ async def read_null(elem: AsyncArray, *, _reader: AsyncReader) -> None:
 
 @_ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("dict", "0.1.0"))
 async def read_mapping(elem: AsyncGroup, *, _reader: AsyncReader) -> dict[str, Any]:
-    return await _read_members(elem, _reader)
+    return await _read_children(elem, _reader)
 
 
 @_ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("awkward-array", "0.1.0"))
 async def read_awkward(elem: AsyncGroup, *, _reader: AsyncReader) -> AwkArray:
-    return _awkward_from_parts(await _read_members(elem, _reader), elem.attrs)
+    return _awkward_from_parts(await _read_children(elem, _reader), elem.attrs)
 
 
 @_ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("anndata", "0.1.0"))
 @_ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("raw", "0.1.0"))
 async def read_anndata(elem: AsyncGroup, *, _reader: AsyncReader) -> AnnData:
-    return AnnData(**await _read_members(elem, _reader, ANNDATA_ELEMS))
+    return AnnData(
+        **await _read_children(elem, _reader, ANNDATA_ELEMS, missing_ok=True)
+    )
 
 
 @_ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("csr_matrix", "0.1.0"))
@@ -144,8 +160,8 @@ async def read_sparse(
         _check_array(arr := await elem.getitem(k), elem, k, AsyncArray)
         return cast("DenseType", await cast("AsyncArray", arr).getitem(...))
 
-    data, indices, indptr = await asyncio.gather(
-        *map(read_dense, ["data", "indices", "indptr"])
+    data, indices, indptr = await _gather(
+        map(read_dense, ["data", "indices", "indptr"])
     )
     return _construct(
         cast("Literal['csr', 'csc']", format),
@@ -158,23 +174,23 @@ async def read_sparse(
 @_ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("dataframe", "0.2.0"))
 async def read_dataframe(elem: AsyncGroup, *, _reader: AsyncReader) -> pd.DataFrame:
     columns, idx_key = _dataframe_keys(elem.attrs)
-    *data, index = await _read_children(elem, [*columns, idx_key], _reader)
+    parts = await _read_children(elem, _reader, [*columns, idx_key])
     return _dataframe_from_parts(
-        dict(zip(columns, data, strict=True)), index, columns, idx_key
+        {k: parts[k] for k in columns}, parts[idx_key], columns, idx_key
     )
 
 
 @_ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("categorical", "0.2.0"))
 async def read_categorical(elem: AsyncGroup, *, _reader: AsyncReader) -> pd.Categorical:
-    codes, categories = await _read_children(elem, ["codes", "categories"], _reader)
-    return _categorical_from_parts(codes, categories, elem.attrs)
+    parts = await _read_children(elem, _reader, ["codes", "categories"])
+    return _categorical_from_parts(parts["codes"], parts["categories"], elem.attrs)
 
 
 async def _read_nullable(
     elem: AsyncGroup, *, _reader: AsyncReader, array_type: _BaseMaskedArray
 ) -> pd.api.extensions.ExtensionArray:
-    values, mask = await _read_children(elem, ["values", "mask"], _reader)
-    return _nullable_from_parts(values, mask, array_type)
+    parts = await _read_children(elem, _reader, ["values", "mask"])
+    return _nullable_from_parts(parts["values"], parts["mask"], array_type)
 
 
 _ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("nullable-integer", "0.1.0"))(
@@ -189,5 +205,5 @@ _ASYNC_REGISTRY.register_read(AsyncGroup, IOSpec("nullable-boolean", "0.1.0"))(
 async def read_nullable_string(
     elem: AsyncGroup, *, _reader: AsyncReader
 ) -> pd.api.extensions.ExtensionArray:
-    values, mask = await _read_children(elem, ["values", "mask"], _reader)
-    return _nullable_string_from_parts(values, mask, elem.attrs)
+    parts = await _read_children(elem, _reader, ["values", "mask"])
+    return _nullable_string_from_parts(parts["values"], parts["mask"], elem.attrs)
