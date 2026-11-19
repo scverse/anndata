@@ -7,6 +7,7 @@ from __future__ import annotations
 from collections import OrderedDict, defaultdict
 from collections.abc import Mapping, MutableMapping, Sequence
 from copy import copy, deepcopy
+from dataclasses import dataclass
 from functools import singledispatchmethod
 from pathlib import Path
 from textwrap import dedent
@@ -38,7 +39,6 @@ from ..compat import (
     has_xp,
     old_positionals,
     pandas_as_str,
-    pandas_no_chained_assignment_warning,
 )
 from ..logging import anndata_logger as logger
 from ..utils import (
@@ -72,7 +72,12 @@ from .index import (
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset
 from .storage import _non_2d_message, coerce_array
-from .views import DictView, _resolve_idxs, as_view
+from .views import (
+    DictView,
+    _resolve_idxs,
+    as_view,
+    remove_unused_categories,
+)
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
@@ -102,7 +107,7 @@ if TYPE_CHECKING:
     from ..typing import AlignedArray, Index, Index1D, Storable, _Index, _Index1DNorm
     from .aligned_df import IntoAlignedDf
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
-    from .index import SubsetIdx
+    from .index import NumpyIdx1D, SubsetIdx
     from .sparse_dataset import BackedSparseMatrix
 
     type IntoAlignedMapping = Mapping[str, AlignedArray] | NDArray[np.void] | None
@@ -362,16 +367,19 @@ class AnnData:  # noqa: PLW1641
 
         # views on attributes of adata_ref
         # pandas cannot be indexed with an `IndexManager` or an array-API array
-        var_sub = adata_ref.var.iloc[_as_numpy_idx(self._vidx)]
-        obs_sub = adata_ref.obs.iloc[_as_numpy_idx(self._oidx)]
+        vidx_np, oidx_np = _as_numpy_idx(self._vidx), _as_numpy_idx(self._oidx)
+        var_sub = adata_ref.var.iloc[vidx_np]
+        obs_sub = adata_ref.obs.iloc[oidx_np]
+        _IndexCache(adata_ref.var.index).pass_on_unique(var_sub.index, vidx_np)
+        _IndexCache(adata_ref.obs.index).pass_on_unique(obs_sub.index, oidx_np)
         # fix categories
         uns = copy(adata_ref._uns)
         if settings.remove_unused_categories:
             self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
             self._remove_unused_categories(adata_ref.var, var_sub, uns)
-        # set attributes
-        self._obs = as_view(obs_sub, view_args=(self, "obs"))
-        self._var = as_view(var_sub, view_args=(self, "var"))
+        # set attributes; categories are fixed already, so skip `as_view_df` doing it again
+        self._obs = as_view(obs_sub, (self, "obs"), remove_unused_categories=False)
+        self._var = as_view(var_sub, (self, "var"), remove_unused_categories=False)
         self._uns = uns
 
         # set raw, easy, as it’s immutable anyways...
@@ -1186,8 +1194,7 @@ class AnnData:  # noqa: PLW1641
             if not isinstance(df_full[k].dtype, pd.CategoricalDtype):
                 continue
             all_categories = df_full[k].cat.categories
-            with pandas_no_chained_assignment_warning():
-                df_sub[k] = df_sub[k].cat.remove_unused_categories()
+            remove_unused_categories(df_sub, k)
             # also correct the colors...
             color_key = f"{k}_colors"
             if color_key not in uns:
@@ -1691,12 +1698,12 @@ class AnnData:  # noqa: PLW1641
     def _check_uniqueness(self) -> None:
         if (
             settings.restrict_index_types
-            and self.obs.index[self.obs.index.notna()].has_duplicates
+            and _IndexCache(self.obs.index).has_duplicates()
         ):
             utils.warn_names_duplicates("obs")
         if (
             settings.restrict_index_types
-            and self.var.index[self.var.index.notna()].has_duplicates
+            and _IndexCache(self.var.index).has_duplicates()
         ):
             utils.warn_names_duplicates("var")
 
@@ -2144,3 +2151,36 @@ def _infer_shape(
 def _subset_anndata(a: AnnData, subset_idx: SubsetIdx) -> AnnData:
     """`AnnData` normalises its own indices, so pass them through untouched."""
     return a._getitem(subset_idx)
+
+
+@dataclass(frozen=True, slots=True)
+class _IndexCache:
+    """Access to the private cache of a :class:`pandas.Index` (shared with its copies)."""
+
+    index: pd.Index
+
+    @property
+    def cache(self) -> dict[str, object]:
+        return vars(self.index)["_cache"]
+
+    def has_duplicates(self) -> bool:
+        if self.index.hasnans:
+            return self.index[self.index.notna()].has_duplicates
+        # keep only the answer on the index (shared with its copies), not pandas' lookup table,
+        # which costs ~90 bytes per name and slows down slicing: check a throw-away view,
+        # unless the index already has a table (slicing it would build another one)
+        cache = self.cache
+        if "is_unique" not in cache:
+            idx = self.index if "_engine" in cache else self.index[:]
+            cache["is_unique"] = idx.is_unique
+        return not cache["is_unique"]
+
+    def pass_on_unique(self, sub: pd.Index, idx: NumpyIdx1D) -> None:
+        """Mark `sub = index[idx]` as unique if `index` is known to be and `idx` can’t repeat a name.
+
+        Copies of a view then don’t have to check its names for duplicates again.
+        """
+        if (isinstance(idx, slice) or idx.dtype == bool) and self.cache.get(
+            "is_unique"
+        ):
+            _IndexCache(sub).cache["is_unique"] = True

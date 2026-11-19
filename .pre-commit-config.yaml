@@ -7,10 +7,15 @@ default_language_version:
   python: "3.14"
 repos:
   - repo: https://github.com/biomejs/pre-commit
-    rev: v2.6.3
+    rev: v2.6.4
     hooks:
       - id: biome-format
         exclude: ^\.cruft\.json$ # inconsistent indentation with cruft - file never to be modified manually.
+        groups: [format]
+  - repo: https://github.com/jolars/panache-pre-commit
+    rev: v3.18.0
+    hooks:
+      - id: panache-format
         groups: [format]
   - repo: https://github.com/ComPWA/taplo-pre-commit
     rev: v0.9.3
@@ -19,7 +24,7 @@ repos:
         groups: [format]
         exclude: ^pyproject[.]toml$
   - repo: https://github.com/tox-dev/pyproject-fmt
-    rev: v2.30.3
+    rev: v2.30.6
     hooks:
       - id: pyproject-fmt
         groups: [format]
@@ -69,7 +74,7 @@ repos:
         additional_dependencies:
           - tomli
   - repo: https://github.com/zizmorcore/zizmor-pre-commit
-    rev: v1.31.1
+    rev: v1.32.0
     hooks:
       - id: zizmor
         args: [--no-progress, --fix]
