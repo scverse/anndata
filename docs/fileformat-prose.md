@@ -301,7 +301,6 @@ with the names array `"columns"` and the prefix `"column"`.
   - MUST contain encoding metadata `"encoding-type": "dataframe"`, `"encoding-version": "0.3.0"`
   - MUST contain `"df:shape"`, the number of rows and the number of columns *including* the index
   - MAY contain `"df:index"`, the position of the index in `"columns"`.
-    Without it, a reader MUST use a range index `0` … `n_rows - 1`.
     When there is an index, anndata writes it at position `0`
 - The group MUST contain the string array `"columns"`, holding the index name (if any) and the column names
 - An unnamed index MUST be named `""` (the empty string)

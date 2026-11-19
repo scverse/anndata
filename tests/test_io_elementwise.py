@@ -277,6 +277,18 @@ def test_accessor_roundtrip(store: _GroupStorageType, ref: object) -> None:
     assert read_elem(store["ref"]) == ref
 
 
+@pytest.mark.parametrize(
+    "elem", [pd.DataFrame({"a": [1, 2]}), {"x": np.zeros(2)}], ids=["df", "dict"]
+)
+def test_write_child_into_indexed_warns(
+    store: _GroupStorageType, elem: pd.DataFrame | dict[str, np.ndarray]
+) -> None:
+    """Writing a child directly bypasses the names array, so readers ignore it."""
+    write_elem(store, "elem", elem, compat="0.14")
+    with pytest.warns(ad.WriteWarning, match=r"readers will ignore it"):
+        write_elem(cast("_GroupStorageType", store["elem"]), "new", np.ones(2))
+
+
 @dataclass(frozen=True)
 class ExtMetaAcc(MetaAcc):
     """A third-party accessor that `A.to_json` would serialize lossily."""
