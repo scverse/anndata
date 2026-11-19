@@ -322,7 +322,7 @@ with the names array `"columns"` and the prefix `"column"`.
     When there is an index, anndata writes it at position `0`
 - The group MUST contain the string array `"columns"`, holding the index name (if any) and the column names
 - An unnamed index MUST be named `""` (the empty string)
-- `"column_{i}"` MUST hold the data for `columns[i]`, each an array with equivalent first dimensions
+- `"column_{i}"` MUST hold the data for `columns[i]`, each a logical array with equivalent first (and only) dimensions
 - Each entry SHOULD share chunk sizes (in the HDF5 or zarr container)
 
 (mappings)=
