@@ -13,7 +13,7 @@ import zarr
 import zarr.storage
 
 import anndata as ad
-from anndata._io.specs.registry import read_elem_partial
+from anndata._io.specs.registry import IORegistryError, read_elem_partial
 from anndata.acc import A, AdAcc, AdRef
 from anndata.experimental.backed import Dataset2D
 
@@ -75,7 +75,7 @@ def test_accessor_needs_0_14(
     assert adata.unwriteable()
     assert not adata.unwriteable(compat="0.14")
     assert not adata.unwriteable(compat=ad.WriteConfig(accessor=True))
-    with pytest.raises(ValueError, match=r'Pass `compat="0.14"`'):
+    with pytest.raises(IORegistryError, match=r'Pass `compat="0.14"`'):
         getattr(adata, f"write_{diskfmt}")(diskfmt_store)
 
 
@@ -354,6 +354,65 @@ def test_indexed_keys_roundtrip_full(
     adata.uns["empty"] = {}
     getattr(adata, f"write_{diskfmt}")(diskfmt_store, compat="0.14")
     assert_equal(getattr(ad, f"read_{diskfmt}")(diskfmt_store), adata)
+
+
+@pytest.mark.parametrize(
+    ("compat", "versions"),
+    [
+        pytest.param("0.13", {"dict": "0.1.0", "dataframe": "0.2.0"}, id="0.13"),
+        pytest.param("0.14", {"dict": "0.2.0", "dataframe": "0.3.0"}, id="0.14"),
+    ],
+)
+def test_callback_iospec_matches_written(
+    compat: Literal["0.13", "0.14"], versions: dict[str, str]
+) -> None:
+    """`write_dispatched` callbacks see the spec that’s actually written."""
+    g = zarr.open_group(zarr.storage.MemoryStore())
+    seen: dict[str, str] = {}
+
+    def callback(func, store, k, elem, *, dataset_kwargs, iospec):
+        func(store, k, elem, dataset_kwargs=dataset_kwargs)
+        if iospec.encoding_type in versions:
+            seen[iospec.encoding_type] = iospec.encoding_version
+            assert store[k].attrs["encoding-version"] == iospec.encoding_version
+
+    elem = {"df": pd.DataFrame({"a": [1, 2]})}
+    ad.experimental.write_dispatched(g, "/", elem, callback=callback, compat=compat)
+    assert seen == versions
+
+
+def test_register_write_unknown_flag() -> None:
+    from anndata._io.specs.registry import IORegistry, IOSpec
+
+    with pytest.raises(ValueError, match=r"Unknown `WriteConfig` flags: \['nope'\]"):
+        IORegistry().register_write(zarr.Group, dict, IOSpec("x", "0"), when={"nope"})
+
+
+def test_register_write_no_matching_flags() -> None:
+    from anndata._io.specs.registry import IORegistry, IORegistryError, IOSpec, Writer
+
+    registry = IORegistry()
+    registry.register_write(zarr.Group, dict, IOSpec("x", "0"), when={"accessor"})(
+        lambda *_, **__: None
+    )
+    with pytest.raises(IORegistryError, match=r"needs flag\(s\) `accessor`"):
+        Writer(registry, compat="0.13").find_write_func(zarr.Group, {})
+
+
+def test_register_write_ambiguous_flags() -> None:
+    """Writers needing different flags of the same count can’t be told apart."""
+    from anndata._io.specs.registry import IORegistry, IORegistryError, IOSpec, Writer
+
+    registry = IORegistry()
+    for flag in ("accessor", "indexed_keys"):
+        registry.register_write(zarr.Group, dict, IOSpec("x", "0"), when={flag})(
+            lambda *_, **__: None
+        )
+    # one enabled flag picks its writer unambiguously
+    one = ad.WriteConfig(accessor=True, indexed_keys=False)
+    Writer(registry, compat=one).find_write_func(zarr.Group, {})
+    with pytest.raises(IORegistryError, match=r"Ambiguous writers"):
+        Writer(registry, compat="0.14").find_write_func(zarr.Group, {})
 
 
 @pytest.mark.parametrize("compat", ["0.13", "0.14"])

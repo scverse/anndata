@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from functools import partial, singledispatch, wraps
 from types import MappingProxyType
 from typing import TYPE_CHECKING, cast
@@ -25,7 +25,7 @@ from ...utils import warn
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
-    from typing import Any
+    from typing import Any, Literal
 
     from anndata._types import (
         ReadCallback,
@@ -77,8 +77,25 @@ class IOSpec:
 # TODO: Should this subclass from LookupError?
 class IORegistryError(Exception):
     @classmethod
-    def _from_write_parts(cls, dest_type: type, typ: WriteSrcType) -> IORegistryError:
-        return cls(f"No method registered for writing {typ} into {dest_type}")
+    def _from_write_parts(
+        cls,
+        dest_type: type,
+        typ: WriteSrcType,
+        *,
+        whens: Iterable[frozenset[str]] = (),
+    ) -> IORegistryError:
+        msg = f"No method registered for writing {typ} into {dest_type}"
+        if whens := list(whens):
+            reqs = " or ".join(
+                " and ".join(f"`{flag}`" for flag in sorted(w)) for w in whens
+            )
+            msg += f" with the current `compat`: needs flag(s) {reqs}"
+            # `WriteCompat` iterates oldest first
+            if profile := next(
+                (p for p in WriteCompat if any(w <= p._features for w in whens)), None
+            ):
+                msg += f'. Pass `compat="{profile}"` to the write function'
+        return cls(msg)
 
     @classmethod
     def _from_read_parts(
@@ -111,11 +128,28 @@ def write_spec[W: Callable[..., Any]](spec: IOSpec) -> Callable[[W], W]:
     return decorator
 
 
+class _ByFlags[T](dict[frozenset[str], T]):
+    """Values by the :class:`~anndata.WriteConfig` flags they require."""
+
+    def select(self, compat: WriteConfig) -> T | None:
+        """Pick the value requiring the most of `compat`’s enabled flags."""
+        matching = [when for when in self if when <= compat._features]
+        if not matching:
+            return None
+        best = max(matching, key=len)
+        if ties := [w for w in matching if len(w) == len(best) and w != best]:
+            msg = f"Ambiguous writers for {compat!r}: {[best, *ties]}"
+            raise IORegistryError(msg)
+        return self[best]
+
+
 class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
     read: dict[tuple[type, IOSpec], RI]
     read_partial: dict[tuple[type, IOSpec], Callable]
-    write: dict[tuple[type, WriteSrcType], _WriteInternal]
-    write_specs: dict[WriteSrcType, IOSpec]
+    write: dict[tuple[type, WriteSrcType], _ByFlags[_WriteInternal]]
+    """Writers by destination, source, then by required flags."""
+    write_specs: dict[WriteSrcType, _ByFlags[IOSpec]]
+    """Specs by source, then by required flags."""
 
     def __init__(self) -> None:
         self.read = {}
@@ -128,23 +162,36 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         dest_type: type[StorageType],
         src_type: WriteSrcType,
         spec: IOSpec | Mapping[str, str],
+        *,
+        when: Iterable[str] = frozenset(),
     ) -> Callable[[W], W]:
+        """Register a writer.
+
+        `when` names :class:`~anndata.WriteConfig` flags that all need to be enabled
+        for this writer to be used. If several writers apply, the one with the most flags wins.
+        """
+        from anndata._write_compat import WriteConfig
+
         spec = proc_spec(spec)
+        when = frozenset(when)
+        if unknown := when - {f.name for f in fields(WriteConfig)}:
+            msg = f"Unknown `WriteConfig` flags: {sorted(unknown)}"
+            raise ValueError(msg)
 
         # Record specification for src_type
-        if src_type in self.write_specs and (spec != self.write_specs[src_type]):
+        specs = self.write_specs.setdefault(src_type, _ByFlags())
+        if when in specs and (spec != specs[when]):
             # First check for consistency
-            current_spec = self.write_specs[src_type]
             msg = (
                 "Cannot overwrite IO specifications. Attempted to overwrite encoding "
-                f"for {src_type} from {current_spec} to {spec}"
+                f"for {src_type} from {specs[when]} to {spec}"
             )
             raise TypeError(msg)
-        else:
-            self.write_specs[src_type] = spec
+        specs[when] = spec
 
         def _register(func: W) -> W:
-            self.write[dest_type, src_type] = write_spec(spec)(func)
+            writers = self.write.setdefault((dest_type, src_type), _ByFlags())
+            writers[when] = write_spec(spec)(func)
             return func
 
         return _register
@@ -160,13 +207,26 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
 
         if dest_type is h5py.File:
             dest_type = h5py.Group
-        if (dest_type, src_type) not in self.write:
-            raise IORegistryError._from_write_parts(dest_type, src_type)
-        internal = self.write[dest_type, src_type]
+        candidates = self.write.get((dest_type, src_type), _ByFlags())
+        if (internal := candidates.select(writer.compat)) is None:
+            raise IORegistryError._from_write_parts(
+                dest_type, src_type, whens=candidates.keys()
+            )
         return partial(internal, _writer=writer)
 
     def has_write(self, dest_type: type, src_type: WriteSrcType) -> bool:
         return (dest_type, src_type) in self.write
+
+    def writeable_types(
+        self, compat: WriteConfig, store_type: Literal["h5", "zarr"] | None = None
+    ) -> set[WriteSrcType]:
+        """Source types that have a writer for `compat` (and `store_type`, if given)."""
+        return {
+            src_type
+            for (dest_type, src_type), writers in self.write.items()
+            if store_type is None or store_type in dest_type.__module__
+            if writers.select(compat) is not None
+        }
 
     def register_read(
         self,
@@ -212,19 +272,19 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         name = "read_partial"
         raise IORegistryError._from_read_parts(name, self.read_partial, src_type, spec)
 
-    def get_spec(self, elem: StorageType) -> IOSpec:
+    def get_spec(
+        self, elem: StorageType, compat: WriteConfig = WriteCompat.DEFAULT
+    ) -> IOSpec:
+        patterns: list[WriteSrcType] = []
         if isinstance(elem, DaskArray):
-            if (typ_meta := (DaskArray, type(elem._meta))) in self.write_specs:
-                return self.write_specs[typ_meta]
-        elif (
-            hasattr(elem, "dtype")
-            and (typ_kind := (type(elem), elem.dtype.kind)) in self.write_specs
-        ):
-            return self.write_specs[typ_kind]
-        for pattern in _iter_patterns(elem):
-            if pattern in self.write_specs:
-                return self.write_specs[pattern]
-        return self.write_specs[type(elem)]  # raises KeyError
+            patterns.append((DaskArray, type(elem._meta)))
+        elif hasattr(elem, "dtype"):
+            patterns.append((type(elem), elem.dtype.kind))
+        for pattern in [*patterns, *_iter_patterns(elem)]:
+            specs = self.write_specs.get(pattern, _ByFlags())
+            if (spec := specs.select(compat)) is not None:
+                return spec
+        raise KeyError(type(elem))
 
 
 _REGISTRY: IORegistry[_ReadInternal, Read] = IORegistry()
@@ -385,7 +445,9 @@ class Writer:
 
         if self.callback is not None:
             write_func = partial(
-                self.callback, write_func, iospec=self.registry.get_spec(elem)
+                self.callback,
+                write_func,
+                iospec=self.registry.get_spec(elem, self.compat),
             )
         write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
         _add_to_column_order(store, k)

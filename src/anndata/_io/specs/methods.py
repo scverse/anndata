@@ -505,19 +505,33 @@ def write_mapping(
 ):
     v = {check_key(sub_k): sub_v for sub_k, sub_v in v.items()}
     g = f.require_group(k)
-    if not _writer.compat.indexed_keys:
-        for sub_k, sub_v in v.items():
-            _writer.write_elem(g, sub_k, sub_v, dataset_kwargs=dataset_kwargs)
-        return
+    for sub_k, sub_v in v.items():
+        _writer.write_elem(g, sub_k, sub_v, dataset_kwargs=dataset_kwargs)
+
+
+@_REGISTRY.register_write(
+    h5py.Group, dict, IndexedLayout.DICT.spec, when={"indexed_keys"}
+)
+@_REGISTRY.register_write(
+    zarr.Group, dict, IndexedLayout.DICT.spec, when={"indexed_keys"}
+)
+@suppress_autoshard_warning
+def write_mapping_indexed(
+    f: _GroupStorageType,
+    k: str,
+    v: dict[str, Storable],
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
+    items = [(check_key(sub_k), sub_v) for sub_k, sub_v in v.items()]
     write_indexed(
-        g,
+        f.require_group(k),
         IndexedLayout.DICT,
-        v.items(),
+        items,
         _writer=_writer,
         dataset_kwargs=dataset_kwargs,
     )
-    # `write_spec` only sets this if absent, so this wins
-    g.attrs["encoding-version"] = IndexedLayout.DICT.encoding_version
 
 
 ##############
@@ -1125,20 +1139,17 @@ def read_awkward(elem: _GroupStorageType, *, _reader: Reader) -> AwkArray:
 ##############
 
 
-@_REGISTRY.register_write(h5py.Group, views.DataFrameView, IOSpec("dataframe", "0.2.0"))
-@_REGISTRY.register_write(h5py.Group, pd.DataFrame, IOSpec("dataframe", "0.2.0"))
-@_REGISTRY.register_write(zarr.Group, views.DataFrameView, IOSpec("dataframe", "0.2.0"))
-@_REGISTRY.register_write(zarr.Group, pd.DataFrame, IOSpec("dataframe", "0.2.0"))
-@suppress_autoshard_warning
-def write_dataframe(
+def _prepare_dataframe(
     f: _GroupStorageType,
     key: str,
     df: views.DataFrameView | pd.DataFrame,
     *,
-    _writer: Writer,
-    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
-):
-    indexed = _writer.compat.indexed_keys
+    indexed: bool,
+) -> tuple[_GroupStorageType, str, Any, list[tuple[str, Any]]]:
+    """Validate `df` and create its group.
+
+    Returns the group, the index’s name and values, and the columns’ names and values.
+    """
     # in the 0.2.0 layout, `_index` is the child key of an unnamed index
     if not indexed and "_index" in df.columns:
         msg = "'_index' is a reserved name for dataframe columns."
@@ -1175,15 +1186,40 @@ def write_dataframe(
     )
     # TODO: this should write the "true" representation of the series (i.e. the underlying array or ndarray depending)
     columns = [(c, s._values) for c, (_, s) in zip(col_names, df.items(), strict=True)]
+    return group, index_name, index_values, columns
 
-    if not indexed:
-        group.attrs["column-order"] = col_names
-        group.attrs["_index"] = index_name
-        for colname, values in [(index_name, index_values), *columns]:
-            _writer.write_elem(group, colname, values, dataset_kwargs=dataset_kwargs)
-        return
 
-    # https://github.com/scverse/zarr-convention-dataframe, with the index first
+@suppress_autoshard_warning
+def write_dataframe(
+    f: _GroupStorageType,
+    key: str,
+    df: views.DataFrameView | pd.DataFrame,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
+    group, index_name, index_values, columns = _prepare_dataframe(
+        f, key, df, indexed=False
+    )
+    group.attrs["column-order"] = [c for c, _ in columns]
+    group.attrs["_index"] = index_name
+    for colname, values in [(index_name, index_values), *columns]:
+        _writer.write_elem(group, colname, values, dataset_kwargs=dataset_kwargs)
+
+
+@suppress_autoshard_warning
+def write_dataframe_indexed(
+    f: _GroupStorageType,
+    key: str,
+    df: views.DataFrameView | pd.DataFrame,
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
+):
+    """Write `df` following https://github.com/scverse/zarr-convention-dataframe, with the index first."""
+    group, index_name, index_values, columns = _prepare_dataframe(
+        f, key, df, indexed=True
+    )
     n_cols = write_indexed(
         group,
         IndexedLayout.DATAFRAME,
@@ -1191,12 +1227,17 @@ def write_dataframe(
         _writer=_writer,
         dataset_kwargs=dataset_kwargs,
     )
-    # `write_spec` only sets `encoding-version` if absent, so this wins
-    group.attrs.update({
-        "encoding-version": IndexedLayout.DATAFRAME.encoding_version,
-        "df:shape": [len(df), n_cols],
-        "df:index": 0,
-    })
+    group.attrs.update({"df:shape": [len(df), n_cols], "df:index": 0})
+
+
+for store_type, df_type in product(_STORE_TYPES, (views.DataFrameView, pd.DataFrame)):
+    _REGISTRY.register_write(store_type, df_type, IOSpec("dataframe", "0.2.0"))(
+        write_dataframe
+    )
+    _REGISTRY.register_write(
+        store_type, df_type, IndexedLayout.DATAFRAME.spec, when={"indexed_keys"}
+    )(write_dataframe_indexed)
+del store_type, df_type
 
 
 @_REGISTRY.register_read(h5py.Group, IOSpec("dataframe", "0.2.0"))
@@ -1619,13 +1660,6 @@ def write_accessor(
     """
     from anndata.acc._entry_points import to_json
 
-    if not _writer.compat.accessor:
-        msg = (
-            f"Cannot write {type(elem).__name__}. "
-            'Pass `compat="0.14"` to the write function to write it '
-            "as an `accessor` encoded element."
-        )
-        raise ValueError(msg)
     project, json_data = to_json(elem)
     data = json.dumps(json_data, separators=(",", ":"))
     if isinstance(f, h5py.Group):
@@ -1638,9 +1672,9 @@ def write_accessor(
 # Subclasses dispatch to these via `_iter_patterns`.
 # Includes ones without JSON form like `A.obs`: `to_json` rejects them.
 for store_type, acc_type in product(_STORE_TYPES, (AdRef, RefAcc, AdAcc)):
-    _REGISTRY.register_write(store_type, acc_type, IOSpec("accessor", "0.1.0"))(
-        write_accessor
-    )
+    _REGISTRY.register_write(
+        store_type, acc_type, IOSpec("accessor", "0.1.0"), when={"accessor"}
+    )(write_accessor)
 del store_type, acc_type
 
 
