@@ -9,7 +9,7 @@ from functools import partial, singledispatch, wraps
 from importlib.metadata import version
 from importlib.util import find_spec
 from string import ascii_letters
-from typing import TYPE_CHECKING, TypedDict, overload
+from typing import TYPE_CHECKING, TypedDict, cast, overload
 
 import h5py
 import numpy as np
@@ -729,8 +729,25 @@ def assert_equal_sparse(
         assert a.indices.dtype == b.indices.dtype, (
             f"{elem_name}: indices dtype mismatch"
         )
-    a = asarray(a)
-    assert_equal(b, a, exact=exact, elem_name=elem_name)
+    a_mem = a.to_memory() if isinstance(a, BaseCompressedSparseDataset) else a
+    b_mem = b.to_memory() if isinstance(b, BaseCompressedSparseDataset) else b
+    if isinstance(a_mem, sparse.sparray | sparse.spmatrix) and isinstance(
+        b_mem, sparse.sparray | sparse.spmatrix
+    ):
+        b_sparse = cast("SparseArray | SparseMatrix", b_mem)
+        if a_mem.shape == b_sparse.shape:
+            a_csr = sparse.csr_array(a_mem, copy=True)
+            b_csr = sparse.csr_array(b_sparse, copy=True)
+            idx = cast("sparse.csr_array", a_csr != b_csr).nonzero()
+            if not idx[0].size:
+                return
+            return assert_equal(
+                asarray(a_csr[idx]).ravel(),
+                asarray(b_csr[idx]).ravel(),
+                exact=exact,
+                elem_name=elem_name,
+            )
+    assert_equal(b_mem, asarray(a_mem), exact=exact, elem_name=elem_name)
 
 
 @assert_equal.register(CupySparseMatrix)

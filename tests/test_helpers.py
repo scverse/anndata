@@ -263,6 +263,85 @@ def test_assert_equal_sparse_index_dtype(attr):
         assert_equal(a, b, exact=True)
 
 
+@pytest.mark.parametrize(
+    "a_type", [sparse.csr_matrix, sparse.csc_matrix, sparse.csr_array, sparse.csc_array]
+)
+@pytest.mark.parametrize(
+    "b_type", [sparse.csr_matrix, sparse.csc_matrix, sparse.csr_array, sparse.csc_array]
+)
+@pytest.mark.parametrize("exact", [False, True])
+def test_assert_equal_sparse_without_densifying(a_type, b_type, exact, monkeypatch):
+    a = a_type([[1.0, 0, 3], [0, 0, -2]])
+    b = b_type(
+        sparse.csr_matrix(([1.0, 0, 3, -2], [0, 1, 2, 2], [0, 3, 4]), shape=(2, 3))
+    ).astype(np.float32)
+
+    def no_dense(*args, **kwargs):
+        pytest.fail("Sparse comparison densified an input")
+
+    for typ in [
+        sparse.csr_matrix,
+        sparse.csc_matrix,
+        sparse.csr_array,
+        sparse.csc_array,
+    ]:
+        monkeypatch.setattr(typ, "toarray", no_dense)
+
+    assert_equal(a, b, exact=exact)
+    assert_equal(ad.AnnData(a), ad.AnnData(b), exact=exact)
+    b[0, 0] = 2
+    with pytest.raises(AssertionError, match="values"):
+        assert_equal(a, b, exact=exact, elem_name="values")
+
+
+@pytest.mark.parametrize(
+    "typ", [sparse.csr_matrix, sparse.csc_matrix, sparse.csr_array, sparse.csc_array]
+)
+@pytest.mark.parametrize(
+    ("a", "b", "exact", "equal"),
+    [
+        (1.0, 1.0 + 5e-8, False, True),
+        (1.0, 1.0 + 5e-8, True, False),
+        (1.0, 1.0 + 5e-6, False, False),
+        (0.0, 1e-10, False, False),
+        (np.nan, np.nan, False, True),
+        (np.nan, np.nan, True, False),
+        (np.inf, np.inf, True, True),
+        (np.inf, -np.inf, False, False),
+    ],
+)
+def test_assert_equal_sparse_numeric_semantics(typ, a, b, exact, equal):
+    a, b = typ([[a, 0]]), typ([[b, 0]])
+    if equal:
+        assert_equal(a, b, exact=exact)
+    else:
+        with pytest.raises(AssertionError):
+            assert_equal(a, b, exact=exact)
+
+
+def test_assert_equal_sparse_array_1d():
+    a = sparse.csr_array([1.0, 0, 2])
+    assert_equal(a, a.copy())
+    with pytest.raises(AssertionError):
+        assert_equal(a, sparse.csr_array([1.0, 0, 3]))
+
+
+def test_assert_equal_backed_sparse_without_densifying(tmp_path, monkeypatch):
+    adata = ad.AnnData(sparse.csr_matrix(np.eye(3)))
+    path = tmp_path / "sparse.h5ad"
+    adata.write_h5ad(path)
+    backed = ad.read_h5ad(path, backed="r")
+
+    def no_dense(*args, **kwargs):
+        pytest.fail("Sparse comparison densified an input")
+
+    monkeypatch.setattr(sparse.csr_matrix, "toarray", no_dense)
+    try:
+        assert_equal(adata, backed)
+    finally:
+        backed.file.close()
+
+
 def test_assert_equal_dask_sparse_arrays():
     import dask.array as da
     from scipy import sparse
