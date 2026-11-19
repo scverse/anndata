@@ -87,9 +87,9 @@ From the `"0.14"` {doc}`write compatibility profile <write-compat>` on,
 mappings and dataframes therefore store their keys in a {ref}`string array <string-array>`
 and name their children by position instead:
 
-- The group MUST contain a string array of the keys in order (the _names array_)
+- The group MUST contain a string array of the keys in order (the *names array*)
 - The element for the *i*th key MUST be the child `{prefix}_{i}`,
-  where `{i}` is _i_ in base 10 without sign or leading zeros,
+  where `{i}` is *i* in base 10 without sign or leading zeros,
   and the children MUST be numbered consecutively from `{prefix}_0` with no gaps
 - Which names array and prefix to use is part of each encoding’s own specification –
   see {ref}`dataframes <dataframe-indexed>` and {ref}`mappings <mapping-indexed>`
@@ -316,7 +316,7 @@ with the names array `"columns"` and the prefix `"column"`.
 - A dataframe MUST be stored as a group
 - The group's metadata:
   - MUST contain encoding metadata `"encoding-type": "dataframe"`, `"encoding-version": "0.3.0"`
-  - MUST contain `"df:shape"`, the number of rows and the number of columns _including_ the index
+  - MUST contain `"df:shape"`, the number of rows and the number of columns *including* the index
   - MAY contain `"df:index"`, the position of the index in `"columns"`.
     Without it, a reader MUST use a range index `0` … `n_rows - 1`.
     When there is an index, anndata writes it at position `0`
