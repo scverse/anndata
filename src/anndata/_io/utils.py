@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from .._write_compat import WriteConfig
     from ..acc import AdRef, MapAcc, RefAcc
     from ..typing import RWAble
-    from .specs.registry import Writer
+    from .specs.registry import IOSpec, Writer
 
     Storage = StorageType | BaseCompressedSparseDataset
 
@@ -436,6 +436,12 @@ class IndexedLayout(_IndexedLayout, Enum):
         return next(
             (l for l in cls if (l.encoding_type, l.encoding_version) == spec), None
         )
+
+    @property
+    def spec(self) -> IOSpec:
+        from .specs.registry import IOSpec
+
+        return IOSpec(self.encoding_type, self.encoding_version)
 
     def child_key(self, i: int) -> str:
         return f"{self.prefix}_{i}"
