@@ -1751,15 +1751,10 @@ class AnnData:  # noqa: PLW1641
         )
 
         match key:
-            # `isin` and `get` assume the scope exists and has the type it’s cast to
-            case MapAcc() | RefAcc() as acc if not _cast_in(acc, self):
-                return False
-            case AdRef(acc=acc) if not _cast_in(acc, self):
-                return False
             case AdAcc():
                 return _cast_in(key, self)
             case LayerMapAcc() | MultiMapAcc() | GraphMapAcc() | UnsMapAcc():
-                return bool(key.get(self))
+                return _cast_in(key, self) and bool(key.get(self))
             case MapAcc():  # to check MapAccs, we need to know the attribute name
                 msg = f"Unknown MapAcc subclass {type(key)}."
                 raise TypeError(msg)

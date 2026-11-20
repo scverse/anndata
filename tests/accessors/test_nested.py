@@ -9,12 +9,12 @@ import pandas as pd
 import pytest
 
 from anndata import AnnData
-from anndata.acc import A, DFAcc, ItemAcc, UnsMapAcc
+from anndata.acc import A, AdRef, DFAcc, ItemAcc, RefAcc, UnsMapAcc
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from anndata.acc import AdRef, MapAcc, RefAcc
+    from anndata.acc import MapAcc
 
 
 @pytest.fixture
@@ -150,6 +150,10 @@ def test_cast_invalid(adata: AnnData, ref: AdRef, match: str) -> None:
 def test_cast_invalid_not_in(adata: AnnData, acc: AdRef | RefAcc | MapAcc) -> None:
     """Nothing is in an element of the wrong type."""
     assert acc not in adata
+    if isinstance(acc, AdRef):
+        assert not acc.acc.isin(adata, acc.idx)
+    elif isinstance(acc, RefAcc):
+        assert not acc.isin(adata)
 
 
 def test_get(adata: AnnData) -> None:

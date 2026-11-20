@@ -275,13 +275,22 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData, E = object, V = object]
     def idx_repr(self, idx: I, /) -> str:
         """Get a string representation of the index."""
 
-    @abc.abstractmethod
     def isin(self, data: D, idx: I | None = None, /) -> bool:
         """Check if the referenced array is in the AnnData object.
 
-        Only called if :attr:`~anndata.acc.RefAcc.scope` (or :attr:`~anndata.acc.DFAcc.frame_acc`) is `None`, or in `data` with the type this accessor casts it to (`.AD`/`.DF`), so :meth:`~anndata.acc.RefAcc.container` won’t fail.
-        To check an accessor including its scope, use `acc in data`.
+        Returns `False` if :attr:`~anndata.acc.RefAcc.scope` (or :attr:`~anndata.acc.DFAcc.frame_acc`) isn’t in `data`
+        or doesn’t have the type this accessor casts it to (`.AD`/`.DF`).
+        Subclasses implement :meth:`~anndata.acc.RefAcc._isin` instead.
         """
+        return _cast_in(self, data) and self._isin(data, idx)
+
+    @future_abstractmethod(Deprecation("0.14.0", "Rename your `isin` to `_isin`."))
+    def _isin(self, data: D, idx: I | None = None, /) -> bool:
+        """Check if the referenced array is in the AnnData object, called by :meth:`~anndata.acc.RefAcc.isin`.
+
+        Only called if :attr:`~anndata.acc.RefAcc.scope` (or :attr:`~anndata.acc.DFAcc.frame_acc`) is `None`, or in `data` with the type this accessor casts it to (`.AD`/`.DF`), so :meth:`~anndata.acc.RefAcc.container` won’t fail.
+        """
+        raise NotImplementedError
 
     @overload
     def get(self, data: D, /) -> E: ...
@@ -389,7 +398,7 @@ class LayerAcc[R: AdRef[Idx2D, AnnData]](
             raise TypeError(msg)
         return inner
 
-    def isin(self, adata: AnnData, idx: Idx2D | None = None) -> bool:
+    def _isin(self, adata: AnnData, idx: Idx2D | None = None) -> bool:
         adata = self.container(adata)
         if adata.X is None if self.k is None else self.k not in adata.layers:
             return False
@@ -531,7 +540,7 @@ class DFAcc[R: AdRef](RefAcc[R, str | None, MuData | AnnData, DataFrameLike, Arr
     def idx_repr(self, k: str | None) -> str:
         return ".index" if k is None else f"[{k!r}]"
 
-    def isin(self, data: MuData | AnnData, idx: str | None = None) -> bool:
+    def _isin(self, data: MuData | AnnData, idx: str | None = None) -> bool:
         return idx is None or idx in self.frame(data)
 
     @overload
@@ -682,7 +691,7 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](
     def idx_repr(self, i: int) -> str:
         return f"[:, {i!r}]"
 
-    def isin(self, data: MuData | AnnData, idx: int | None = None) -> bool:
+    def _isin(self, data: MuData | AnnData, idx: int | None = None) -> bool:
         m: AxisArrays = getattr(self.container(data), f"{self.dim}m")
         if (arr := m.get(self.k)) is None:
             return False
@@ -807,7 +816,7 @@ class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](
     def idx_repr(self, idx: Idx2D) -> str:
         return f"[{idx[0]!r}, {idx[1]!r}]"
 
-    def isin(self, data: MuData | AnnData, idx: Idx2D | None = None) -> bool:
+    def _isin(self, data: MuData | AnnData, idx: Idx2D | None = None) -> bool:
         data = self.container(data)
         if self.k not in getattr(data, f"{self.dim}p"):
             return False
@@ -962,7 +971,7 @@ class ItemAcc[R: AdRef](ScopeAcc[R, MuData | AnnData]):
     def idx_repr(self, idx: Never) -> str:
         return f"[{idx!r}]"
 
-    def isin(self, data: MuData | AnnData, idx: None = None) -> bool:
+    def _isin(self, data: MuData | AnnData, idx: None = None) -> bool:
         item = self.container(data).uns
         try:
             for k in self.path:

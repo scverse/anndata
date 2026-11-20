@@ -283,7 +283,7 @@ There are three layers of extensibility:
     A.obs[['a', 'b']]
 
     Note that for implementing :meth:`RefAcc.get` when subclassing, you will need :class:`NO_IDX`,
-    and that :meth:`RefAcc.get`/:meth:`~RefAcc.set`/:meth:`~RefAcc.isin` should go through
+    and that :meth:`RefAcc.get`/:meth:`~RefAcc.set`/:meth:`~RefAcc._isin` should go through
     :meth:`RefAcc.container` to work when nested (e.g. in `A.uns["a"].AD`).
     To refer to another data frame, subclass :class:`DFAcc` and override :meth:`DFAcc.frame`.
 
