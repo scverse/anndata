@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import replace
 from functools import WRAPPER_ASSIGNMENTS, cache, wraps
 from itertools import pairwise
 from types import MappingProxyType
@@ -173,11 +172,14 @@ def write_use(
     # resolve everything first so an invalid accessor fails before anything is written
     uses = use if isinstance(use, Sequence) else [use]
     _check_store(f, adata, use)
-    targets = [_descend(f, adata, u) for u in uses]
-    for g, obj, _ in targets:
+    targets = [(u, *_descend(f, adata, u)) for u in uses]
+    for _, g, inner in targets:
         if g is not f:
-            _check_store(g, obj, use)
-    for g, parent, key, elem in [(g, *_resolve_use(g, o, u)) for g, o, u in targets]:
+            _check_store(g, inner, use)
+    # `g` is the nested group, but `u` resolves its own scope, so pass it the root `adata`
+    for g, parent, key, elem in [
+        (g, *_resolve_use(g, adata, u)) for u, g, _ in targets
+    ]:
         if parent is not None and parent not in g:
             write_elem(g, parent, {})
         write_elem(
@@ -212,30 +214,22 @@ def _check_store(f: _GroupStorageType, adata: AnnData, use: object) -> None:
 
 def _descend(
     f: _GroupStorageType, adata: AnnData, use: AdRef | RefAcc | MapAcc
-) -> tuple[_GroupStorageType, AnnData, AdRef | RefAcc | MapAcc]:
-    """Get the anndata group and object `use` refers into, and `use` relative to them."""
+) -> tuple[_GroupStorageType, AnnData]:
+    """Get the anndata group and object `use` refers into."""
     from .. import AnnData
-    from ..acc import AdRef, ItemAcc, MapAcc, RefAcc, _resolve
-    from ..acc._parse_json import _unscoped
+    from ..acc import AdRef, ItemAcc
 
     if (scope := (use.acc if isinstance(use, AdRef) else use).scope) is None:
-        return f, adata, use
-    f, adata, scope_rel = _descend(f, adata, scope)
-    if not isinstance(scope_rel, ItemAcc):  # e.g. a mudata modality
-        msg = f"Cannot write {use}: {scope_rel!r} has no known location in the store."
+        return f, adata
+    f, _ = _descend(f, adata, scope)
+    if not isinstance(scope, ItemAcc):  # e.g. a mudata modality
+        msg = f"Cannot write {use}: {scope!r} has no known location in the store."
         raise ValueError(msg)
-    group = _require_group(f, "/".join(["uns", *scope_rel.path]), "anndata", use)
-    if not isinstance(inner := _resolve(scope_rel, adata), AnnData):
-        msg = f"Cannot write {use}: {scope_rel!r} is a {type(inner).__name__}, not an AnnData object."
+    group = _require_group(f, "/".join(["uns", *scope.path]), "anndata", use)
+    if not isinstance(inner := scope.get(adata), AnnData):
+        msg = f"Cannot write {use}: {scope!r} is a {type(inner).__name__}, not an AnnData object."
         raise ValueError(msg)
-    match use:
-        case AdRef(acc=acc, idx=idx):
-            use = type(use)(_unscoped(acc), idx)
-        case MapAcc():
-            use = replace(use, scope=None)
-        case RefAcc():
-            use = _unscoped(use)
-    return cast("_GroupStorageType", f[group]), inner, use
+    return cast("_GroupStorageType", f[group]), inner
 
 
 def _require_group(f: _GroupStorageType, group: str, encoding: str, use: object) -> str:
