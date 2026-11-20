@@ -71,7 +71,9 @@ def to_json(
             return [*to_json(acc), *_idx_2d_ser(idx)]
         case AdRef(MetaAcc(dim), idx):
             return [dim, idx]
-        case AdRef(MultiAcc() as acc, i):
+        case AdRef(MultiAcc() as acc, int(i)):
+            # Slices and chained indices can’t be represented in schema v1,
+            # so they fall through to the `TypeError` below.
             return [*to_json(acc), i]
         case LayerAcc(k):
             return ["layers", k]
