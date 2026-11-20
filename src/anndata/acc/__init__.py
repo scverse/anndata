@@ -179,6 +179,7 @@ class AdRef[I: Hashable, D: MuData | AnnData]:
         return self.__repr
 
 
+@dataclass(frozen=True)
 class MapAcc[R: RefAcc](abc.ABC):
     r"""Accessor for mapping containers."""
 

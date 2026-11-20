@@ -232,7 +232,7 @@ def _descend(
         case AdRef(acc=acc, idx=idx):
             use = type(use)(_unscoped(acc), idx)
         case MapAcc():
-            use = replace(use, scope=None)  # type: ignore[type-var]  # all `MapAcc`s are dataclasses
+            use = replace(use, scope=None)
         case RefAcc():
             use = _unscoped(use)
     return cast("_GroupStorageType", f[group]), inner, use
