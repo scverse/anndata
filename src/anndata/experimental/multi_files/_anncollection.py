@@ -22,7 +22,7 @@ from ...utils import set_module, warn
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Sequence
-    from typing import Literal, TypeAlias
+    from typing import Literal
 
     from ..._types import Join_T
     from ...typing import AlignedArray, Index, _Index1DNorm
@@ -589,8 +589,7 @@ class AnnCollectionView(_ConcatViewMixin, _IterateViewMixin):
         return self.reference.attrs_keys
 
 
-# no `type` alias: Sphinx would render its self-reference as a link to this undocumented alias
-ConvertType: TypeAlias = "Callable | Mapping[str, ConvertType]"  # noqa: UP040
+type ConvertType = Callable | Mapping[str, ConvertType]
 
 
 @doctest_filterwarnings("ignore", r"Moving element.*uns.*to.*obsp", FutureWarning)
