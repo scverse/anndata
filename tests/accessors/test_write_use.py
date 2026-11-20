@@ -155,8 +155,8 @@ def test_write_elem(
 @pytest.mark.parametrize(
     ("use", "match"),
     [
-        pytest.param(A.obsm["o"][:, 0], r"only `obs`/`var` columns", id="vector"),
-        pytest.param(A.obs.index, r"only `obs`/`var` columns", id="index"),
+        pytest.param(A.obsm["o"][:, 0], r"only data frame columns", id="vector"),
+        pytest.param(A.obs.index, r"only data frame columns", id="index"),
         pytest.param(A.obs["_index"], r"name of the obs index", id="reserved"),
     ],
 )
@@ -235,6 +235,6 @@ def test_write_list_invalid_writes_nothing(
     _write(adata, diskfmt_store, diskfmt)
     expected = adata.copy()
     adata.X = np.zeros((5, 3))
-    with pytest.raises(ValueError, match=r"only `obs`/`var` columns"):
+    with pytest.raises(ValueError, match=r"only data frame columns"):
         _write(adata, diskfmt_store, diskfmt, use=[A.X, A.obsm["o"][:, 0]])
     assert_equal(_read(diskfmt_store, diskfmt), expected)

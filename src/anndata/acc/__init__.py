@@ -5,9 +5,16 @@ from __future__ import annotations
 import abc
 import sys
 from collections.abc import Hashable
-from dataclasses import KW_ONLY, dataclass, field
+from dataclasses import KW_ONLY, dataclass, field, replace
 from functools import cached_property
-from typing import TYPE_CHECKING, ClassVar, Protocol, overload, runtime_checkable
+from typing import (
+    TYPE_CHECKING,
+    ClassVar,
+    Never,
+    Protocol,
+    overload,
+    runtime_checkable,
+)
 
 if sys.version_info < (3, 15):
     from typing_extensions import sentinel
@@ -25,17 +32,20 @@ from ..compat import (
     CupySparseMatrix,
     DaskArray,
     SupportsArrayApiBase,
+    XVariable,
     known_dim,
 )
-from ..typing import _is_in_memory
+from ..typing import AlignedArray, InMemoryArray, _is_in_memory
 
 if TYPE_CHECKING:
+    from typing import TypeAlias
+
     from mudata import MuData
 else:
     MuData = type("MuData", (), {"__module__": "mudata"})
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Sequence
+    from collections.abc import Callable, Collection, MutableMapping, Sequence
     from typing import Any, Literal, Self, TypeGuard
 
     from .._core.aligned_mapping import (
@@ -46,8 +56,6 @@ if TYPE_CHECKING:
         PairwiseArrays,
         PairwiseArraysView,
     )
-    from ..compat import XVariable
-    from ..typing import AlignedArray, InMemoryArray
 
 
 type Axes = Collection[Literal["obs", "var"]]
@@ -63,7 +71,10 @@ type Idx2DList = (
 )
 type IdxMultiList = list[int] | pd.Index[int] | tuple[slice, list[int] | pd.Index[int]]
 
-type Array = InMemoryArray | pd.api.extensions.ExtensionArray | XVariable
+Array: TypeAlias = InMemoryArray | pd.api.extensions.ExtensionArray | XVariable  # noqa: UP040  # private, so autodoc must expand it
+
+type AccJson = Sequence[str | int | AccJson | None]
+"""JSON form of an accessor, see :meth:`AdAcc.to_json`."""
 
 type DataFrameLike = pd.DataFrame | Dataset2D
 """A 2D dataframe-like container (pandas- or xarray-backed)."""
@@ -74,17 +85,22 @@ NO_IDX = sentinel("NO_IDX")
 __all__ = [
     "NO_IDX",
     "A",
+    "AccJson",
     "AdAcc",
     "AdRef",
+    "DFAcc",
     "GraphAcc",
     "GraphMapAcc",
     "Idx2D",
+    "ItemAcc",
     "LayerAcc",
     "LayerMapAcc",
     "MetaAcc",
     "MultiAcc",
     "MultiMapAcc",
     "RefAcc",
+    "ScopeAcc",
+    "UnsMapAcc",
 ]
 
 
@@ -111,7 +127,7 @@ class AdRef[I: Hashable, D: MuData | AnnData]:
 
     """
 
-    acc: RefAcc[Self, I, D]
+    acc: RefAcc[Self, I, D, object, Array]
     r"""The accessor containing information about this array.
 
     See :term:`reference accessor`\ s for all possible types this can assume.
@@ -125,7 +141,7 @@ class AdRef[I: Hashable, D: MuData | AnnData]:
 
     __match_args__: ClassVar = ("acc", "idx")
 
-    def __init__(self, acc: RefAcc[Self, I, D], idx: I) -> None:
+    def __init__(self, acc: RefAcc[Self, I, D, object, Array], idx: I) -> None:
         self.acc = acc
         self.idx = idx
 
@@ -164,10 +180,13 @@ class AdRef[I: Hashable, D: MuData | AnnData]:
         return self.__repr
 
 
+@dataclass(frozen=True)
 class MapAcc[R: RefAcc](abc.ABC):
     r"""Accessor for mapping containers."""
 
     ref_acc_cls: type[R]
+    scope: ScopeAcc | None
+    """Accessor for the element whose `.AD` cast the mapping is in, see :attr:`anndata.acc.RefAcc.scope`."""
 
     @abc.abstractmethod
     def __getitem__(self, k: str, /) -> R:
@@ -181,7 +200,9 @@ class MapAcc[R: RefAcc](abc.ABC):
 
 
 @dataclass(frozen=True)
-class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
+class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData, E = object, V = object](
+    abc.ABC
+):
     r"""Abstract base class for reference accessors.
 
     See :term:`reference accessor`\ s for all existing subclasses.
@@ -189,12 +210,44 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
 
     _: KW_ONLY
     ref_class: type[R]
+    scope: ScopeAcc | None = None
+    """Accessor for the element whose `.AD` cast this accessor is in, e.g. `A.uns['a']` for `A.uns['a'].AD.obsm['x'].DF`.
+
+    If `None`, this accessor refers into the object passed to :meth:`~anndata.acc.RefAcc.get`/:meth:`~anndata.acc.RefAcc.set`/:meth:`~anndata.acc.RefAcc.isin` itself.
+    """
+
+    def container(self, data: D, /) -> MuData | AnnData:
+        """Get the AnnData object this accessor indexes into.
+
+        That is `data` itself, or the element :attr:`~anndata.acc.RefAcc.scope` refers to in `data`.
+        Call this in :meth:`~anndata.acc.RefAcc.get`, :meth:`~anndata.acc.RefAcc.set`, and :meth:`~anndata.acc.RefAcc.isin` so your subclass works when nested.
+
+        Examples
+        --------
+        >>> from anndata import AnnData
+        >>> from anndata.acc import A
+        >>> adata = AnnData(shape=(3, 2), uns={"n": AnnData(shape=(5, 4))})
+        >>> A.obs.container(adata) is adata
+        True
+        >>> A.uns["n"].AD.obs.container(adata) is adata.uns["n"]
+        True
+
+        Raises
+        ------
+        TypeError
+            If the element :attr:`~anndata.acc.RefAcc.scope` refers to isn’t an AnnData object.
+        """
+        return _resolve(self.scope, data)
 
     def process_idx(self, idx: Any, /) -> I:  # noqa: ANN401  # subclasses may override `idx` however they want
         self.dims(idx)
         return idx
 
-    def __getitem__(self, idx: Any, /) -> R:  # noqa: ANN401  # subclasses may override `idx` however they want
+    def __getitem__(  # only accessors with array values (`V`) create references
+        self: RefAcc[R, I, D, object, Array],
+        idx: Any,  # noqa: ANN401  # subclasses may override `idx` however they want
+        /,
+    ) -> R:
         """Get a reference to an array.
 
         Parameters
@@ -222,16 +275,29 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
     def idx_repr(self, idx: I, /) -> str:
         """Get a string representation of the index."""
 
-    @abc.abstractmethod
     def isin(self, data: D, idx: I | None = None, /) -> bool:
-        """Check if the referenced array is in the AnnData object."""
+        """Check if the referenced array is in the AnnData object.
+
+        Returns `False` if :attr:`~anndata.acc.RefAcc.scope` (or :attr:`~anndata.acc.DFAcc.frame_acc`) isn’t in `data`
+        or doesn’t have the type this accessor casts it to (`.AD`/`.DF`).
+        Subclasses implement :meth:`~anndata.acc.RefAcc._isin` instead.
+        """
+        return _cast_in(self, data) and self._isin(data, idx)
+
+    @future_abstractmethod(Deprecation("0.14.0", "Rename your `isin` to `_isin`."))
+    def _isin(self, data: D, idx: I | None = None, /) -> bool:
+        """Check if the referenced array is in the AnnData object, called by :meth:`~anndata.acc.RefAcc.isin`.
+
+        Only called if :attr:`~anndata.acc.RefAcc.scope` (or :attr:`~anndata.acc.DFAcc.frame_acc`) is `None`, or in `data` with the type this accessor casts it to (`.AD`/`.DF`), so :meth:`~anndata.acc.RefAcc.container` won’t fail.
+        """
+        raise NotImplementedError
 
     @overload
-    def get(self, data: D, /) -> AlignedArray: ...
+    def get(self, data: D, /) -> E: ...
     @overload
-    def get(self, data: D, idx: I, /) -> Array: ...
+    def get(self, data: D, idx: I, /) -> V: ...
     @abc.abstractmethod
-    def get(self, data: D, idx: I | NO_IDX = NO_IDX, /) -> AlignedArray | Array:
+    def get(self, data: D, idx: I | NO_IDX = NO_IDX, /) -> E | V:
         """Get the indexed array or element from the AnnData object at `idx`.
 
         When `idx` is omitted (i.e., `idx` is :class:`~anndata.acc.NO_IDX`), return the full array one level up instead.
@@ -244,7 +310,7 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
     def set(self, data: D, idx: I | NO_IDX, value: object, /) -> None:
         """Set the indexed array or element in the AnnData object at `idx`.
 
-        When `idx` is :class:`~anndata.acc.NO_IDX`, replace the full element one level up (see :meth:`get`),
+        When `idx` is :class:`~anndata.acc.NO_IDX`, replace the full element one level up (see :meth:`~anndata.acc.RefAcc.get`),
         otherwise assign into the existing element in-place.
         """
         msg = f"{type(self).__name__} does not support setting values."
@@ -270,7 +336,9 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
 
 
 @dataclass(frozen=True)
-class LayerAcc[R: AdRef[Idx2D, AnnData]](RefAcc[R, Idx2D, AnnData]):
+class LayerAcc[R: AdRef[Idx2D, AnnData]](
+    RefAcc[R, Idx2D, AnnData, AlignedArray, Array]
+):
     r"""Reference accessor for arrays in layers (`A.`\ :attr:`~AdAcc.layers`).
 
     Examples
@@ -318,12 +386,20 @@ class LayerAcc[R: AdRef[Idx2D, AnnData]](RefAcc[R, Idx2D, AnnData]):
                 raise TypeError(msg)
 
     def __repr__(self) -> str:
-        return "A.X" if self.k is None else f"A.layers[{self.k!r}]"
+        root = _root(self.scope)
+        return f"{root}.X" if self.k is None else f"{root}.layers[{self.k!r}]"
 
     def idx_repr(self, idx: Idx2D) -> str:
         return f"[{idx[0]!r}, {idx[1]!r}]"
 
-    def isin(self, adata: AnnData, idx: Idx2D | None = None) -> bool:
+    def container(self, data: AnnData, /) -> AnnData:
+        if not isinstance(inner := super().container(data), AnnData):
+            msg = f"{self!r} can only refer into AnnData objects, not {type(inner).__name__}."
+            raise TypeError(msg)
+        return inner
+
+    def _isin(self, adata: AnnData, idx: Idx2D | None = None) -> bool:
+        adata = self.container(adata)
         if adata.X is None if self.k is None else self.k not in adata.layers:
             return False
         for i, dim in zip(idx or (), ("obs", "var"), strict=False):
@@ -336,6 +412,7 @@ class LayerAcc[R: AdRef[Idx2D, AnnData]](RefAcc[R, Idx2D, AnnData]):
     @overload
     def get(self, adata: AnnData, idx: Idx2D, /) -> InMemoryArray: ...
     def get(self, adata: AnnData, idx: Idx2D | NO_IDX = NO_IDX, /) -> AlignedArray:
+        adata = self.container(adata)
         if idx is NO_IDX:
             return adata.X if self.k is None else adata.layers[self.k]
         # To keep things as lazy as possible, we don't reuse the full-array branch here
@@ -343,14 +420,15 @@ class LayerAcc[R: AdRef[Idx2D, AnnData]](RefAcc[R, Idx2D, AnnData]):
         return self._maybe_flatten(idx, arr)
 
     def set(self, adata: AnnData, idx: Idx2D | NO_IDX, value: object, /) -> None:
+        inner = self.container(adata)
         if idx is NO_IDX:
             if self.k is None:
-                adata.X = value
+                inner.X = value
             else:
-                adata.layers[self.k] = value
+                inner.layers[self.k] = value
             return
         full = _check_settable(self.get(adata))
-        full[_positional_idx(adata, idx, ("obs", "var"))] = value
+        full[_positional_idx(inner, idx, ("obs", "var"))] = value
 
 
 @dataclass(frozen=True)
@@ -360,6 +438,7 @@ class LayerMapAcc[R: AdRef](MapAcc[LayerAcc]):
     _: KW_ONLY
     ref_class: type[R]
     ref_acc_cls: type[LayerAcc] = LayerAcc
+    scope: ScopeAcc | None = None
 
     def __getitem__(self, k: str | None, /) -> LayerAcc[R]:
         """Get a reference accessor for a layer.
@@ -372,19 +451,146 @@ class LayerMapAcc[R: AdRef](MapAcc[LayerAcc]):
         if not isinstance(k, str | None):
             msg = f"Unsupported layer {k!r}"
             raise TypeError(msg)
-        return self.ref_acc_cls(k, ref_class=self.ref_class)
+        return self.ref_acc_cls(k, ref_class=self.ref_class, scope=self.scope)
 
     def __repr__(self) -> str:
-        return "A.layers"
+        return f"{_root(self.scope)}.layers"
 
     def get(self, adata: AnnData) -> Layers | LayersView:
-        return adata.layers
+        return _resolve(self.scope, adata).layers
 
 
 @dataclass(frozen=True)
-class MetaAcc[R: AdRef[str | None, MuData | AnnData]](
-    RefAcc[R, str | None, MuData | AnnData]
-):
+class DFAcc[R: AdRef](RefAcc[R, str | None, MuData | AnnData, DataFrameLike, Array]):
+    r"""Reference accessor for columns of a data frame in an AnnData object.
+
+    Created by casting another accessor to a data frame (`.DF`), which becomes its :attr:`frame_acc`.
+    :class:`MetaAcc` (`A.obs`/`A.var`) is a subclass.
+
+    Examples
+    --------
+    >>> from anndata.acc import A, DFAcc
+    >>> assert isinstance(A.obsm["df"].DF, DFAcc)
+    >>> A.obsm["df"].DF["col"]
+    A.obsm['df'].DF['col']
+    >>> A.uns["df"].DF.index
+    A.uns['df'].DF.index
+
+    """
+
+    _: KW_ONLY
+    frame_acc: RefAcc | None = None
+    """Accessor for the data frame this `.DF` cast refers into, e.g. `A.obsm['df']` for `A.obsm['df'].DF`."""
+
+    def __post_init__(self) -> None:
+        if self.frame_acc is not None and self.scope != self.frame_acc.scope:
+            msg = f"A `.DF` cast must be in the same scope as {self.frame_acc!r}."
+            raise ValueError(msg)
+
+    @property
+    def index(self) -> R:
+        """Index :class:`AdRef`, e.g. `A.obs.index` or `A.uns['df'].DF.index`."""
+        return self[None]
+
+    def frame(self, data: MuData | AnnData, /) -> DataFrameLike:
+        """Get the data frame this accessor refers to.
+
+        :meth:`~anndata.acc.RefAcc.get`, :meth:`~anndata.acc.RefAcc.set`, and :meth:`~anndata.acc.RefAcc.isin` use this,
+        so subclasses only need to override this to refer to another frame
+        (e.g. :class:`MetaAcc` returns `.obs`/`.var` of :meth:`~anndata.acc.RefAcc.container`).
+
+        Raises
+        ------
+        TypeError
+            If the element :attr:`frame_acc` refers to isn’t a data frame.
+        """
+        frame = None if self.frame_acc is None else self.frame_acc.get(data)
+        if not _is_frame(frame):
+            msg = f"{self.frame_acc!r} is {type(frame).__name__}, not a data frame, so `.DF` can’t index into it."
+            raise TypeError(msg)
+        return frame
+
+    def process_idx(self, k: object, /) -> str | None:
+        if k is not None and not isinstance(k, str):
+            msg = f"Unsupported column {k!r} for {self!r}"
+            raise TypeError(msg)
+        return k
+
+    @overload
+    def __getitem__[K: str | None](self, k: K, /) -> R: ...
+    @overload
+    def __getitem__[K: str | None](self, k: list[K] | pd.Index[str], /) -> list[R]: ...
+    def __getitem__[K: str | None](
+        self, k: K | list[K] | pd.Index[str], /
+    ) -> R | list[R]:
+        # TODO: add docstring once sphinx-autodoc-typehints can render `pd.Index[str]`
+        # _is_t_list doesn’t allow None, so be more liberal when checking for lists
+        if isinstance(k, list) or _is_t_list(k, str):
+            return [self[i] for i in k]
+
+        return super().__getitem__(k)
+
+    def dims(self, k: str | None, /) -> Axes:
+        # only frames in `obsm`/`varm` are aligned to a dimension
+        return {self.frame_acc.dim} if isinstance(self.frame_acc, MultiAcc) else set()
+
+    def __repr__(self) -> str:
+        return f"{self.frame_acc!r}.DF"
+
+    def idx_repr(self, k: str | None) -> str:
+        return ".index" if k is None else f"[{k!r}]"
+
+    def _isin(self, data: MuData | AnnData, idx: str | None = None) -> bool:
+        return idx is None or idx in self.frame(data)
+
+    @overload
+    def get(self, data: MuData | AnnData, /) -> DataFrameLike: ...
+    @overload
+    def get(
+        self, data: MuData | AnnData, k: str | None, /
+    ) -> pd.api.extensions.ExtensionArray | XVariable: ...
+    def get(
+        self, data: MuData | AnnData, k: str | NO_IDX | None = NO_IDX, /
+    ) -> DataFrameLike | pd.api.extensions.ExtensionArray | XVariable:
+        full = self.frame(data)
+        if k is NO_IDX:
+            return full
+        match full, k:
+            case pd.DataFrame() as df, None:
+                return df.index.array
+            case Dataset2D() as ds, None:
+                return ds.true_index.array
+            case pd.DataFrame() as df, k:
+                return df[k].array
+            case Dataset2D() as ds, k:
+                return ds[k].variable
+            case _:
+                msg = f"Unsupported {self!r} container {type(full).__name__}"
+                raise TypeError(msg)
+
+    def set(
+        self, data: MuData | AnnData, k: str | NO_IDX | None, value: object, /
+    ) -> None:
+        if k is NO_IDX:
+            if self.frame_acc is None:
+                msg = f"{self!r} has no `frame_acc` to set the data frame in."
+                raise TypeError(msg)
+            if not _is_frame(value):
+                msg = (
+                    f"Cannot set {self!r} to {type(value).__name__}, not a data frame."
+                )
+                raise TypeError(msg)
+            self.frame_acc.set(data, NO_IDX, value)
+            return
+        frame: Any = self.frame(data)  # value is validated by the frame itself
+        if k is None:
+            frame.index = value
+        else:
+            frame[k] = value
+
+
+@dataclass(frozen=True)
+class MetaAcc[R: AdRef[str | None, MuData | AnnData]](DFAcc[R]):
     r"""Reference accessor for arrays from metadata containers (`A.`\ :attr:`~AdAcc.obs`/`A.`\ :attr:`~AdAcc.var`).
 
     Examples
@@ -404,84 +610,31 @@ class MetaAcc[R: AdRef[str | None, MuData | AnnData]](
     dim: Literal["obs", "var"]
     """Axis this accessor refers to, e.g. `A.obs.dim == 'obs'`."""
 
-    @property
-    def index(self) -> R:
-        """Index :class:`AdRef`, i.e. `A.obs.index` or `A.var.index`."""
-        return self[None]
-
-    def process_idx(self, k: object, /) -> str | None:
-        if k is not None and not isinstance(k, str):
-            msg = f"Unsupported {self.dim} column {k!r}"
-            raise TypeError(msg)
-        return k
-
-    @overload
-    def __getitem__[K: str | None](self, k: K, /) -> R: ...
-    @overload
-    def __getitem__[K: str | None](self, k: list[K] | pd.Index[str], /) -> list[R]: ...
-    def __getitem__[K: str | None](
-        self, k: K | list[K] | pd.Index[str], /
-    ) -> R | list[R]:
-        # TODO: add docstring once sphinx-autodoc-typehints can render `pd.Index[str]`
-        # _is_t_list doesn’t allow None, so be more liberal when checking for lists
-        if isinstance(k, list) or _is_t_list(k, str):
-            return [self[i] for i in k]
-
-        return super().__getitem__(k)
+    def frame(self, data: MuData | AnnData, /) -> DataFrameLike:
+        return getattr(self.container(data), self.dim)
 
     def dims(self, k: str | None, /) -> Axes:
         return {self.dim}
 
     def __repr__(self) -> str:
-        return f"A.{self.dim}"
-
-    def idx_repr(self, k: str | None) -> str:
-        return ".index" if k is None else f"[{k!r}]"
-
-    def isin(self, data: MuData | AnnData, idx: str | None = None) -> bool:
-        if idx is None:
-            return True  # obs and var index always exist
-        attr: DataFrameLike = getattr(data, self.dim)
-        return idx in attr
-
-    @overload
-    def get(self, data: MuData | AnnData, /) -> DataFrameLike: ...
-    @overload
-    def get(
-        self, data: MuData | AnnData, k: str | None, /
-    ) -> pd.api.extensions.ExtensionArray | XVariable: ...
-    def get(
-        self, data: MuData | AnnData, k: str | NO_IDX | None = NO_IDX, /
-    ) -> DataFrameLike | pd.api.extensions.ExtensionArray | XVariable:
-        full: DataFrameLike = getattr(data, self.dim)
-        if k is NO_IDX:
-            return full
-        match full, k:
-            case pd.DataFrame() as df, None:
-                return df.index.array
-            case Dataset2D() as ds, None:
-                return ds.true_index.array
-            case pd.DataFrame() as df, k:
-                return df[k].array
-            case Dataset2D() as ds, k:
-                return ds[k].variable
-            case _:
-                msg = f"Unsupported {self.dim} container"
-                raise TypeError(msg)
+        return f"{_root(self.scope)}.{self.dim}"
 
     def set(
         self, data: MuData | AnnData, k: str | NO_IDX | None, value: object, /
     ) -> None:
+        # replacing the frame or index goes through AnnData to keep things aligned
         if k is NO_IDX:
-            setattr(data, self.dim, value)
+            setattr(self.container(data), self.dim, value)
         elif k is None:
-            setattr(data, f"{self.dim}_names", value)
+            setattr(self.container(data), f"{self.dim}_names", value)
         else:
-            getattr(data, self.dim)[k] = value
+            super().set(data, k, value)
 
 
 @dataclass(frozen=True)
-class MultiAcc[R: AdRef[int, MuData | AnnData]](RefAcc[R, int, MuData | AnnData]):
+class MultiAcc[R: AdRef[int, MuData | AnnData]](
+    RefAcc[R, int, MuData | AnnData, AlignedArray, Array]
+):
     r"""Reference accessor for arrays from multi-dimensional containers (`A.`\ :attr:`~AdAcc.obsm`/`A.`\ :attr:`~AdAcc.varm`).
 
     Examples
@@ -527,14 +680,19 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](RefAcc[R, int, MuData | AnnData]
     def dims(self, i: int, /) -> Axes:
         return {self.dim}
 
+    @property
+    def DF(self) -> DFAcc[R]:
+        """Treat the array as a data frame, to refer to its columns by name, e.g. `A.obsm['x'].DF['c']`."""
+        return DFAcc(ref_class=self.ref_class, scope=self.scope, frame_acc=self)
+
     def __repr__(self) -> str:
-        return f"A.{self.dim}m[{self.k!r}]"
+        return f"{_root(self.scope)}.{self.dim}m[{self.k!r}]"
 
     def idx_repr(self, i: int) -> str:
         return f"[:, {i!r}]"
 
-    def isin(self, data: MuData | AnnData, idx: int | None = None) -> bool:
-        m: AxisArrays = getattr(data, f"{self.dim}m")
+    def _isin(self, data: MuData | AnnData, idx: int | None = None) -> bool:
+        m: AxisArrays = getattr(self.container(data), f"{self.dim}m")
         if (arr := m.get(self.k)) is None:
             return False
         n_cols = known_dim(arr.shape[1])
@@ -545,7 +703,7 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](RefAcc[R, int, MuData | AnnData]
     @overload
     def get(self, data: MuData | AnnData, i: int, /) -> InMemoryArray: ...
     def get(self, data: MuData | AnnData, i: int | NO_IDX = NO_IDX, /) -> AlignedArray:
-        full: AlignedArray = getattr(data, f"{self.dim}m")[self.k]
+        full: AlignedArray = getattr(self.container(data), f"{self.dim}m")[self.k]
         if i is NO_IDX:
             return full
         n_cols = known_dim(full.shape[1])
@@ -564,7 +722,7 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](RefAcc[R, int, MuData | AnnData]
 
     def set(self, data: MuData | AnnData, i: int | NO_IDX, value: object, /) -> None:
         if i is NO_IDX:
-            getattr(data, f"{self.dim}m")[self.k] = value
+            getattr(self.container(data), f"{self.dim}m")[self.k] = value
             return
         full = _check_settable(self.get(data))
         if not -full.shape[1] <= i < full.shape[1]:
@@ -583,6 +741,7 @@ class MultiMapAcc[R: AdRef](MapAcc[MultiAcc]):
     _: KW_ONLY
     ref_class: type[R]
     ref_acc_cls: type[MultiAcc] = MultiAcc
+    scope: ScopeAcc | None = None
 
     def __getitem__(self, k: str, /) -> MultiAcc[R]:
         """Get a reference accessor for an array, e.g. `A.obsm["pca"]`.
@@ -595,17 +754,19 @@ class MultiMapAcc[R: AdRef](MapAcc[MultiAcc]):
         if not isinstance(k, str):
             msg = f"Unsupported {self.dim}m key {k!r}"
             raise TypeError(msg)
-        return self.ref_acc_cls(self.dim, k, ref_class=self.ref_class)
+        return self.ref_acc_cls(self.dim, k, ref_class=self.ref_class, scope=self.scope)
 
     def __repr__(self) -> str:
-        return f"A.{self.dim}m"
+        return f"{_root(self.scope)}.{self.dim}m"
 
     def get(self, adata: AnnData) -> AxisArrays | AxisArraysView:
-        return getattr(adata, f"{self.dim}m")
+        return getattr(_resolve(self.scope, adata), f"{self.dim}m")
 
 
 @dataclass(frozen=True)
-class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](RefAcc[R, Idx2D, MuData | AnnData]):
+class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](
+    RefAcc[R, Idx2D, MuData | AnnData, AlignedArray, Array]
+):
     r"""Reference accessor for arrays from graph containers (`A.`\ :attr:`~AdAcc.obsp`/`A.`\ :attr:`~AdAcc.varp`).
 
     Examples
@@ -650,12 +811,13 @@ class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](RefAcc[R, Idx2D, MuData | AnnD
         return (self.dim,) * n_slices if n_slices > 1 else {self.dim}
 
     def __repr__(self) -> str:
-        return f"A.{self.dim}p[{self.k!r}]"
+        return f"{_root(self.scope)}.{self.dim}p[{self.k!r}]"
 
     def idx_repr(self, idx: Idx2D) -> str:
         return f"[{idx[0]!r}, {idx[1]!r}]"
 
-    def isin(self, data: MuData | AnnData, idx: Idx2D | None = None) -> bool:
+    def _isin(self, data: MuData | AnnData, idx: Idx2D | None = None) -> bool:
+        data = self.container(data)
         if self.k not in getattr(data, f"{self.dim}p"):
             return False
         if idx is None:
@@ -670,6 +832,7 @@ class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](RefAcc[R, Idx2D, MuData | AnnD
     def get(
         self, data: MuData | AnnData, idx: Idx2D | NO_IDX = NO_IDX, /
     ) -> AlignedArray:
+        data = self.container(data)
         full: AlignedArray = getattr(data, f"{self.dim}p")[self.k]
         if idx is NO_IDX:
             return full
@@ -690,11 +853,12 @@ class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](RefAcc[R, Idx2D, MuData | AnnD
     def set(
         self, data: MuData | AnnData, idx: Idx2D | NO_IDX, value: object, /
     ) -> None:
+        inner = self.container(data)
         if idx is NO_IDX:
-            getattr(data, f"{self.dim}p")[self.k] = value
+            getattr(inner, f"{self.dim}p")[self.k] = value
             return
         full = _check_settable(self.get(data))
-        full[_positional_idx(data, idx, (self.dim, self.dim))] = value
+        full[_positional_idx(inner, idx, (self.dim, self.dim))] = value
 
 
 @dataclass(frozen=True)
@@ -707,6 +871,7 @@ class GraphMapAcc[R: AdRef](MapAcc[GraphAcc]):
     _: KW_ONLY
     ref_class: type[R]
     ref_acc_cls: type[GraphAcc] = GraphAcc
+    scope: ScopeAcc | None = None
 
     def __getitem__(self, k: str, /) -> GraphAcc[R]:
         """Get a reference accessor for a graph, e.g. `A.obsp["distances"]`.
@@ -719,13 +884,148 @@ class GraphMapAcc[R: AdRef](MapAcc[GraphAcc]):
         if not isinstance(k, str):
             msg = f"Unsupported {self.dim}p key {k!r}"
             raise TypeError(msg)
-        return self.ref_acc_cls(self.dim, k, ref_class=self.ref_class)
+        return self.ref_acc_cls(self.dim, k, ref_class=self.ref_class, scope=self.scope)
 
     def __repr__(self) -> str:
-        return f"A.{self.dim}p"
+        return f"{_root(self.scope)}.{self.dim}p"
 
     def get(self, adata: AnnData) -> PairwiseArrays | PairwiseArraysView:
-        return getattr(adata, f"{self.dim}p")
+        return getattr(_resolve(self.scope, adata), f"{self.dim}p")
+
+
+@dataclass(frozen=True)
+class ScopeAcc[R: AdRef, D: MuData | AnnData, E = object](RefAcc[R, Never, D, E, E]):
+    r"""Abstract base class for accessors to elements that contain an AnnData-like object.
+
+    Accessors for arrays in that object (created via :attr:`AD`)
+    have it as their :attr:`~RefAcc.scope`.
+    """
+
+    @property
+    @abc.abstractmethod
+    def AD(self) -> AdAcc[R]:
+        """Treat the element as a nested AnnData object, e.g. `A.uns['a'].AD.obs['x']`.
+
+        Its :func:`repr` is used as the prefix of nested accessors’ :func:`repr`\\ s.
+        """
+
+    @abc.abstractmethod
+    def get(self, data: D, idx: NO_IDX = NO_IDX, /) -> E:
+        """Get the referenced element."""
+
+
+@dataclass(frozen=True)
+class ItemAcc[R: AdRef](ScopeAcc[R, MuData | AnnData]):
+    r"""Accessor for (possibly nested) items in `.uns` (`A.`\ :attr:`~AdAcc.uns`\ `[k]`).
+
+    Indexing it with a key descends further into the item (treating it as a mapping).
+    It can’t create :term:`reference`\ s itself, as items in `.uns` aren’t aligned to any dimension,
+    but it can be cast into a type with arrays inside (`.AD`, `.DF`).
+
+    Examples
+    --------
+    >>> from anndata.acc import A, ItemAcc
+    >>> assert isinstance(A.uns["foo"], ItemAcc)
+    >>> A.uns["foo"]["bar"]
+    A.uns['foo']['bar']
+    >>> A.uns["baz"].AD.obs["x"]
+    A.uns['baz'].AD.obs['x']
+    >>> A.uns["df"].DF["col"]
+    A.uns['df'].DF['col']
+
+    """
+
+    path: tuple[str, ...]
+    """Keys leading to the item, e.g. `A.uns['a']['b'].path == ('a', 'b')`."""
+
+    def __getitem__(self, k: str, /) -> Self:  # type: ignore[override]  # descends instead of creating refs
+        """Get an accessor for an item nested in this one, e.g. `A.uns['a']['b']`.
+
+        Parameters
+        ----------
+        k
+            The key of the nested item.
+        """
+        if not isinstance(k, str):
+            msg = f"Unsupported uns key {k!r}"
+            raise TypeError(msg)
+        return replace(self, path=(*self.path, k))
+
+    @property
+    def AD(self) -> AdAcc[R]:
+        """Treat the item as a nested AnnData object, e.g. `A.uns['a'].AD.obs['x']`."""
+        return AdAcc(ref_class=self.ref_class, scope=self)
+
+    @property
+    def DF(self) -> DFAcc[R]:
+        """Treat the item as a data frame, e.g. `A.uns['a'].DF['col']`."""
+        return DFAcc(ref_class=self.ref_class, scope=self.scope, frame_acc=self)
+
+    def dims(self, idx: Never, /) -> Axes:
+        msg = f"{self!r} doesn’t contain arrays aligned to a dimension. Cast it, e.g. with `.AD` or `.DF`."
+        raise TypeError(msg)
+
+    def __repr__(self) -> str:
+        return f"{_root(self.scope)}.uns" + "".join(f"[{k!r}]" for k in self.path)
+
+    def idx_repr(self, idx: Never) -> str:
+        return f"[{idx!r}]"
+
+    def _isin(self, data: MuData | AnnData, idx: None = None) -> bool:
+        item = self.container(data).uns
+        try:
+            for k in self.path:
+                item = item[k]
+        except (KeyError, IndexError, TypeError):  # missing, or not a mapping
+            return False
+        return True
+
+    def get(self, data: MuData | AnnData, idx: NO_IDX = NO_IDX, /) -> object:
+        if idx is not NO_IDX:
+            msg = f"{self!r} can only be used to get the whole item."
+            raise TypeError(msg)
+        item = self.container(data).uns
+        for k in self.path:
+            item = item[k]
+        return item
+
+    def set(self, data: MuData | AnnData, idx: NO_IDX, value: object, /) -> None:
+        if idx is not NO_IDX:
+            msg = f"{self!r} can only be used to set the whole item."
+            raise TypeError(msg)
+        container = self.container(data).uns
+        for k in self.path[:-1]:
+            container = container[k]
+        container[self.path[-1]] = value
+
+
+@dataclass(frozen=True)
+class UnsMapAcc[R: AdRef](MapAcc[ItemAcc]):
+    r"""Accessor for unstructured metadata (`A.`\ :attr:`~AdAcc.uns`)."""
+
+    _: KW_ONLY
+    ref_class: type[R]
+    ref_acc_cls: type[ItemAcc] = ItemAcc
+    scope: ScopeAcc | None = None
+
+    def __getitem__(self, k: str, /) -> ItemAcc[R]:
+        """Get an accessor for an item, e.g. `A.uns["foo"]`.
+
+        Parameters
+        ----------
+        k
+            The item’s key.
+        """
+        if not isinstance(k, str):
+            msg = f"Unsupported uns key {k!r}"
+            raise TypeError(msg)
+        return self.ref_acc_cls((k,), ref_class=self.ref_class, scope=self.scope)
+
+    def __repr__(self) -> str:
+        return f"{_root(self.scope)}.uns"
+
+    def get(self, adata: AnnData) -> MutableMapping[str, Any]:
+        return _resolve(self.scope, adata).uns
 
 
 # `R`’s bound can’t double as its default before PEP 696 (Python 3.13)
@@ -752,6 +1052,15 @@ class AdAcc[R: AdRef]:
 
     graph_cls: type[GraphAcc] = GraphAcc
     """Class to use for `obsp`/`varp` accessors."""
+
+    item_cls: type[ItemAcc] = ItemAcc
+    """Class to use for `uns` item accessors."""
+
+    scope: ScopeAcc | None = field(default=None, kw_only=True)
+    """Accessor for the element this object is a cast of, e.g. `A.uns['a']` for `A.uns['a'].AD`.
+
+    `None` for a top-level accessor like :data:`A`.
+    """
 
     X: LayerAcc[R] = field(init=False)
     """Access data matrix (shortcut for `A.layers[None]`).
@@ -819,31 +1128,40 @@ class AdAcc[R: AdRef]:
     {'var'}
     """
 
+    uns: UnsMapAcc[R] = field(init=False)
+    """Access (nested) items in unstructured metadata.
+
+    >>> A.uns["neighbors"]["params"]
+    A.uns['neighbors']['params']
+    >>> A.uns["nested"].AD.obs["x"]
+    A.uns['nested'].AD.obs['x']
+    """
+
     ATTRS: ClassVar = frozenset({
         *("layers", "obs", "var"),
         *("obsm", "varm", "obsp", "varp"),
+        "uns",
     })
 
     def __post_init__(self) -> None:
-        x = self.layer_cls(None, ref_class=self.ref_class)
-        layers = LayerMapAcc(ref_class=self.ref_class, ref_acc_cls=self.layer_cls)
+        r, s = self.ref_class, self.scope
+        x = self.layer_cls(None, ref_class=r, scope=s)
+        layers = LayerMapAcc(ref_class=r, ref_acc_cls=self.layer_cls, scope=s)
+        uns = UnsMapAcc(ref_class=r, ref_acc_cls=self.item_cls, scope=s)
         object.__setattr__(self, "X", x)
         object.__setattr__(self, "layers", layers)
+        object.__setattr__(self, "uns", uns)
         for dim in ("obs", "var"):
-            meta = self.meta_cls(dim, ref_class=self.ref_class)
-            multi = MultiMapAcc(
-                dim, ref_class=self.ref_class, ref_acc_cls=self.multi_cls
-            )
-            graphs = GraphMapAcc(
-                dim, ref_class=self.ref_class, ref_acc_cls=self.graph_cls
-            )
+            meta = self.meta_cls(dim, ref_class=r, scope=s)
+            multi = MultiMapAcc(dim, ref_class=r, ref_acc_cls=self.multi_cls, scope=s)
+            graphs = GraphMapAcc(dim, ref_class=r, ref_acc_cls=self.graph_cls, scope=s)
             object.__setattr__(self, dim, meta)
             object.__setattr__(self, f"{dim}m", multi)
             object.__setattr__(self, f"{dim}p", graphs)
 
     def to_json(
-        self, ref: R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R]
-    ) -> list[str | int | None]:
+        self, ref: R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R] | DFAcc[R]
+    ) -> list[str | int | AccJson | None]:
         """Serialize an :class:`AdRef` or a whole container accessor to a JSON-compatible list.
 
         Schema: `acc-schema-v1.json <../acc-schema-v1.json>`_
@@ -857,31 +1175,39 @@ class AdAcc[R: AdRef]:
         ['obsm', 'pca']
         >>> A.to_json(A.X)
         ['layers', None]
+
+        Items in `.uns` have their path in a list,
+        and casts (`.AD`, `.DF`) add a trailing `[cast, payload]` pair:
+
+        >>> A.to_json(A.uns["a"]["b"])
+        ['uns', ['a', 'b']]
+        >>> A.to_json(A.obsm["df"].DF["c"])
+        ['obsm', 'df', ['DF', 'c']]
+        >>> A.to_json(A.uns["n"].AD.obs["x"])
+        ['uns', ['n'], ['AD', ['obs', 'x']]]
         """
         from ._parse_json import to_json
 
         return to_json(ref)
 
     @overload
-    def from_json(
-        self, data: Sequence[str | int | None], *, vec: Literal[True]
-    ) -> R: ...
+    def from_json(self, data: AccJson, *, vec: Literal[True]) -> R: ...
     @overload
     def from_json(
-        self, data: Sequence[str | int | None], *, vec: Literal[False]
-    ) -> LayerAcc[R] | MultiAcc[R] | GraphAcc[R]: ...
+        self, data: AccJson, *, vec: Literal[False]
+    ) -> LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R] | DFAcc[R]: ...
     @overload
     def from_json(
-        self, data: Sequence[str | int | None], *, vec: None = None
-    ) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R]: ...
+        self, data: AccJson, *, vec: None = None
+    ) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R] | DFAcc[R]: ...
     def from_json(
-        self, data: Sequence[str | int | None], *, vec: bool | None = None
-    ) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R]:
+        self, data: AccJson, *, vec: bool | None = None
+    ) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R] | DFAcc[R]:
         """Create an :class:`AdRef` or a whole container accessor from a JSON sequence.
 
         `vec` works like in :meth:`resolve`:
         if `True`, `data` must refer to a vector (:class:`AdRef`),
-        if `False`, to a whole container (:class:`LayerAcc`/:class:`MultiAcc`/:class:`GraphAcc`),
+        if `False`, to a whole container (:class:`LayerAcc`/:class:`MultiAcc`/:class:`GraphAcc`/:class:`ItemAcc`/:class:`DFAcc`),
         and if unset, both are accepted.
 
         Schema: `acc-schema-v1.json <../acc-schema-v1.json>`_
@@ -918,26 +1244,26 @@ class AdAcc[R: AdRef]:
     @overload
     def resolve(
         self, spec: str, *, strict: Literal[True] = True, vec: Literal[False]
-    ) -> LayerAcc[R] | MultiAcc[R] | GraphAcc[R]: ...
+    ) -> LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R]: ...
     @overload
     def resolve(
         self, spec: str, *, strict: Literal[False], vec: Literal[False]
-    ) -> LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | None: ...
+    ) -> LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R] | None: ...
     @overload
     def resolve(
         self, spec: str, *, strict: Literal[True] = True, vec: None = None
-    ) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R]: ...
+    ) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R]: ...
     @overload
     def resolve(
         self, spec: str, *, strict: Literal[False], vec: None = None
-    ) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | None: ...
+    ) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R] | None: ...
     def resolve(
         self, spec: str, *, strict: bool = True, vec: bool | None = None
-    ) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | None:
+    ) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R] | None:
         """Create :class:`AdRef` from a simplified string.
 
         If `vec` is `True`, `spec` must be an indexed form yielding an :class:`AdRef`, e.g. `"X[:,:]"`, `"obs.a"`, or `"obsm.c.0"` (the current default behavior).
-        If `vec` is `False`, `spec` must refer to a whole container instead (`"X"`, `"layers.<k>"`, `"obsm.<k>"`, `"varm.<k>"`, `"obsp.<k>"`, or `"varp.<k>"`), and a :class:`LayerAcc`/:class:`MultiAcc`/:class:`GraphAcc` is returned instead of an :class:`AdRef`.
+        If `vec` is `False`, `spec` must refer to a whole container instead (`"X"`, `"layers.<k>"`, `"obsm.<k>"`, `"varm.<k>"`, `"obsp.<k>"`, `"varp.<k>"`, or `"uns.<k1>.….<kn>"`), and a :class:`LayerAcc`/:class:`MultiAcc`/:class:`GraphAcc`/:class:`ItemAcc` is returned instead of an :class:`AdRef`.
         If `vec` is unset, both forms are accepted.
 
         Examples
@@ -973,13 +1299,21 @@ class AdAcc[R: AdRef]:
         A.obsm['c']
         >>> A.resolve("obsp.g", vec=False)
         A.obsp['g']
+
+        Items in `.uns`, yielding an :class:`ItemAcc`.
+        Like for `"obsm.<k>.<i>"`, the path is split at periods.
+
+        >>> A.resolve("uns.neighbors", vec=False)
+        A.uns['neighbors']
+        >>> A.resolve("uns.a.b.0", vec=False)
+        A.uns['a']['b']['0']
         """
         from ._parse_str import parse
 
         return parse(self, spec, strict=strict, vec=vec)
 
     def __repr__(self) -> str:
-        return "A"
+        return "A" if self.scope is None else f"{self.scope!r}.AD"
 
 
 A: AdAcc[AdRef] = AdAcc()
@@ -1045,6 +1379,46 @@ def _check_settable(a: AlignedArray, /) -> _Settable:
         msg = f"Cannot assign into {type(a).__name__}."
         raise TypeError(msg)
     return a
+
+
+def _root(scope: ScopeAcc | None, /) -> str:
+    """Get the repr of the :class:`AdAcc` an accessor in `scope` belongs to."""
+    # the scope’s `.AD` decides how it’s written, e.g. `A.uns['a'].AD`, or mudata’s `A.mod['rna']`
+    return "A" if scope is None else repr(scope.AD)
+
+
+def _resolve(scope: ScopeAcc | None, data: MuData | AnnData, /) -> MuData | AnnData:
+    """Get the AnnData object `scope` refers to in `data`, validating the `.AD` cast."""
+    if scope is None:
+        return data
+    if not _is_anndata_like(elem := scope.get(data)):
+        msg = f"{scope!r} is {type(elem).__name__}, not an AnnData object, so `.AD` can’t index into it."
+        raise TypeError(msg)
+    return elem
+
+
+def _cast_in(acc: RefAcc | MapAcc | AdAcc, data: MuData | AnnData, /) -> bool:
+    """Check if the element `acc` is cast from is in `data` and has the right type."""
+    match acc:
+        case DFAcc(frame_acc=RefAcc() as frame):  # `.DF`
+            return frame in data and _is_frame(frame.get(data))
+        case _ if (scope := acc.scope) is not None:  # `.AD`
+            return scope in data and _is_anndata_like(scope.get(data))
+    return True
+
+
+def _is_frame(x: object, /) -> TypeGuard[DataFrameLike]:
+    return isinstance(x, pd.DataFrame | Dataset2D)
+
+
+def _is_anndata_like(x: object, /) -> TypeGuard[MuData | AnnData]:
+    if isinstance(x, AnnData):
+        return True
+    # `MuData` is a placeholder at runtime, since importing mudata here would be circular.
+    # A MuData object can only exist if mudata was imported, so look it up there.
+    return (mudata := sys.modules.get("mudata")) is not None and isinstance(
+        x, mudata.MuData
+    )
 
 
 def _positional_idx(

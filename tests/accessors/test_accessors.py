@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import importlib.resources
 import json
+import re
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING
 
@@ -20,7 +21,9 @@ if TYPE_CHECKING:
 
     from anndata.acc import (
         AdRef,
+        DFAcc,
         GraphAcc,
+        ItemAcc,
         LayerAcc,
         MapAcc,
         MetaAcc,
@@ -28,10 +31,10 @@ if TYPE_CHECKING:
         MultiMapAcc,
     )
 
-    type MatrixAcc = LayerAcc | MultiAcc | GraphAcc
+    type MatrixAcc = LayerAcc | MultiAcc | GraphAcc | ItemAcc | DFAcc
 
 
-type AdRefSer = Sequence[str | int | None]
+type AdRefSer = Sequence[str | int | AdRefSer | None]
 
 with importlib.resources.open_text("anndata.acc", "acc-schema-v1.json") as f:
     SCHEMA = json.load(f)
@@ -61,6 +64,17 @@ PATHS: list[tuple[AdRef, AdRefSer]] = [
     (A.varp["cons"][:, :], ["varp", "cons", None, None]),
     (A.varp["cons"]["gene-46", :], ["varp", "cons", "gene-46", None]),
     (A.varp["cons"][:, "gene-46"], ["varp", "cons", None, "gene-46"]),
+    (A.varm["df"].DF["a"], ["varm", "df", ["DF", "a"]]),
+    (A.uns["df"].DF.index, ["uns", ["df"], ["DF", None]]),
+    (A.uns["n"].AD.obs["x"], ["uns", ["n"], ["AD", ["obs", "x"]]]),
+    (
+        A.uns["n"]["o"].AD.obsm["df"].DF["c"],
+        ["uns", ["n", "o"], ["AD", ["obsm", "df", ["DF", "c"]]]],
+    ),
+    (
+        A.uns["n"].AD.uns["m"].AD.X[:, "g"],
+        ["uns", ["n"], ["AD", ["uns", ["m"], ["AD", ["layers", None, None, "g"]]]]],
+    ),
 ]
 
 
@@ -116,6 +130,13 @@ MATRICES: list[tuple[MatrixAcc, AdRefSer]] = [
     (A.varm["PCs"], ["varm", "PCs"]),
     (A.obsp["conn"], ["obsp", "conn"]),
     (A.varp["cons"], ["varp", "cons"]),
+    (A.uns["a"], ["uns", ["a"]]),
+    (A.uns["a"]["b"], ["uns", ["a", "b"]]),
+    (A.uns["n"].AD.obsm["p"], ["uns", ["n"], ["AD", ["obsm", "p"]]]),
+    (A.uns["n"].AD.uns["m"], ["uns", ["n"], ["AD", ["uns", ["m"]]]]),
+    (A.obsm["df"].DF, ["obsm", "df", ["DF"]]),
+    (A.uns["df"].DF, ["uns", ["df"], ["DF"]]),
+    (A.uns["n"].AD.varm["df"].DF, ["uns", ["n"], ["AD", ["varm", "df", ["DF"]]]]),
 ]
 
 
@@ -143,6 +164,9 @@ def test_serialization_matrix(
         pytest.param(["obsm", "umap"], True, id="obsm-matrix-as-vec"),
         pytest.param(["obsm", "umap", 0], False, id="obsm-vec-as-matrix"),
         pytest.param(["varp", "cons"], True, id="varp-matrix-as-vec"),
+        pytest.param(["uns", ["a"]], True, id="uns-item-as-vec"),
+        pytest.param(["uns", ["a"], ["DF", "c"]], False, id="uns-df-vec-as-matrix"),
+        pytest.param(["uns", ["a"], ["AD", ["obsm", "p"]]], True, id="ad-acc-as-vec"),
     ],
 )
 def test_from_json_vec_mismatch(
@@ -152,9 +176,30 @@ def test_from_json_vec_mismatch(
         A.from_json(serialized, vec=vec)
 
 
-def test_to_json_unsupported() -> None:
-    with pytest.raises(TypeError, match=r"Unsupported accessor A\.obs"):
-        A.to_json(A.obs)  # type: ignore[arg-type]
+@pytest.mark.parametrize("acc", [A.obs, A.uns["n"].AD.var], ids=str)
+def test_to_json_unsupported(acc: MetaAcc) -> None:
+    with pytest.raises(
+        TypeError, match=rf"Unsupported accessor {re.escape(repr(acc))}$"
+    ):
+        A.to_json(acc)
+
+
+@pytest.mark.parametrize(
+    "serialized",
+    [
+        pytest.param(["uns", []], id="empty-path"),
+        pytest.param(["uns", [0]], id="int-first"),
+        pytest.param(["uns", ["a", 0]], id="int-in-path"),
+        pytest.param(["uns", ["a", True]], id="bool-in-path"),
+        pytest.param(["uns", ["a"], ["XX", "c"]], id="unknown-cast"),
+        pytest.param(["obsm", "p", ["AD", ["obs", "x"]]], id="ad-cast-on-obsm"),
+    ],
+)
+def test_from_json_invalid(serialized: AdRefSer) -> None:
+    with pytest.raises(jsonschema.ValidationError):
+        validate(serialized)
+    with pytest.raises(ValueError, match=r"Failed to parse"):
+        A.from_json(serialized)
 
 
 @pytest.mark.parametrize(
@@ -298,7 +343,7 @@ def test_special[C](
 @pytest.mark.parametrize(
     "ref_or_acc",
     [
-        *(p[0] for p in PATHS),
+        *(p[0] for p in PATHS if p[1][0] != "uns"),  # see test_nested.py for those
         A.X,
         A.obs,
         A.layers,

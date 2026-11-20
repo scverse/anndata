@@ -136,6 +136,17 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
                 - :attr:`~GraphAcc.dim`, :attr:`~GraphAcc.k`
                 - :attr:`~AdAcc.obsp`\ `[key]`, :attr:`~AdAcc.varp`\ `[key]`
                 - `A.obsp["e"][:, "c1"]`, `A.vbsp["e"]["g0", :]`
+            -   - :class:`DFAcc` (base class of :class:`MetaAcc`)
+                - :attr:`~DFAcc.frame_acc`
+                - :attr:`MultiAcc.DF`, :attr:`ItemAcc.DF`
+                - `A.obsm["d"].DF["c"]`, `A.uns["df"].DF["c"]`
+            -   - :class:`ItemAcc`
+                - :attr:`~ItemAcc.path`
+                - :attr:`~AdAcc.uns`\ `[key]`
+                - none, but can be cast: `A.uns["a"].AD.obs["c"]`, `A.uns["a"].DF["c"]`
+
+        Every :term:`reference accessor` has a :attr:`~RefAcc.scope`: the element whose `.AD` cast it’s in, e.g. `A.uns["a"].AD.obs.scope == A.uns["a"]`, or `None` at the top level.
+        Such elements are :class:`ScopeAcc`\ s (like :class:`ItemAcc`).
 
     mapping accessor
         :class:`!MapAcc` subclasses can be indexed with a string to create :term:`reference accessor`\ s,
@@ -152,6 +163,7 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
             LayerMapAcc
             MultiMapAcc
             GraphMapAcc
+            UnsMapAcc
 
 ..  this indented code makes autosummary generate the pages
     ..  autosummary::
@@ -162,11 +174,15 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
         MetaAcc
         MultiAcc
         GraphAcc
+        DFAcc
+        ItemAcc
+        ScopeAcc
 
     ..  autosummary::
         :toctree: generated/
 
         Idx2D
+        AccJson
         NO_IDX
 
 ..  toctree::
@@ -176,7 +192,11 @@ See :class:`AdAcc` for examples of how to use it to create :term:`reference`\ s 
     generated/anndata.acc.MetaAcc
     generated/anndata.acc.MultiAcc
     generated/anndata.acc.GraphAcc
+    generated/anndata.acc.DFAcc
+    generated/anndata.acc.ItemAcc
+    generated/anndata.acc.ScopeAcc
     generated/anndata.acc.Idx2D
+    generated/anndata.acc.AccJson
     generated/anndata.acc.NO_IDX
 
 Serialization
@@ -197,6 +217,12 @@ as the same lists without the trailing index:
 ['obsm', 'pca']
 >>> A.from_json(["layers", None])
 A.X
+
+Items in `.uns` store their path as a nested list,
+and casts (`.AD`, `.DF`) add a trailing `[cast, payload]` pair:
+
+>>> A.to_json(A.uns["n"].AD.obs["x"])
+['uns', ['n'], ['AD', ['obs', 'x']]]
 
 Pass `vec=True` or `vec=False` to :meth:`~AdAcc.from_json`
 to accept only :term:`reference`\ s or only :term:`reference accessor`\ s,
@@ -256,7 +282,10 @@ There are three layers of extensibility:
     >>> A.obs[["a", "b"]]
     A.obs[['a', 'b']]
 
-    Note that for implementing :meth:`RefAcc.get` when subclassing, you will need :class:`NO_IDX`.
+    Note that for implementing :meth:`RefAcc.get` when subclassing, you will need :class:`NO_IDX`,
+    and that :meth:`RefAcc.get`/:meth:`~RefAcc.set`/:meth:`~RefAcc._isin` should go through
+    :meth:`RefAcc.container` to work when nested (e.g. in `A.uns["a"].AD`).
+    To refer to another data frame, subclass :class:`DFAcc` and override :meth:`DFAcc.frame`.
 
 
 #.  subclass :class:`AdAcc` to add new accessors:

@@ -287,7 +287,14 @@ def test_set_full_df(adata: AnnData) -> None:
 
 
 @pytest.mark.parametrize(
-    ("index", "exc"), [(A.obsm, IndexError), (0, TypeError)], ids=str
+    ("index", "exc"),
+    [
+        (A.obsm, IndexError),
+        (0, TypeError),
+        (A.varm["df"].DF, TypeError),
+        (A.uns["df"].DF, TypeError),
+    ],
+    ids=str,
 )
 def test_set_unsupported(adata: AnnData, index: object, exc: type[Exception]) -> None:
     with pytest.raises(exc):
@@ -311,8 +318,22 @@ def test_subclass_without_set_warns() -> None:
             def dims(self, idx, /): ...
             def __repr__(self): ...
             def idx_repr(self, idx, /): ...
+            def _isin(self, data, idx=None, /): ...
+            def get(self, data, idx=None, /): ...
+
+
+def test_subclass_with_old_isin_warns() -> None:
+    from anndata.acc import RefAcc
+
+    with pytest.warns(FutureWarning, match=r"doesn’t implement RefAcc\._isin"):
+
+        class _OldIsin(RefAcc):  # pyright: ignore[reportUnusedClass]
+            def dims(self, idx, /): ...
+            def __repr__(self): ...
+            def idx_repr(self, idx, /): ...
             def isin(self, data, idx=None, /): ...
             def get(self, data, idx=None, /): ...
+            def set(self, data, idx, value, /): ...
 
 
 def test_set_multi_out_of_range(adata: AnnData) -> None:

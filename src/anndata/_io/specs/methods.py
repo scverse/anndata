@@ -1616,7 +1616,7 @@ del store_type, acc_type
 @_REGISTRY.register_read(zarr.Array, IOSpec("accessor", "0.1.0"))
 def read_accessor(
     elem: _ArrayStorageType, *, _reader: Reader
-) -> acc.AdRef | acc.LayerAcc | acc.MultiAcc | acc.GraphAcc:
+) -> acc.AdRef | acc.RefAcc:
     from anndata.acc._entry_points import load_acc
 
     read = read_hdf5_string if isinstance(elem, h5py.Dataset) else read_zarr_string

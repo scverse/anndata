@@ -10,7 +10,7 @@
     {%- if loop.first %}
     .. rubric:: Attributes
     {% endif %}
-    .. autoattribute:: {{ item }}
+    .. auto{{ [fullname, item] | join(".") | member_type }}:: {{ item }}
     {%- endfor %}
     {% endblock %}
 

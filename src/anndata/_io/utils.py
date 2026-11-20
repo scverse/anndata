@@ -28,7 +28,7 @@ if TYPE_CHECKING:
         _GroupStorageType,
         _WriteInternal,
     )
-    from ..acc import AdRef, MapAcc, RefAcc
+    from ..acc import AdRef, DFAcc, MapAcc, RefAcc
     from ..typing import RWAble
     from .specs.registry import Writer
 
@@ -168,7 +168,32 @@ def write_use(
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
 ) -> None:
     """Write only the parts of `adata` referenced by `use` into the existing anndata group `f`."""
-    from .specs import read_elem, write_elem
+    from .specs import write_elem
+
+    # resolve everything first so an invalid accessor fails before anything is written
+    uses = use if isinstance(use, Sequence) else [use]
+    _check_store(f, adata, use)
+    targets = [(u, *_descend(f, adata, u)) for u in uses]
+    for _, g, inner in targets:
+        if g is not f:
+            _check_store(g, inner, use)
+    # `g` is the nested group, but `u` resolves its own scope, so pass it the root `adata`
+    for g, parent, key, elem in [
+        (g, *_resolve_use(g, adata, u)) for u, g, _ in targets
+    ]:
+        if parent is not None and parent not in g:
+            write_elem(g, parent, {})
+        write_elem(
+            g if parent is None else cast("_GroupStorageType", g[parent]),
+            key,
+            elem,
+            dataset_kwargs=dataset_kwargs,
+        )
+
+
+def _check_store(f: _GroupStorageType, adata: AnnData, use: object) -> None:
+    """Check that `f` is an anndata group with the same names as `adata`."""
+    from .specs import read_elem
 
     if (
         f.attrs.get("encoding-type"),
@@ -187,43 +212,84 @@ def write_use(
             msg = f"Cannot write {use}: {dim}_names in the store do not match the AnnData object."
             raise ValueError(msg)
 
-    # resolve everything first so an invalid accessor fails before anything is written
-    uses = use if isinstance(use, Sequence) else [use]
-    for parent, key, elem in [_resolve_use(f, adata, u) for u in uses]:
-        if parent is not None and parent not in f:
-            write_elem(f, parent, {})
-        write_elem(
-            f if parent is None else cast("_GroupStorageType", f[parent]),
-            key,
-            elem,
-            dataset_kwargs=dataset_kwargs,
-        )
+
+def _descend(
+    f: _GroupStorageType, adata: AnnData, use: AdRef | RefAcc | MapAcc
+) -> tuple[_GroupStorageType, AnnData]:
+    """Get the anndata group and object `use` refers into."""
+    from .. import AnnData
+    from ..acc import AdRef, ItemAcc
+
+    if (scope := (use.acc if isinstance(use, AdRef) else use).scope) is None:
+        return f, adata
+    f, _ = _descend(f, adata, scope)
+    if not isinstance(scope, ItemAcc):  # e.g. a mudata modality
+        msg = f"Cannot write {use}: {scope!r} has no known location in the store."
+        raise ValueError(msg)
+    group = _require_group(f, "/".join(["uns", *scope.path]), "anndata", use)
+    if not isinstance(inner := scope.get(adata), AnnData):
+        msg = f"Cannot write {use}: {scope!r} is a {type(inner).__name__}, not an AnnData object."
+        raise ValueError(msg)
+    return cast("_GroupStorageType", f[group]), inner
 
 
-def _resolve_use(  # noqa: PLR0911
+def _require_group(f: _GroupStorageType, group: str, encoding: str, use: object) -> str:
+    """Check that `group` exists in `f` with `encoding`, as only fixed attributes get created."""
+    if group not in f or f[group].attrs.get("encoding-type") != encoding:
+        msg = f"Cannot write {use}: there is no {encoding!r} element at {group!r} in the store. Write it first."
+        raise ValueError(msg)
+    return group
+
+
+def _frame_col(
+    f: _GroupStorageType, adata: AnnData, acc: DFAcc, group: str, col: str
+) -> tuple[str, str, RWAble]:
+    """Get the parent group, key, and element to write column `col` of the frame at `group`."""
+    if col in {"_index", cast("_GroupStorageType", f[group]).attrs["_index"]}:
+        msg = f"Cannot write column {col!r}: it is the name of the {group} index."
+        raise ValueError(msg)
+    # `._values` is what `write_dataframe` writes for each column
+    return group, col, acc.frame(adata)[col]._values
+
+
+def _resolve_use(  # noqa: PLR0911, PLR0912
     f: _GroupStorageType, adata: AnnData, use: AdRef | RefAcc | MapAcc
 ) -> tuple[str | None, str, RWAble]:
     """Get the parent group, key, and element to write for `use`."""
     from ..acc import (
         AdRef,
+        DFAcc,
         GraphAcc,
         GraphMapAcc,
+        ItemAcc,
         LayerAcc,
         LayerMapAcc,
         MetaAcc,
         MultiAcc,
         MultiMapAcc,
+        RefAcc,
+        UnsMapAcc,
     )
 
     match use:
+        case DFAcc(frame_acc=RefAcc() as frame):  # `.DF`
+            return _resolve_use(f, adata, frame)
+        case ItemAcc(path=path):
+            for i in range(1, len(path)):  # `uns` itself is a fixed attribute
+                _require_group(f, "/".join(["uns", *path[:i]]), "dict", use)
+            return "/".join(["uns", *path[:-1]]), path[-1], use.get(adata)
+        case UnsMapAcc():
+            return None, "uns", dict(use.get(adata))
         case AdRef(acc=MetaAcc(dim=dim) as acc, idx=str() as col):
-            if col in {"_index", cast("_GroupStorageType", f[dim]).attrs["_index"]}:
-                msg = f"Cannot write column {col!r}: it is the name of the {dim} index."
-                raise ValueError(msg)
-            # `._values` is what `write_dataframe` writes for each column
-            return dim, col, acc.get(adata)[col]._values
+            return _frame_col(f, adata, acc, dim, col)
+        case AdRef(acc=DFAcc(frame_acc=RefAcc() as frame) as acc, idx=str() as col):
+            # `.DF`: write into the frame where it is in the store
+            frame_parent, frame_key, _ = _resolve_use(f, adata, frame)
+            group = "/".join(filter(None, [frame_parent, frame_key]))
+            _require_group(f, group, "dataframe", use)
+            return _frame_col(f, adata, acc, group, col)
         case AdRef():
-            msg = f"Cannot write {use}: only `obs`/`var` columns can be written as single vectors."
+            msg = f"Cannot write {use}: only data frame columns can be written as single vectors."
             raise ValueError(msg)
         case LayerAcc(k=k):
             return (
