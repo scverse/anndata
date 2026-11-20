@@ -150,7 +150,7 @@ def test_to_memory(adata_remote: AnnData, adata_orig: AnnData):
     assert_equal(remote_to_memory, adata_orig)
 
 
-def test_access_counts_obsm_df():
+def test_access_counts_obsm_df() -> None:
     adata = AnnData(
         X=np.array(np.random.rand(100, 20)),
     )
@@ -216,7 +216,7 @@ def test_unconsolidated(mtx_format):
 
 
 @pytest.mark.zarr_io
-def test_empty_df_warns():
+def test_empty_df_warns() -> None:
     adata = AnnData(X=np.ones((10, 10)))
     adata.write_zarr(store := MemoryStore())
     root = zarr.open(store)

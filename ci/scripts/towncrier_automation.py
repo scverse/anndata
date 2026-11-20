@@ -126,7 +126,7 @@ def main(argv: Sequence[str] | None = None) -> None:
 
 
 @cache
-def get_base_branch():
+def get_base_branch() -> str:
     return subprocess.run(
         ["git", "rev-parse", "--abbrev-ref", "HEAD"],
         capture_output=True,

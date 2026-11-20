@@ -69,14 +69,14 @@ def test_warn_on_import_with_redirect(old_name: str, new_name: str, module):
         getattr(module, old_name)
 
 
-def test_warn_on_deprecated__io_module():
+def test_warn_on_deprecated__io_module() -> None:
     with pytest.warns(
         FutureWarning, match=r"Importing read_h5ad from `anndata._io` is deprecated"
     ):
         from anndata._io import read_h5ad  # noqa
 
 
-def test_warn_on_deprecated_extension_namespace():
+def test_warn_on_deprecated_extension_namespace() -> None:
     with pytest.warns(
         FutureWarning, match=r"Importing ExtensionNamespace from `types`"
     ):

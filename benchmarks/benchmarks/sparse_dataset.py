@@ -46,7 +46,7 @@ class SparseCSRContiguousSlice:
         "use_dask",
     )
 
-    def setup_cache(self):
+    def setup_cache(self) -> None:
         X = sparse.random(
             10_000,
             10_000,
@@ -92,7 +92,7 @@ class SparseCSRDaskConcat:
     params = (["inner", "outer"], [0, -1])
     param_names = ("join", "fill_value")
 
-    def setup_cache(self):
+    def setup_cache(self) -> None:
         X = sparse.random(
             10_000,
             10_000,
@@ -140,7 +140,7 @@ class SparseCSRDaskConcat:
 class SparseCSRDask:
     filepath = "data.zarr"
 
-    def setup_cache(self):
+    def setup_cache(self) -> None:
         X = sparse.random(
             10_000,
             10_000,

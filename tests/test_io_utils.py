@@ -77,7 +77,7 @@ def test_write_error_info(diskfmt, diskfmt_store):
         write(a)
 
 
-def test_clean_uns():
+def test_clean_uns() -> None:
     adata = ad.AnnData(
         uns=dict(species_categories=["a", "b"]),
         obs=pd.DataFrame({"species": [0, 1, 0]}, index=["a", "b", "c"]),
@@ -122,13 +122,13 @@ def test_only_child_key_reported_on_failure(tmp_path, group_fn):
 
 
 @pytest.mark.parametrize("to", [np.array, pd.Series, lambda x: x])
-def test_to_writeable_passthrough(to: Callable[[list], np.ndarray | pd.Series | list]):
+def test_to_writeable_passthrough(to: Callable[[list[int]], object]):
     x = to([1, 2, 3])
     result = to_writeable(x)
     assert result is x
 
 
-def get_gpu_devices() -> list:
+def get_gpu_devices() -> list[object]:
     assert jnp is not None
     return [
         d

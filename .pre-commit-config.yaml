@@ -46,6 +46,13 @@ repos:
         require_serial: true
         pass_filenames: false
         groups: [typing]
+      - id: stale-ann-ignores
+        name: stale ANN per-file ignores
+        entry: python ci/scripts/stale-ann-ignores.py
+        language: python
+        additional_dependencies: [ruff==0.17.4] # keep in sync with ruff-pre-commit above
+        files: (\.py|\.ipynb|^pyproject\.toml)$
+        pass_filenames: false
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:

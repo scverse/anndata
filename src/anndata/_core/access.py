@@ -4,6 +4,8 @@ from functools import reduce
 from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
+    from collections.abc import MutableMapping
+
     from anndata import AnnData
 
 
@@ -16,18 +18,18 @@ class ElementRef[K: (str, str | None)](NamedTuple):
         return f".{self.attrname}" + "".join(f"[{x!r}]" for x in self.keys)
 
     @property
-    def _parent_el(self):
+    def _parent_el(self) -> MutableMapping[K, object]:
         return reduce(
             lambda d, k: d[k], self.keys[:-1], getattr(self.parent, self.attrname)
         )
 
-    def get(self):
+    def get(self) -> object:
         """Get referenced value in self.parent."""
         return reduce(lambda d, k: d[k], self.keys, getattr(self.parent, self.attrname))
 
-    def set(self, val):
+    def set(self, val: object) -> None:
         """Set referenced value in self.parent."""
         self._parent_el[self.keys[-1]] = val
 
-    def delete(self):
+    def delete(self) -> None:
         del self._parent_el[self.keys[-1]]

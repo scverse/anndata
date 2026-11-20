@@ -31,6 +31,7 @@ from ..compat import (
     CupySparseMatrix,
     DaskArray,
     has_xp_base,
+    known_dim,
 )
 from ..utils import Default, asarray, axis_len, warn, warn_once
 from .anndata import AnnData
@@ -38,7 +39,14 @@ from .index import _subset, make_slice
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Generator, Iterable, Sequence
+    from collections.abc import (
+        Callable,
+        Collection,
+        Generator,
+        Hashable,
+        Iterable,
+        Sequence,
+    )
     from pathlib import Path
 
     import zarr
@@ -92,11 +100,11 @@ class OrderedSet(MutableSet):
         return reduce(sub, vals, self)
 
 
-def union_keys(ds: Collection) -> OrderedSet:
+def union_keys(ds: Collection[Iterable[Hashable]]) -> OrderedSet:
     return reduce(or_, ds, OrderedSet())
 
 
-def intersect_keys(ds: Collection) -> OrderedSet:
+def intersect_keys(ds: Collection[Iterable[Hashable]]) -> OrderedSet:
     return reduce(and_, map(OrderedSet, ds))
 
 
@@ -692,23 +700,24 @@ class Reindexer:
 
         # Handling edge case to mimic pandas behavior
         if el.shape[axis] == 0:
-            shape = list(el.shape)
-            shape[axis] = indexer.shape[0]
+            shape = [known_dim(d) for d in el.shape]
+            shape[axis] = known_dim(indexer.shape[0])
             # convert fill_value to the same type as el - to keep everything in the same dtype
             # fv = xp.asarray(fill_value, dtype=getattr(el, "dtype", None))
-            fv = xp.asarray(fill_value)
+            # array API implementations reject non-numeric fill values at runtime
+            fv = xp.asarray(fill_value)  # type: ignore[arg-type]
             return xp.broadcast_to(fv, tuple(shape))
         # marking which positions are missing, so we could use fill_value
         missing_mask = indexer == -1
         safe_indexer = xp.where(missing_mask, 0, indexer)
-        taken = xp.take(el, safe_indexer, axis=axis)
+        taken = xp.take(el, safe_indexer, axis=axis)  # type: ignore[arg-type]  # https://github.com/data-apis/array-api-compat/issues/485
         # Expand mask so we can apply xp.where along the right axis
-        shape = [1] * taken.ndim
-        shape[axis] = missing_mask.shape[0]
-        mask = missing_mask.reshape(shape)
+        mask_shape = [1] * taken.ndim
+        mask_shape[axis] = -1
+        mask = xp.reshape(missing_mask, tuple(mask_shape))
         if not xp.any(missing_mask):
             return taken
-        fv = xp.asarray(fill_value)
+        fv = xp.asarray(fill_value)  # type: ignore[arg-type]  # see above
         return xp.where(mask, fv, taken)
 
     def _apply_to_sparse[M: (CSMatrix, CSArray, CupyCSMatrix)](  # noqa: PLR0912
@@ -1488,7 +1497,7 @@ def concat(  # noqa: PLR0912, PLR0913, PLR0915
     merge: StrategiesLiteral | Callable | None = None,
     uns_merge: StrategiesLiteral | Callable | None = None,
     label: str | None = None,
-    keys: Collection | None = None,
+    keys: Collection[Hashable] | None = None,
     index_unique: str | None = None,
     fill_value: Scalar | None = None,
     pairwise: bool = False,
