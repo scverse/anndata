@@ -23,6 +23,17 @@ If you want to write e.g. plotting or validation code for anndata objects, look 
    anndata.acc <accessors>
 ```
 
+`AnnData` provides two runtime checkable protocols for structural subtyping. Use these if you are writing code
+that should work with any class implementing (a subset of) the `AnnData` API, for example plotting code.
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated/
+
+   typing.AnnDataLikeMetadataOnly
+   typing.AnnDataLike
+```
+
 (combining-api)=
 
 ## Combining
@@ -321,6 +332,7 @@ Types used by the former:
    typing.Index
    typing.InMemoryArray
    typing.AlignedArray
+   typing.AlignedAny
    typing.Storable
    typing.RWAble
 ```

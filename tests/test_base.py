@@ -28,6 +28,7 @@ from anndata.tests.helpers import (
     get_multiindex_columns_df,
     jnp,
 )
+from anndata.typing import AnnDataLike, AnnDataLikeMetadataOnly
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
@@ -935,3 +936,8 @@ def test_transpose_errors_with_backed_arrays(
     if storage == "h5ad":
         assert isinstance(f, h5py.File)
         f.close()
+
+
+def test_protocol_compatibility(adata):
+    assert isinstance(adata, AnnDataLikeMetadataOnly)
+    assert isinstance(adata, AnnDataLike)

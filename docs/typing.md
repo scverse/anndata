@@ -7,6 +7,7 @@
 .. autotype:: Index
 .. autotype:: InMemoryArray
 .. autotype:: AlignedArray
+.. autotype:: AlignedAny
 .. autotype:: Storable
 .. autotype:: RWAble
 ```
