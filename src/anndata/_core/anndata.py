@@ -1300,16 +1300,9 @@ class AnnData:  # noqa: PLW1641
             if not isinstance(frame, pd.DataFrame):
                 # lazy frames dedup their categories on access
                 continue
-            string_cols = [
-                key for key in frame.columns if infer_dtype(frame[key]) == "string"
-            ]
-            for key in string_cols:
-                c = pd.Categorical(frame[key])
-                # TODO: We should only check if non-null values are unique, but
-                # this would break cases where string columns with nulls could
-                # be written as categorical, but not as string.
-                # Possible solution: https://github.com/scverse/anndata/issues/504
-                if len(c.categories) >= len(c):
+            for key in frame.columns:
+                c = _strings_as_categorical(frame[key])
+                if c is None:
                     continue
                 # Ideally this could be done inplace
                 sorted_categories = natsorted(c.categories)
@@ -1610,6 +1603,10 @@ class AnnData:  # noqa: PLW1641
             if _non_2d_message(value, name="layer") is not None:
                 return True
 
+        from anndata._io.specs.dataframe_columns import (
+            UnsupportedColumnTypeError,
+            normalize_column,
+        )
         from anndata._io.specs.registry import _REGISTRY
         from anndata.acc import AdRef, RefAcc
 
@@ -1633,6 +1630,12 @@ class AnnData:  # noqa: PLW1641
                 )
             if isinstance(elem, pd.Categorical):
                 return accumulate or predicate(elem.categories, accumulate=accumulate)
+            if isinstance(elem, pd.Series) and elem.dtype == object:
+                try:
+                    values = normalize_column(elem._values, name=str(elem.name))
+                except UnsupportedColumnTypeError:
+                    return accumulate or _strings_as_categorical(elem) is None
+                return accumulate or predicate(values, accumulate=accumulate)
             if isinstance(elem, pd.Series | pd.Index):
                 # matches behavior in methods.py
                 return accumulate or predicate(elem.values, accumulate=accumulate)
@@ -2104,6 +2107,18 @@ def _check_2d_shape(X):
     if X.dtype.names is None and len(X.shape) != 2:
         msg = f"X needs to be 2-dimensional, not {len(X.shape)}-dimensional."
         raise ValueError(msg)
+
+
+def _strings_as_categorical(values: pd.Series) -> pd.Categorical | None:
+    """`values` as categorical if they are strings with fewer categories than values."""
+    if infer_dtype(values) != "string":
+        return None
+    c = pd.Categorical(values)
+    # TODO: We should only check if non-null values are unique, but
+    # this would break cases where string columns with nulls could
+    # be written as categorical, but not as string.
+    # Possible solution: https://github.com/scverse/anndata/issues/504
+    return c if len(c.categories) < len(c) else None
 
 
 def _infer_shape_for_axis(
