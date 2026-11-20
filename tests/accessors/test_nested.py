@@ -142,6 +142,8 @@ def test_cast_invalid(adata: AnnData, ref: AdRef, match: str) -> None:
         A.uns["foo"].AD.obsm,
         A.uns["nested"].DF["x"],
         A.uns["nested"].DF,
+        A.uns["foo"].AD,
+        A.uns["df"].AD,
     ],
     ids=str,
 )
@@ -153,6 +155,8 @@ def test_cast_invalid_not_in(adata: AnnData, acc: AdRef | RefAcc | MapAcc) -> No
 def test_get(adata: AnnData) -> None:
     assert adata[A.uns["foo"]["bar"]["baz"]] == 2
     assert adata[A.uns["nested"]] is adata.uns["nested"]
+    assert adata[A.uns["nested"].AD] is adata.uns["nested"]
+    assert adata[A] is adata
     np.testing.assert_array_equal(adata[A.uns["nested"].AD.obs["x"]], [1, 2])
     np.testing.assert_array_equal(adata[A.uns["nested"].AD.X["c1", :]], [3, 4, 5])
     np.testing.assert_array_equal(adata[A.uns["df"].DF["c"]], [1, 2, 3])
@@ -180,6 +184,16 @@ def test_set(adata: AnnData) -> None:
     assert adata[A.varm["df"].DF].columns.tolist() == ["a", "b", "c"]
 
 
+def test_set_ad(adata: AnnData) -> None:
+    new = AnnData(shape=(1, 1))
+    adata[A.uns["nested"].AD] = new
+    assert adata.uns["nested"] is new
+    with pytest.raises(TypeError, match=r"not an AnnData object"):
+        adata[A.uns["nested"].AD] = 0
+    with pytest.raises(TypeError, match=r"Cannot replace the object itself"):
+        adata[A] = new
+
+
 @pytest.mark.parametrize(
     "acc",
     [
@@ -187,6 +201,8 @@ def test_set(adata: AnnData) -> None:
         A.uns["foo"]["bar"]["baz"],
         A.uns["nested"].AD.obs["x"],
         A.uns["nested"].AD.X,
+        A.uns["nested"].AD,
+        A,
         A.uns["df"].DF["c"],
         A.varm["df"].DF["a"],
     ],
@@ -203,6 +219,7 @@ def test_in(adata: AnnData, acc: MapAcc | RefAcc | AdRef) -> None:
         A.uns["foo"]["nope"],
         A.uns["missing"].AD.obs["x"],
         A.uns["missing"].AD.obsm,
+        A.uns["missing"].AD,
         A.uns["nested"].AD.obsm,
         A.uns["nested"].AD.obs["missing"],
         A.uns["df"].DF["missing"],

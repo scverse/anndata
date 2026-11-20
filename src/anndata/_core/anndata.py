@@ -93,6 +93,7 @@ if TYPE_CHECKING:
     from .._types import ReduceFunc
     from .._write_compat import WriteConfig
     from ..acc import (
+        AdAcc,
         AdRef,
         Array,
         DataFrameLike,
@@ -1123,9 +1124,9 @@ class AnnData:  # noqa: PLW1641
     @overload
     def __getitem__(self, index: AdRef) -> Array: ...
     @overload
-    def __getitem__(self, index: Index) -> AnnData: ...
+    def __getitem__(self, index: Index | AdAcc) -> AnnData: ...
     def __getitem__(
-        self, index: Index | AdRef | RefAcc | MapAcc
+        self, index: Index | AdRef | RefAcc | MapAcc | AdAcc
     ) -> AnnData | DataFrameLike | AlignedArray | Array:
         """Slice AnnData object or retrieve an array using an accessor.
 
@@ -1139,23 +1140,27 @@ class AnnData:  # noqa: PLW1641
             - an :class:`~anndata.acc.AdRef`, returning the referenced 1D or 2D array,
               e.g. `adata[A.obs["cell-type"]]` or `adata[A.layers["counts"][:, "gene-1"]]`;
             - a :term:`reference accessor`, returning the full element (see :meth:`~anndata.acc.RefAcc.get`),
-              e.g. `adata[A.obs]` or `adata[A.obsm["pca"]]`.
+              e.g. `adata[A.obs]` or `adata[A.obsm["pca"]]`;
+            - an :class:`~anndata.acc.AdAcc`, returning the nested AnnData object it is cast from,
+              e.g. `adata[A.uns["nested"].AD]`.
 
             Mapping accessors like `A.obsm` raise an :class:`IndexError`, as they don’t refer to an array.
         """
-        from ..acc import AdRef, MapAcc, RefAcc
+        from ..acc import AdAcc, AdRef, MapAcc, RefAcc, _resolve
 
         if isinstance(index, AdRef):
             return index.acc.get(self, index.idx)
         elif isinstance(index, RefAcc):
             return index.get(self)
+        elif isinstance(index, AdAcc):
+            return _resolve(index.scope, self)
         elif isinstance(index, MapAcc):
             msg = f"Cannot index with {index} because this is not a path to an array-like structure."
             raise IndexError(msg)
 
         return self._getitem(index)
 
-    def __setitem__(self, index: AdRef | RefAcc, value: object) -> None:
+    def __setitem__(self, index: AdRef | RefAcc | AdAcc, value: object) -> None:
         """Set an array or element using an accessor.
 
         Parameters
@@ -1166,16 +1171,26 @@ class AnnData:  # noqa: PLW1641
             - an :class:`~anndata.acc.AdRef`, assigning into the referenced 1D or 2D array,
               e.g. `adata[A.obs["cell-type"]] = ...` or `adata[A.layers["counts"][:, "gene-1"]] = ...`;
             - a :term:`reference accessor`, replacing the full element (see :meth:`~anndata.acc.RefAcc.set`),
-              e.g. `adata[A.obs] = ...` or `adata[A.obsm["pca"]] = ...`.
+              e.g. `adata[A.obs] = ...` or `adata[A.obsm["pca"]] = ...`;
+            - an :class:`~anndata.acc.AdAcc`, replacing the nested AnnData object it is cast from,
+              e.g. `adata[A.uns["nested"].AD] = ...`.
         value
             The value to assign.
         """
-        from ..acc import NO_IDX, AdRef, MapAcc, RefAcc
+        from ..acc import NO_IDX, AdAcc, AdRef, MapAcc, RefAcc, _is_anndata_like
 
         if isinstance(index, AdRef):
             index.acc.set(self, index.idx, value)
         elif isinstance(index, RefAcc):
             index.set(self, NO_IDX, value)
+        elif isinstance(index, AdAcc):
+            if index.scope is None:
+                msg = f"Cannot replace the object itself via {index!r}."
+                raise TypeError(msg)
+            if not _is_anndata_like(value):
+                msg = f"Cannot set {index!r} to {type(value).__name__}, not an AnnData object."
+                raise TypeError(msg)
+            index.scope.set(self, NO_IDX, value)
         elif isinstance(index, MapAcc):
             msg = f"Cannot index with {index} because this is not a path to an array-like structure."
             raise IndexError(msg)
@@ -1710,7 +1725,7 @@ class AnnData:  # noqa: PLW1641
         ):
             utils.warn_names_duplicates("var")
 
-    def __contains__(self, key: AdRef | RefAcc | MapAcc) -> bool:
+    def __contains__(self, key: AdRef | RefAcc | MapAcc | AdAcc) -> bool:
         """Check if array is in AnnData via its path as an accessor.
 
         When passed a :class:`~anndata.acc.MapAcc`,
@@ -1724,6 +1739,7 @@ class AnnData:  # noqa: PLW1641
 
         """
         from ..acc import (
+            AdAcc,
             AdRef,
             GraphMapAcc,
             LayerMapAcc,
@@ -1735,11 +1751,13 @@ class AnnData:  # noqa: PLW1641
         )
 
         match key:
-            # `isin` and `get` assume the parent exists and has the type it’s cast to
+            # `isin` and `get` assume the scope exists and has the type it’s cast to
             case MapAcc() | RefAcc() as acc if not _cast_in(acc, self):
                 return False
             case AdRef(acc=acc) if not _cast_in(acc, self):
                 return False
+            case AdAcc():
+                return _cast_in(key, self)
             case LayerMapAcc() | MultiMapAcc() | GraphMapAcc() | UnsMapAcc():
                 return bool(key.get(self))
             case MapAcc():  # to check MapAccs, we need to know the attribute name

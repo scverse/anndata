@@ -279,7 +279,7 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData, E = object, V = object]
         """Check if the referenced array is in the AnnData object.
 
         Only called if :attr:`~anndata.acc.RefAcc.scope` (or :attr:`~anndata.acc.DFAcc.frame_acc`) is `None`, or in `data` with the type this accessor casts it to (`.AD`/`.DF`), so :meth:`~anndata.acc.RefAcc.container` won’t fail.
-        To check an accessor including its parents, use `acc in data`.
+        To check an accessor including its scope, use `acc in data`.
         """
 
     @overload
@@ -1386,7 +1386,7 @@ def _resolve(scope: ScopeAcc | None, data: MuData | AnnData, /) -> MuData | AnnD
     return elem
 
 
-def _cast_in(acc: RefAcc | MapAcc, data: MuData | AnnData, /) -> bool:
+def _cast_in(acc: RefAcc | MapAcc | AdAcc, data: MuData | AnnData, /) -> bool:
     """Check if the element `acc` is cast from is in `data` and has the right type."""
     match acc:
         case DFAcc(frame_acc=RefAcc() as frame):  # `.DF`
