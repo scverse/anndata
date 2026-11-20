@@ -128,7 +128,13 @@ def write_zarr(
             # stale consolidated metadata would hide the newly written element
             consolidate_metadata |= is_group_consolidated(zarr.open_group(store))
             f = zarr.open_group(store, mode="r+", use_consolidated=False)
-            write_use(f, adata, use, dataset_kwargs=ds_kwargs)
+            write_use(
+                f,
+                adata,
+                use,
+                dataset_kwargs=ds_kwargs,
+                compat=WriteCompat.or_config(compat),
+            )
         else:
             f = zarr.open_group(store, mode="w")
             f.attrs.setdefault("encoding-type", "anndata")

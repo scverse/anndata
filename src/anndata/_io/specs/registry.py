@@ -10,9 +10,14 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 import zarr
 
-from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
+from anndata._io.utils import (
+    IndexedLayout,
+    report_read_key_on_error,
+    report_write_key_on_error,
+)
 from anndata._settings import settings
 from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
+from anndata._warnings import WriteWarning
 from anndata._write_compat import WriteCompat
 from anndata.compat import DaskArray, _read_attr, has_xp
 
@@ -409,18 +414,7 @@ class Writer:
             if k.startswith("/"):
                 k = str(PurePosixPath(k).relative_to(store.name, walk_up=False))
 
-            # Apart from this code, we also ban keys containing slashes in `write_adata`/`write_h5ad`
-            # for AnnData elements other than `obs`, `var`, and `uns`.
-            if "/" in k:
-                if (
-                    isinstance(store, zarr.Group)
-                    or settings.disallow_forward_slash_in_h5ad
-                ):
-                    msg = f"Forward slashes are not allowed in keys in {type(store)}"
-                    raise ValueError(msg)
-                msg = "Forward slashes will be written differently in a future anndata version"
-                warn(msg, FutureWarning)
-
+            _check_child_key(store, k)
             if k in store:
                 del store[k]
 
@@ -435,6 +429,23 @@ class Writer:
             )
         write_func(store, k, elem, dataset_kwargs=dataset_kwargs)
         _add_to_column_order(store, k)
+        _warn_unindexed_child(store, k)
+
+
+def _check_child_key(store: _GroupStorageType, k: str) -> None:
+    hint = 'Write the whole mapping or dataframe with `compat="0.14"` to allow any string as key'
+    if not k:  # would refer to `store` itself
+        msg = f"Empty keys are not allowed in {type(store)}. {hint}"
+        raise ValueError(msg)
+
+    # Apart from this code, we also ban keys containing slashes in `write_adata`/`write_h5ad`
+    # for AnnData elements other than `obs`, `var`, and `uns`.
+    if "/" in k:
+        if isinstance(store, zarr.Group) or settings.disallow_forward_slash_in_h5ad:
+            msg = f"Forward slashes are not allowed in keys in {type(store)}. {hint}"
+            raise ValueError(msg)
+        msg = "Forward slashes will be written differently in a future anndata version"
+        warn(msg, FutureWarning)
 
 
 def _add_to_column_order(store: _GroupStorageType, k: str) -> None:
@@ -442,10 +453,32 @@ def _add_to_column_order(store: _GroupStorageType, k: str) -> None:
     if (
         k != "/"  # writing the dataframe itself to the root
         and store.attrs.get("encoding-type") == "dataframe"
+        and "column-order" in store.attrs  # not in the 0.3.0 layout
         and k != store.attrs["_index"]
         and k not in (order := list(cast("Iterable[str]", store.attrs["column-order"])))
     ):
         store.attrs["column-order"] = [*order, k]
+
+
+def _warn_unindexed_child(store: _GroupStorageType, k: str) -> None:
+    """Warn when writing a child that readers of an indexed group will ignore."""
+    if (
+        k == "/"
+        or (layout := IndexedLayout.of(store)) is None
+        or k == layout.names_key
+        or (
+            (prefix := f"{layout.prefix}_") == k[: len(prefix)]
+            and k[len(prefix) :].isdecimal()
+        )
+    ):
+        return
+    msg = (
+        f"Wrote {k!r} into {store.name!r}, which stores its names in "
+        f"{layout.names_key!r}, so readers will ignore it. "
+        f"Write the whole {layout.encoding_type} instead, "
+        "or use `AnnData.write_*(…, use=…)` for elements of an AnnData store."
+    )
+    warn(msg, WriteWarning)
 
 
 def read_elem(elem: StorageType) -> RWAble:

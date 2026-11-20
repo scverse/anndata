@@ -72,6 +72,29 @@ Using this information, we’re able to dispatch onto readers for the different 
 - An element MUST have a string-valued field `"encoding-type"` in its metadata
 - An element MUST have a string-valued field `"encoding-version"` in its metadata that can be evaluated to a version
 
+(indexed-keys)=
+### Indexed keys
+
+`/` separates groups in both `HDF5` and `zarr`,
+and a `zarr` store commonly maps each key to a real file,
+so a key like `a/b`, `a:b`, `CON`, or a very long one cannot be used as a child name.
+When using newer [mapping](#mapping-indexed) or [dataframe](#dataframe-indexed) specifications[^0.14],
+keys are stored in in a {ref}`string array <string-array>`
+and name their children by position instead:
+
+- The group MUST contain a string array of the keys in order (the *names array*)
+- The element for the *i*th key MUST be the child `{prefix}_{i}`,
+  where `{i}` is *i* in base 10 without sign or leading zeros,
+  and the children MUST be numbered consecutively from `{prefix}_0` with no gaps
+- Which names array and prefix to use is part of each encoding’s own specification –
+  see {ref}`dataframes <dataframe-indexed>` and {ref}`mappings <mapping-indexed>`
+
+This is the layout of the [zarr dataframe convention][df-conv],
+so any string works as a key, and child names never hit a file system’s limits.
+
+[df-conv]: https://github.com/scverse/zarr-convention-dataframe
+[^0.14]: Available in the python package as of the `"0.14"` {doc}`write compatibility profile <write-compat>`
+
 (anndata)=
 ### AnnData specification (v0.1.0)
 
@@ -265,7 +288,23 @@ feature_is_filtered <zarr.core.Array '/var/feature_is_filtered' (40145,) bool re
   - MUST contain `"column-order"` an array of strings denoting the order of column entries
 - The group MUST contain an array for the index
 - Each entry in the group MUST correspond to an array with equivalent first dimensions
-- Each entry SHOULD share chunk sizes (in the HDF5 or zarr container)
+
+(dataframe-indexed)=
+### Dataframe Specification (v0.3.0)
+
+The index and columns are stored as {ref}`indexed keys <indexed-keys>`
+following closely, but not declaring, the [zarr dataframe convention][df-conv],
+with the names array `"columns"` and the prefix `"column"`.
+
+- A dataframe MUST be stored as a group
+- The group's metadata:
+  - MUST contain encoding metadata `"encoding-type": "dataframe"`, `"encoding-version": "0.3.0"`
+  - MUST contain `"df:shape"`, the number of rows and the number of columns *including* the index
+  - MAY contain `"df:index"`, the position of the index in `"columns"`.
+    When there is an index, anndata writes it at position `0`
+- The group MUST contain the string array `"columns"`, holding the index name (if any) and the column names
+- An unnamed index MUST be named `""` (the empty string)
+- `"column_{i}"` MUST hold the data for `columns[i]`, each a logical array with equivalent first (and only) dimensions
 
 (mappings)=
 ## Mappings
@@ -310,6 +349,17 @@ pca/variance_ratio <zarr.core.Array '/uns/pca/variance_ratio' (50,) float64 read
 
 - Each mapping MUST be its own group
 - The group's metadata MUST contain the encoding metadata `"encoding-type": "dict"`, `"encoding-version": "0.1.0"`
+
+(mapping-indexed)=
+### Mapping specifications (v0.2.0)
+
+The keys are stored as {ref}`indexed keys <indexed-keys>`,
+with the names array `"keys"` and the prefix `"item"`.
+
+- Each mapping MUST be its own group
+- The group's metadata MUST contain the encoding metadata `"encoding-type": "dict"`, `"encoding-version": "0.2.0"`
+- The group MUST contain the string array `"keys"`
+- `"item_{i}"` MUST hold the element for `keys[i]`
 
 (acc-encoding)=
 ## Accessors
@@ -595,7 +645,7 @@ ignoring the `"na-value"` attribute (since `character` arrays can not be made to
 **Experimental**
 
 Support for ragged arrays via awkward array is considered experimental under the 0.9.0 release series.
-Please direct feedback on it’s implementation to [https://github.com/scverse/anndata](https://github.com/scverse/anndata).
+Please direct feedback on it’s implementation to <https://github.com/scverse/anndata>.
 ```
 
 Ragged arrays are supported in `anndata` through the [Awkward
