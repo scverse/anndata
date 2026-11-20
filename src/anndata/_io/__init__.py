@@ -5,7 +5,7 @@ from ..utils import warn
 __all__: list[str] = []
 
 
-def __getattr__(key: str):
+def __getattr__(key: str) -> object:
     from .. import io
 
     attr = getattr(io, key)

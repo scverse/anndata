@@ -191,6 +191,10 @@ class _ArrayApiNoDLPack:
     def __getitem__(self, k):
         return _ArrayApiNoDLPack(self._arr[k])
 
+    @property
+    def T(self) -> _ArrayApiNoDLPack:
+        return _ArrayApiNoDLPack(self._arr.T)
+
 
 def test_store_array_api_without_dlpack() -> None:
     X = _ArrayApiNoDLPack(np.arange(6.0).reshape(2, 3))

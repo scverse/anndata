@@ -95,7 +95,9 @@ def read_excel(
     return AnnData(X, row, col)
 
 
-def read_umi_tools(filename: PathLike[str] | str, dtype=None) -> AnnData:
+def read_umi_tools(
+    filename: PathLike[str] | str, dtype: DTypeLike | None = None
+) -> AnnData:
     """\
     Read a gzipped condensed count matrix from umi_tools.
 
@@ -110,7 +112,7 @@ def read_umi_tools(filename: PathLike[str] | str, dtype=None) -> AnnData:
 
     X = sparse.csr_matrix(
         (table["count"], (table["cell"].cat.codes, table["gene"].cat.codes)),
-        dtype=dtype,
+        dtype=None if dtype is None else np.dtype(dtype),
     )
     obs = pd.DataFrame(index=pd.Index(table["cell"].cat.categories, name="cell"))
     var = pd.DataFrame(index=pd.Index(table["gene"].cat.categories, name="gene"))
@@ -206,7 +208,7 @@ def read_loom(  # noqa: PLR0912, PLR0913
     dtype: str = "float32",
     obsm_mapping: Mapping[str, Iterable[str]] = MappingProxyType({}),
     varm_mapping: Mapping[str, Iterable[str]] = MappingProxyType({}),
-    **kwargs,
+    **kwargs: object,
 ) -> AnnData:
     """\
     Read `.loom`-formatted hdf5 file.

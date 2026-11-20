@@ -118,7 +118,7 @@ def _compute_chunk(
 
 
 @singledispatch
-def get_chunksize(obj) -> tuple[int, ...]:
+def get_chunksize(obj: object) -> tuple[int, ...]:
     if hasattr(obj, "chunks"):
         return obj.chunks
     msg = "object of type {type(obj)} has no recognized chunks"

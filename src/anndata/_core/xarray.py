@@ -74,7 +74,7 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
             msg = f"Dataset dimension {next(iter(ds.dims))} does not match coordinate {next(iter(ds.coords))}."
             raise ValueError(msg)
 
-    def __init__(self, ds: XDataset):
+    def __init__(self, ds: XDataset) -> None:
         Dataset2D._validate_shape_invariants(ds)
         self._ds = ds
 
@@ -455,7 +455,7 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
         return Dataset2D(el)
 
     # Used "publicly" in src/anndata/_core/merge.py but not intended for public use.
-    def _items(self):
+    def _items(self) -> Iterator[tuple[Hashable, XDataArray]]:
         for col in self:
             yield col, self[col]
 
