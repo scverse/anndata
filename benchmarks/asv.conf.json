@@ -5,7 +5,7 @@
     // The name of the project being benchmarked
     "project": "anndata",
     // The project's homepage
-    "project_url": "https://anndata.readthedocs.io/",
+    "project_url": "https://anndata.scverse.org/",
     // The URL or local path of the source code repository for the
     // project being benchmarked
     "repo": "../../anndata",

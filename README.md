@@ -1,7 +1,7 @@
 [![Tests](https://github.com/scverse/anndata/actions/workflows/test-cpu.yml/badge.svg)](https://github.com/scverse/anndata/actions)
 [![Conda](https://img.shields.io/conda/vn/conda-forge/anndata.svg)](https://anaconda.org/conda-forge/anndata)
 [![Coverage](https://codecov.io/gh/scverse/anndata/branch/main/graph/badge.svg?token=IN1mJN1Wi8)](https://codecov.io/gh/scverse/anndata)
-[![Docs](https://readthedocs.com/projects/icb-anndata/badge/?version=latest)](https://anndata.readthedocs.io)
+[![Docs](https://readthedocs.org/projects/anndata/badge/?version=latest)](https://anndata.scverse.org)
 [![PyPI](https://img.shields.io/pypi/v/anndata.svg)](https://pypi.org/project/anndata)
 [![Downloads](https://static.pepy.tech/badge/anndata/month)](https://pepy.tech/project/anndata)
 [![Downloads](https://static.pepy.tech/badge/anndata)](https://pepy.tech/project/anndata)
@@ -19,7 +19,7 @@ anndata is a Python package for handling annotated data matrices in memory and o
 A separate data loader package, [annbatch](https://annbatch.readthedocs.io/en/stable/), offers minibatch data loading functionality for applications ranging from linear models to foundation models, scaling all the way up from small in-memory matrices to terabyte-scale disk-backed anndata datasets.
 
 - Discuss development on [GitHub](https://github.com/scverse/anndata).
-- Read the [documentation](https://anndata.readthedocs.io).
+- Read the [documentation](https://anndata.scverse.org).
 - Ask questions on the [scverse Discourse](https://discourse.scverse.org).
 - Install via `pip install anndata` or `conda install anndata -c conda-forge`.
 - See [Scanpy's documentation](https://scanpy.readthedocs.io/) for usage related to single cell data. anndata was initially built for Scanpy.
@@ -46,7 +46,7 @@ In other words, we do not officially support (or encourage users to do) somethin
 However, we are aware that [many users do use these internal APIs][] and thus encourage them to [open an issue][] or migrate to the public API.
 That is, if something is missing from our public API as documented, for example a feature you wish to be exported publicly, please open an issue.
 
-[api section]: https://anndata.readthedocs.io/en/stable/api.html
+[api section]: https://anndata.scverse.org/page/api.html
 [leading underscore]: https://peps.python.org/pep-0008/#public-and-internal-interfaces
 [many users do use these internal APIs]: https://github.com/search?q=%22anndata._io%22&type=code
 [open an issue]: https://github.com/scverse/anndata/issues/new/choose
