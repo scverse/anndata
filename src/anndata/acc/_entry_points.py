@@ -13,7 +13,7 @@ from . import AdRef
 if TYPE_CHECKING:
     from importlib.metadata import EntryPoint
 
-    from . import AdAcc, RefAcc
+    from . import AdAcc, MapAcc, RefAcc
 
 
 __all__ = ["load_acc", "to_json"]
@@ -27,7 +27,7 @@ def _entry_points() -> list[tuple[EntryPoint, str | None]]:
     return [(ep, ep.dist.name if ep.dist else None) for ep in entry_points(group=GROUP)]
 
 
-def _project_of(elem: AdRef | RefAcc) -> str:
+def _project_of(elem: AdRef | RefAcc | MapAcc) -> str:
     """Get the name of the entry point pointing into the top-level package that defines `elem`’s classes."""
     types = {type(elem), *([type(elem.acc)] if isinstance(elem, AdRef) else [])}
     mods = {t.__module__.partition(".")[0] for t in types}

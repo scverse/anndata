@@ -207,11 +207,11 @@ def _view_pd_boolean_array(a: XDataArray, view_args: ViewArgs) -> XDataArray:
     return a
 
 
-@get_chunksize.register(MaskedArray)
+@get_chunksize.register(MaskedArray)  # type: ignore[has-type] # import cycle
 def _(a: MaskedArray):
     return get_chunksize(a._values)
 
 
-@get_chunksize.register(CategoricalArray)
+@get_chunksize.register(CategoricalArray)  # type: ignore[has-type] # import cycle
 def _(a: CategoricalArray):
     return get_chunksize(a._codes)

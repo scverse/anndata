@@ -122,6 +122,7 @@ Writing individual portions ({attr}`~AnnData.obs`, {attr}`~AnnData.varm` etc.) o
    :toctree: generated/
 
    io.write_elem
+   io.update
 ```
 
 All of these take a `compat` argument, see {doc}`/write-compat` for what the compatibility profiles do.
