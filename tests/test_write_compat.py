@@ -130,33 +130,64 @@ def test_indexed_keys_roundtrip(
 def test_indexed_layout_on_disk(
     diskfmt_store: Path | MemoryStore, diskfmt: Literal["h5ad", "zarr"]
 ) -> None:
-    """Names are stored in an array, children are numbered, dataframes follow the convention."""
+    """Children are numbered, dataframes follow the convention.
+
+    Names are stored in an attribute in zarr (saving a request) and in an array in HDF5.
+    """
     obs = pd.DataFrame({"a/b": [1, 2], "x": [3, 4]}, index=["c1", "c2"])
     adata = ad.AnnData(np.zeros((2, 3)), obs=obs, uns={"c:d": 1})
     getattr(adata, f"write_{diskfmt}")(diskfmt_store, compat="0.14")
 
     def check(f: h5py.Group | zarr.Group) -> None:
         uns, obs_g = (cast("h5py.Group | zarr.Group", f[k]) for k in ("uns", "obs"))
-        names = {
-            k: cast("h5py.Dataset | zarr.Array", g[k])
-            for g, k in [(uns, "keys"), (obs_g, "columns")]
-        }
 
-        assert dict(uns.attrs) == {"encoding-type": "dict", "encoding-version": "0.2.0"}
-        assert set(uns) == {"keys", "item_0"}
-        assert list(ad.io.read_elem(names["keys"])) == ["c:d"]  # type: ignore[arg-type]
+        assert uns.attrs["encoding-type"] == "dict"
+        assert uns.attrs["encoding-version"] == "0.2.0"
+        assert set(uns) - {"keys"} == {"item_0"}
+        assert _names(uns, "dict:keys", "keys", in_attrs=diskfmt == "zarr") == ["c:d"]
 
         assert obs_g.attrs["encoding-version"] == "0.3.0"
         assert list(obs_g.attrs["df:shape"]) == [2, 3]  # type: ignore[arg-type]
         assert obs_g.attrs["df:index"] == 0
-        assert set(obs_g) == {"columns", "column_0", "column_1", "column_2"}
-        assert list(ad.io.read_elem(names["columns"])) == ["", "a/b", "x"]  # type: ignore[arg-type]
+        assert set(obs_g) - {"columns"} == {"column_0", "column_1", "column_2"}
+        assert _names(obs_g, "df:columns", "columns", in_attrs=diskfmt == "zarr") == [
+            "",
+            "a/b",
+            "x",
+        ]
 
     if diskfmt == "zarr":
         check(zarr.open_group(diskfmt_store))
     else:
         with h5py.File(diskfmt_store) as f:
             check(f)
+
+
+def _names(
+    g: h5py.Group | zarr.Group, attr: str, key: str, *, in_attrs: bool
+) -> list[str]:
+    """Get names stored either in attribute `attr` or array `key`, asserting it’s not both."""
+    if in_attrs:
+        assert key not in g
+        return list(g.attrs[attr])  # type: ignore[arg-type]
+    assert attr not in g.attrs
+    # a `string-array`, never a `nullable-string-array` group
+    assert isinstance(arr := g[key], h5py.Dataset | zarr.Array)
+    return list(ad.io.read_elem(arr))  # type: ignore[arg-type]
+
+
+def test_long_names_in_array() -> None:
+    """Names too long for an attribute go into an array, even in zarr."""
+    long = "x" * 5000
+    g = zarr.open_group(zarr.storage.MemoryStore())
+    df = pd.DataFrame({long: [1, 2]})
+    ad.io.write_elem(g, "df", df, compat="0.14")
+    ad.io.write_elem(g, "d", {long: 1}, compat="0.14")
+
+    assert _names(g["df"], "df:columns", "columns", in_attrs=False) == ["", long]  # type: ignore[arg-type]
+    assert _names(g["d"], "dict:keys", "keys", in_attrs=False) == [long]  # type: ignore[arg-type]
+    assert list(cast("pd.DataFrame", ad.io.read_elem(g["df"])).columns) == [long]
+    assert ad.io.read_elem(g["d"]) == {long: 1}
 
 
 @needs_xarray
@@ -193,11 +224,18 @@ def test_index_named_index(
 
 
 @needs_xarray
-def test_dataframe_without_index() -> None:
-    """The convention makes `df:index` optional, so we read a range index then."""
+@pytest.mark.parametrize("names_in", ["attr", "array"])
+def test_dataframe_without_index(names_in: Literal["attr", "array"]) -> None:
+    """The convention makes `df:index` optional, so we read a range index then.
+
+    It also allows storing names in `df:columns` or `columns`.
+    """
     g = zarr.open_group(zarr.storage.MemoryStore())
     ad.io.write_elem(g, "column_0", np.array([1, 2, 3]))
-    ad.io.write_elem(g, "columns", np.array(["a"], dtype=object))
+    if names_in == "attr":
+        g.attrs["df:columns"] = ["a"]
+    else:
+        ad.io.write_elem(g, "columns", np.array(["a"], dtype=object))
     g.attrs.update({
         "encoding-type": "dataframe",
         "encoding-version": "0.3.0",
