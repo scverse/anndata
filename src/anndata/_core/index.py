@@ -22,6 +22,7 @@ from ..compat import (
     IndexManager,
     XDataArray,
     has_xp_base,
+    known_dim,
 )
 from ..types import SupportsArrayApiBase
 from .xarray import Dataset2D
@@ -145,7 +146,7 @@ def _from_sparse(
 
 @_gen_anndata_index.register(Sequence)
 def _from_sequence(
-    indexer: Sequence,
+    indexer: Sequence[object],
     index: pd.Index,
 ) -> _Index1DNorm | int | np.integer:
     arr = np.array(indexer)
@@ -178,7 +179,7 @@ def _from_array(
         indexer = (
             np.asarray(indexer).reshape(-1)
             if isinstance(indexer, np.matrix)
-            else xp.reshape(indexer, (-1,))
+            else xp.reshape(indexer, (-1,))  # type: ignore[arg-type]  # https://github.com/data-apis/array-api-compat/issues/485
         )
     # https://github.com/numpy/numpy/issues/27545
     is_numpy_string = indexer.dtype == np.dtypes.StringDType()
@@ -186,8 +187,8 @@ def _from_array(
     if not is_numpy_string or is_pandas_idx(indexer):
         # if it is a float array or something along those lines, convert it to integers
         if XArrayDtype.Float(indexer):
-            indexer_int = xp.astype(indexer, xp.int64)
-            if xp.any((indexer - indexer_int) != 0):
+            indexer_int = xp.astype(indexer, xp.int64)  # type: ignore[arg-type]  # https://github.com/data-apis/array-api-compat/issues/485
+            if xp.any((indexer - indexer_int) != 0):  # type: ignore[operator]  # https://github.com/data-apis/array-api-compat/issues/485
                 msg = f"Indexer {indexer!r} has floating point values."
                 raise IndexError(msg)
             return indexer_int
@@ -217,7 +218,7 @@ def _from_array(
         )
     )
     positions = index.get_indexer(names)
-    if xp.any(positions < 0):
+    if xp.any(positions < 0):  # type: ignore[arg-type]  # https://github.com/data-apis/array-api-compat/issues/485
         not_found = names[positions < 0]
         msg = (
             f"Values {list(not_found)}, from {list(names)}, "
@@ -366,8 +367,8 @@ def array_api_ix(*args: SupportsArrayApiBase) -> tuple[SupportsArrayApiBase, ...
             msg = "Cross index must be 1 dimensional"
             raise ValueError(msg)
         if xp.isdtype(new.dtype, "bool"):
-            (new,) = xp.nonzero(new)
-        new = xp.reshape(new, (1,) * k + (new.size,) + (1,) * (n_dims - k - 1))
+            (new,) = xp.nonzero(new)  # type: ignore[arg-type]  # https://github.com/data-apis/array-api-compat/issues/485
+        new = xp.reshape(new, (1,) * k + (-1,) + (1,) * (n_dims - k - 1))  # type: ignore[arg-type]  # https://github.com/data-apis/array-api-compat/issues/485
         out.append(new)
     return tuple(out)
 
@@ -617,7 +618,7 @@ def _get_index_size(idx: _Index1DNorm, dim_size: int) -> int:
     elif isinstance(idx, int):
         return 1
     else:  # For other types, try to get length
-        return idx.shape[0]
+        return known_dim(idx.shape[0])
 
 
 def make_slice(idx, dimidx: int, n: int = 2) -> tuple[slice, ...]:

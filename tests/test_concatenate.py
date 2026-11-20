@@ -670,7 +670,7 @@ def test_concatenate_sparse():
     ]
 
 
-def test_concatenate_mixed():
+def test_concatenate_mixed() -> None:
     X1 = sparse.csr_matrix(np.array([[1, 2, 0], [4, 0, 6], [0, 0, 9]]))
     X2 = sparse.csr_matrix(np.array([[0, 2, 3], [4, 0, 0], [7, 0, 9]]))
     X3 = sparse.csr_matrix(np.array([[1, 0, 3], [0, 0, 6], [0, 8, 0]]))
@@ -963,7 +963,7 @@ def test_nan_merge(axis_name, join_type, array_type):
     assert len(getattr(result_nonan, mapping_attr)) == 0
 
 
-def test_merge_unique():
+def test_merge_unique() -> None:
     from anndata._core.merge import merge_unique
 
     # Simple cases
@@ -999,7 +999,7 @@ def test_merge_unique():
     assert merge_unique([{"a": np.ones(5)}, {"a": list(np.ones(4))}]) == {}
 
 
-def test_merge_same():
+def test_merge_same() -> None:
     from anndata._core.merge import merge_same
 
     # Same as unique for a number of cases:
@@ -1027,7 +1027,7 @@ def test_merge_same():
     )
 
 
-def test_merge_first():
+def test_merge_first() -> None:
     from anndata._core.merge import merge_first
 
     assert merge_first([{"a": "b"}, {"a": "b"}]) == {"a": "b"}
@@ -1298,7 +1298,7 @@ def test_concat_categories_from_mapping(use_xdataset, force_lazy):
     )
 
 
-def test_concat_categories_maintain_dtype():
+def test_concat_categories_maintain_dtype() -> None:
     a = AnnData(
         X=np.ones((5, 1)),
         obs=pd.DataFrame(
@@ -1337,7 +1337,7 @@ def test_concat_categories_maintain_dtype():
     assert pd.api.types.is_string_dtype(result.obs["cat_ordered"])
 
 
-def test_concat_ordered_categoricals_retained():
+def test_concat_ordered_categoricals_retained() -> None:
     a = AnnData(
         X=np.ones((5, 1)),
         obs=pd.DataFrame(
@@ -1611,7 +1611,7 @@ def test_concat_outer_aligned_mapping(elem, axis, use_xdataset, force_lazy):
     check_filled_like(result, elem_name=f"{axis}m/{elem}")
 
 
-def test_concatenate_size_0_axis():
+def test_concatenate_size_0_axis() -> None:
     # https://github.com/scverse/anndata/issues/526
 
     a = gen_adata((5, 10))
@@ -1744,7 +1744,7 @@ def test_impute_dask(axis_name):
     assert in_memory.shape[axis - 1] == 17
 
 
-def test_outer_concat_with_missing_value_for_df():
+def test_outer_concat_with_missing_value_for_df() -> None:
     # https://github.com/scverse/anndata/issues/901
     # TODO: Extend this test to cover all cases of missing values
     # TODO: Check values
@@ -1911,7 +1911,7 @@ def test_concat_dask_sparse_matches_memory(
     assert_equal(res_in_memory, res_dask)
 
 
-def test_1d_concat():
+def test_1d_concat() -> None:
     adata = AnnData(np.ones((5, 20)), obsm={"1d-array": np.ones(5)})
     concated = concat([adata, adata])
     assert concated.obsm["1d-array"].shape == (10, 1)

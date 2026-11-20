@@ -243,7 +243,11 @@ def suppress_autoshard_warning[S: StorageType, T: RWAble](
 def read_basic(
     elem: h5py.File | h5py.Group | h5py.Dataset, *, _reader: Reader
 ) -> (
-    dict[str, _StorableArrayOrScalar] | npt.NDArray | CSMatrix | CSArray | CupyCSMatrix
+    dict[str, _StorableArrayOrScalar]
+    | npt.NDArray[np.generic]
+    | CSMatrix
+    | CSArray
+    | CupyCSMatrix
 ):
     from anndata._io.h5ad import read_dataset
 
@@ -263,7 +267,11 @@ def read_basic(
 def read_basic_zarr(
     elem: zarr.Group | zarr.Array, *, _reader: Reader
 ) -> (
-    dict[str, _StorableArrayOrScalar] | npt.NDArray | CSMatrix | CSArray | CupyCSMatrix
+    dict[str, _StorableArrayOrScalar]
+    | npt.NDArray[np.generic]
+    | CSMatrix
+    | CSArray
+    | CupyCSMatrix
 ):
     from anndata._io.zarr import read_dataset
 
@@ -673,7 +681,7 @@ def write_basic_dask_dask_dense(
 @_REGISTRY.register_read(h5py.Dataset, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_read(zarr.Array, IOSpec("array", "0.2.0"))
 @_REGISTRY.register_read(zarr.Array, IOSpec("string-array", "0.2.0"))
-def read_array(elem: _ArrayStorageType, *, _reader: Reader) -> npt.NDArray:
+def read_array(elem: _ArrayStorageType, *, _reader: Reader) -> npt.NDArray[np.generic]:
     return np.asarray(elem[()])
 
 

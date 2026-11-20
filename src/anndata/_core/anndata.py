@@ -879,7 +879,7 @@ class AnnData:  # noqa: PLW1641
         self._set_dim_df(value, "obs")
 
     @obs.deleter
-    def obs(self):
+    def obs(self) -> None:
         self.obs = pd.DataFrame({}, index=self.obs_names)
 
     @property
@@ -902,7 +902,7 @@ class AnnData:  # noqa: PLW1641
         self._set_dim_df(value, "var")
 
     @var.deleter
-    def var(self):
+    def var(self) -> None:
         self.var = pd.DataFrame({}, index=self.var_names)
 
     @property
@@ -935,7 +935,7 @@ class AnnData:  # noqa: PLW1641
         self._uns = value
 
     @uns.deleter
-    def uns(self):
+    def uns(self) -> None:
         self.uns = OrderedDict()
 
     obsm: AlignedMappingProperty[AxisArrays, AxisArraysView, str] = (

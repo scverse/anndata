@@ -6,6 +6,7 @@ from pathlib import Path
 from subprocess import run
 from typing import TYPE_CHECKING
 
+import numpy as np
 import pandas as pd
 import pytest
 import zarr
@@ -17,6 +18,8 @@ from anndata.tests.helpers import assert_equal
 
 if TYPE_CHECKING:
     from typing import Literal
+
+    from zarr.storage import MemoryStore
 
 ARCHIVE_PTH = Path(__file__).parent / "data/archives"
 
@@ -66,12 +69,14 @@ def test_no_diff(tmp_path: Path, archive_dir: Path) -> None:
     assert diff_proc.returncode == 0, diff_proc.stdout
 
 
-def test_clean_uns_backwards_compat(diskfmt_store, diskfmt):
+def test_clean_uns_backwards_compat(
+    diskfmt_store: Path | MemoryStore, diskfmt: Literal["h5ad", "zarr"]
+) -> None:
     write = lambda x, y: getattr(x, f"write_{diskfmt}")(y)
     read = getattr(ad, f"read_{diskfmt}")
 
     orig = ad.AnnData(
-        sparse.csr_matrix((3, 5), dtype="float32"),
+        sparse.csr_matrix((3, 5), dtype=np.float32),
         obs=pd.DataFrame(
             {"a": pd.Categorical(list("aab")), "b": [1, 2, 3]},
             index=[f"cell_{i}" for i in range(3)],

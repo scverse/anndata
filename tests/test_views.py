@@ -164,7 +164,7 @@ def test_views():
     assert adata_subset.obs["foo"].tolist() == list(range(2))
 
 
-def test_convert_error():
+def test_convert_error() -> None:
     adata = ad.AnnData(np.array([[1, 2], [3, 0]]))
     no_array = [[1], []]
 
@@ -172,7 +172,7 @@ def test_convert_error():
         adata[:, 0].X = no_array
 
 
-def test_view_subset_shapes():
+def test_view_subset_shapes() -> None:
     adata = gen_adata((20, 10), **GEN_ADATA_DASK_ARGS)
 
     view = adata[:, ::2]
@@ -594,7 +594,7 @@ def test_view_setattr_machinery(attr, subset_func, subset_func2):
     assert_equal(actual, view, exact=True)
 
 
-def test_layers_view():
+def test_layers_view() -> None:
     X = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
     L = np.array([[10, 11, 12], [13, 14, 15], [16, 17, 18]])
     real_adata = ad.AnnData(X)
@@ -701,7 +701,7 @@ def test_view_different_type_indices(matrix_type):
     assert_equal(orig[integer_list_mask, :].X, orig.X[integer_list_mask, :])
 
 
-def test_view_retains_ndarray_subclass():
+def test_view_retains_ndarray_subclass() -> None:
     adata = ad.AnnData(np.zeros((10, 10)))
     adata.obsm["foo"] = np.zeros((10, 5)).view(NDArraySubclass)
 
@@ -711,7 +711,7 @@ def test_view_retains_ndarray_subclass():
     assert view.obsm["foo"].shape == (5, 5)
 
 
-def test_modify_uns_in_copy():
+def test_modify_uns_in_copy() -> None:
     # https://github.com/scverse/anndata/issues/571
     adata = ad.AnnData(np.ones((5, 5)), uns={"parent": {"key": "value"}})
     adata_copy = adata[:3].copy()
@@ -847,7 +847,7 @@ def test_copy_X_dtype():
     assert adata_c.X.dtype == adata.X.dtype
 
 
-def test_x_none():
+def test_x_none() -> None:
     orig = ad.AnnData(obs=pd.DataFrame(index=np.arange(50)))
     assert orig.shape == (50, 0)
     view = orig[2:4]

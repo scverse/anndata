@@ -33,6 +33,7 @@ from ..compat import (
     DaskArray,
     SupportsArrayApiBase,
     XVariable,
+    known_dim,
 )
 from ..typing import AlignedArray, InMemoryArray, _is_in_memory
 
@@ -321,7 +322,7 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData, E = object, V = object]
         if isinstance(a, CSMatrix | CSArray | CupySparseMatrix | ArrayView):
             a = a.toarray()
         if isinstance(a, SupportsArrayApiBase):
-            return a.__array_namespace__().reshape(a, (a.size,))
+            return a.__array_namespace__().reshape(a, (-1,))  # type: ignore[arg-type]  # https://github.com/data-apis/array-api-compat/issues/485
         return a.ravel()
 
 
@@ -685,7 +686,8 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](
         m: AxisArrays = getattr(self.container(data), f"{self.dim}m")
         if (arr := m.get(self.k)) is None:
             return False
-        return idx is None or -arr.shape[1] <= idx < arr.shape[1]
+        n_cols = known_dim(arr.shape[1])
+        return idx is None or -n_cols <= idx < n_cols
 
     @overload
     def get(self, data: MuData | AnnData, /) -> AlignedArray: ...
@@ -695,7 +697,7 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](
         full: AlignedArray = getattr(self.container(data), f"{self.dim}m")[self.k]
         if i is NO_IDX:
             return full
-        n_cols: int = full.shape[1]
+        n_cols = known_dim(full.shape[1])
         if not -n_cols <= i < n_cols:
             msg = (
                 f"Column index `{i}` is out of range for {self} with {n_cols} columns."

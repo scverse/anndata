@@ -77,7 +77,7 @@ def _copy_array(
         return a.copy()
     if isinstance(a, SupportsArrayApiBase):
         # the array API standard has no `.copy()`, e.g. `torch.Tensor` lacks it
-        return a.__array_namespace__().asarray(a, copy=True)
+        return a.__array_namespace__().asarray(a, copy=True)  # type: ignore[arg-type]  # https://github.com/data-apis/array-api-compat/issues/485
     return a.copy()
 
 
@@ -194,7 +194,7 @@ class AlignedMappingBase[
         return self._view_class(self, parent, subset_idx)
 
     @deprecated(Deprecation("0.10.2", deprecation_msg("as_dict", "dict(obj)")))
-    def as_dict(self) -> dict:
+    def as_dict(self) -> dict[K, V]:
         return dict(self)
 
 
@@ -285,7 +285,7 @@ class AlignedActual[
         *,
         store: MutableMapping[K, V],
         validate: bool = True,
-    ):
+    ) -> None:
         self._parent = parent
         self._data = store
         for k, v in self._data.items():
@@ -296,7 +296,7 @@ class AlignedActual[
     def __getitem__(self, key: K) -> V:
         return self._data[key]
 
-    def __setitem__(self, key: K, value: _AlignedAny):
+    def __setitem__(self, key: K, value: _AlignedAny) -> None:
         if value is not None:
             value = self._validate_value(value, key)
         if key is None and value is None:
@@ -308,7 +308,7 @@ class AlignedActual[
     def __contains__(self, key: object) -> bool:
         return key in self._data
 
-    def __delitem__(self, key: K):
+    def __delitem__(self, key: K) -> None:
         if key is None:
             self._data.pop(key, None)
         else:
@@ -369,7 +369,7 @@ class AxisArrays(AlignedActual[OneDIdx, str, "_AlignedAny"], AxisArraysBase):
         axis: Literal[0, 1],
         store: MutableMapping[str, _AlignedAny] | AxisArraysBase,
         validate: bool = True,
-    ):
+    ) -> None:
         if axis not in {0, 1}:
             raise ValueError()
         self._axis = axis
@@ -449,7 +449,7 @@ class Layers(AlignedActual[TwoDIdx, str | None, "AlignedArray"], LayersBase):
         *,
         store: MutableMapping[str | None, AlignedArray | None],
         validate: bool = True,
-    ):
+    ) -> None:
         super().__init__(parent, store=store, validate=validate)
         self.isbacked = (
             None not in self._data and self._anndata_parent.filename is not None
@@ -533,7 +533,7 @@ class PairwiseArrays(AlignedActual[OneDIdx, str, "AlignedArray"], PairwiseArrays
         axis: Literal[0, 1],
         store: MutableMapping[str, AlignedArray],
         validate: bool = True,
-    ):
+    ) -> None:
         if axis not in {0, 1}:
             raise ValueError()
         self._axis = axis
@@ -593,12 +593,12 @@ class AlignedMappingProperty[A: AlignedActual, V: AlignedView, K: (str, str | No
     def __post_init__(self) -> None:
         """Install a fake `fget` for sphinx-autodoc-typehints."""
 
-        def fake(obj): ...
+        def fake(obj: object) -> None: ...
 
         fake.__annotations__ = {"return": self.cls._actual_class | self.cls._view_class}
         property.__init__(self, fake)
 
-    def __set_name__(self, owner: AnnData, name: str):
+    def __set_name__(self, owner: AnnData, name: str) -> None:
         self.name = name
 
     @overload

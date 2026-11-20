@@ -27,7 +27,7 @@ def _write(
     adata: ad.AnnData,
     store: Path | MemoryStore,
     diskfmt: Literal["h5ad", "zarr"],
-    **kwargs,
+    **kwargs: object,
 ) -> None:
     getattr(adata, f"write_{diskfmt}")(store, **kwargs)
 

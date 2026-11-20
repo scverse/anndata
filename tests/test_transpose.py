@@ -8,7 +8,7 @@ import anndata as ad
 from anndata.tests.helpers import assert_equal, gen_adata, shares_memory
 
 
-def test_transpose_orig():
+def test_transpose_orig() -> None:
     """
     Original test for transpose, should be covered by more thorough tests below, but
     keeping around just in case.

@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from pandas.api.typing.aliases import Scalar
 
     from .._types import Dataset2DIlocIndexer
+    from ..typing import Index
 
 
 def requires_xarray[R, **P](func: Callable[P, R]) -> Callable[P, R]:
@@ -73,7 +74,7 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
             msg = f"Dataset dimension {next(iter(ds.dims))} does not match coordinate {next(iter(ds.coords))}."
             raise ValueError(msg)
 
-    def __init__(self, ds: XDataset):
+    def __init__(self, ds: XDataset) -> None:
         Dataset2D._validate_shape_invariants(ds)
         self._ds = ds
 
@@ -300,7 +301,7 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
         return pd.Index([k for k in self.ds if k != index_key])
 
     @columns.setter
-    def columns(self, val) -> None:
+    def columns(self, val: list[object] | pd.Index) -> None:
         if len(self.columns.symmetric_difference(val)) > 0:
             msg = "Trying to rename the keys of the mapping with new names - please use a different API to rename the keys of the underlying dataset mapping."
             raise ValueError(msg)
@@ -310,7 +311,7 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
         )
 
     def __setitem__(
-        self, key: Hashable | Iterable[Hashable] | Mapping, value: object
+        self, key: Hashable | Iterable[Hashable] | Mapping[str, object], value: object
     ) -> None:
         """
         Setting can only be performed when the incoming value is “standalone” like :class:`numpy.ndarray` to mimic pandas.
@@ -376,7 +377,7 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
 
     def copy(
         self,
-        data: Mapping | None = None,
+        data: Mapping[Hashable, object] | None = None,
         *,
         deep: bool = False,
     ) -> Dataset2D:
@@ -454,7 +455,7 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
         return Dataset2D(el)
 
     # Used "publicly" in src/anndata/_core/merge.py but not intended for public use.
-    def _items(self):
+    def _items(self) -> Iterator[tuple[Hashable, XDataArray]]:
         for col in self:
             yield col, self[col]
 
@@ -464,9 +465,9 @@ class IlocGetter:
     _ds: XDataset
     _coord: str
 
-    def __getitem__(self, idx) -> Dataset2D:
+    def __getitem__(self, idx: Index) -> Dataset2D:
         # xarray seems to have some code looking for a second entry in tuples,
         # so we unpack the tuple
         if isinstance(idx, tuple) and len(idx) == 1:
             idx = idx[0]
-        return Dataset2D(self._ds.isel(**{self._coord: idx}))
+        return Dataset2D(self._ds.isel({self._coord: idx}))
