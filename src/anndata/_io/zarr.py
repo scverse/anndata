@@ -215,7 +215,10 @@ def read_zarr(store: StoreLike | zarr.Group) -> AnnData:
 
         # Backwards compat (should figure out which version)
         if "raw.X" in f:
-            raw = AnnData(**_read_legacy_raw(f, adata.raw, read_dataframe, read_elem))
+            legacy_raw = _read_legacy_raw(f, adata.raw, read_dataframe, read_elem)
+            # a modern `adata.raw` would have raised
+            assert isinstance(legacy_raw, dict)
+            raw = AnnData(**legacy_raw)
             raw.obs_names = adata.obs_names
             adata.raw = raw
 
@@ -253,7 +256,9 @@ def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
         "Consider rewriting it."
     )
     warn(msg, OldFormatWarning)
-    df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
+    value = dataset[()]
+    assert isinstance(value, np.ndarray), "legacy dataframes are structured arrays"
+    df = pd.DataFrame(_from_fixed_length_strings(value))
     return df.set_index(df.columns[0])
 
 

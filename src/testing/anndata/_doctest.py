@@ -18,7 +18,7 @@ class _FilterwarningsMarked(Protocol):
     _doctest_warning_filter: list[WarningFilter]
 
 
-def doctest_needs[F: Callable](mod: str) -> Callable[[F], F]:
+def doctest_needs[F: Callable[..., object]](mod: str) -> Callable[[F], F]:
     """Mark function with doctest dependency."""
 
     def decorator(func: F) -> F:
@@ -28,7 +28,7 @@ def doctest_needs[F: Callable](mod: str) -> Callable[[F], F]:
     return decorator
 
 
-def doctest_filterwarnings[F: Callable](
+def doctest_filterwarnings[F: Callable[..., object]](
     action: _ActionKind,
     message: str = r"",
     category: type[Warning] = Warning,

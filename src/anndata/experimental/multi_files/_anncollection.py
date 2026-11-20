@@ -17,15 +17,15 @@ from ..._core.index import _normalize_index, _normalize_indices
 from ..._core.merge import concat_arrays, inner_concat_aligned_mapping
 from ..._core.sparse_dataset import BaseCompressedSparseDataset
 from ..._core.views import _resolve_idx
-from ...compat import old_positionals
+from ...compat import known_dim, old_positionals
 from ...utils import set_module, warn
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Sequence, Sized
+    from collections.abc import Callable, Iterable, Sequence
     from typing import Literal, TypeAlias
 
     from ..._types import Join_T
-    from ...typing import Index, _Index1DNorm
+    from ...typing import AlignedArray, Index, _Index1DNorm
 
 ATTRS = ["obs", "obsm", "layers"]
 
@@ -130,9 +130,8 @@ class _IterateViewMixin:
     if TYPE_CHECKING:
 
         @property
-        def shape(self) -> tuple[int, int]: ...
-        # `LazyAttrData` yields arrays here, so only `len` is common to all mixin users
-        def __getitem__(self, index: Index, /) -> Sized: ...
+        def shape(self) -> tuple[int, ...] | None: ...
+        def __getitem__(self, index: Index, /) -> object: ...
 
     @old_positionals("axis", "shuffle", "drop_last")
     def iterate_axis(
@@ -160,17 +159,19 @@ class _IterateViewMixin:
             msg = "Axis should be either 0 or 1."
             raise ValueError(msg)
 
-        n = self.shape[axis]
+        if (shape := self.shape) is None:
+            msg = f"Cannot iterate over {self!r} since it has no shape."
+            raise TypeError(msg)
+        n = shape[axis]
         indices = np.random.permutation(n).tolist() if shuffle else list(range(n))
 
         for i in range(0, n, batch_size):
             idx = indices[i : min(i + batch_size, n)]
-            batch = self[:, idx] if axis == 1 else self[idx]
             # only happens if the last batch is smaller than batch_size
-            if len(batch) < batch_size and drop_last:
+            if len(idx) < batch_size and drop_last:
                 continue
 
-            yield batch, idx
+            yield (self[:, idx] if axis == 1 else self[idx]), idx
 
 
 class MapObsView:
@@ -237,14 +238,14 @@ class MapObsView:
 
         return _arr
 
-    def keys(self):
+    def keys(self) -> list[str]:
         if self._keys is not None:
             return self._keys
         else:
             return list(getattr(self.adatas[0], self.attr).keys())
 
     @old_positionals("use_convert")
-    def to_dict(self, keys: Iterable[str] | None = None, *, use_convert=True):
+    def to_dict(self, keys: Iterable[str] | None = None, *, use_convert: bool = True):
         dct = {}
         keys = self.keys() if keys is None else keys
         for key in keys:
@@ -257,7 +258,7 @@ class MapObsView:
             return None
         return pd.DataFrame(self.to_dict(use_convert=False), index=self.obs_names)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         descr = f"View of {self.attr} with keys: {str(self.keys())[1:-1]}"
         return descr
 
@@ -707,7 +708,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         convert: ConvertType | None = None,
         harmonize_dtypes: bool = True,
         indices_strict: bool = True,
-    ):
+    ) -> None:
         if isinstance(adatas, Mapping):
             if keys is not None:
                 msg = (
@@ -831,7 +832,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
 
         self.indices_strict = indices_strict
 
-    def __getitem__(self, index: Index):
+    def __getitem__(self, index: Index) -> AnnCollectionView:
         """Lazily subset the collection.
 
         Parameters
@@ -851,7 +852,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         return AnnCollectionView(self, self.convert, resolved_idx)
 
     @property
-    def convert(self):
+    def convert(self) -> ConvertType | None:
         """On the fly converters for keys of attributes and data matrix.
 
         A function or a Mapping of functions which will be applied
@@ -878,11 +879,11 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         return self._convert
 
     @convert.setter
-    def convert(self, value):
+    def convert(self, value: ConvertType | None) -> None:
         self._convert = value
 
     @property
-    def obs(self):
+    def obs(self) -> pd.DataFrame:
         """One-dimensional annotation of observations.
 
         If `join_obs` was set to "inner" and "outer", subset objects' `.obs`
@@ -891,7 +892,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         return self._obs
 
     @property
-    def obsm(self):
+    def obsm(self) -> AxisArrays | None:
         """Multi-dimensional annotation of observations.
 
         If `join_obsm` was set to "inner", subset objects' `.obsm`
@@ -901,24 +902,24 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         return self._obsm
 
     @property
-    def shape(self):
+    def shape(self) -> tuple[int, int]:
         """Shape of the lazily concatenated data matrix"""
         return self.limits[-1], len(self.var_names)
 
     @property
-    def n_obs(self):
+    def n_obs(self) -> int:
         """Number of observations."""
         return self.shape[0]
 
     @property
-    def n_vars(self):
+    def n_vars(self) -> int:
         """Number of variables/features."""
         return self.shape[1]
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.limits[-1]
 
-    def to_adata(self):
+    def to_adata(self) -> AnnData:
         """Convert this AnnCollection object to an AnnData object.
 
         The AnnData object won't have `.X`, only `.obs` and `.obsm`.
@@ -933,7 +934,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
                 else None
             )
         else:
-            obsm = self.obsm.copy()
+            obsm = None if self.obsm is None else self.obsm.copy()
 
         obs = self.obs.copy()
         if "obs" in self._view_attrs_keys and concat_view.obs is not None:
@@ -945,7 +946,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         adata.var_names = self.var_names
         return adata
 
-    def lazy_attr(self, attr, key=None):
+    def lazy_attr(self, attr: str, key: str | None = None) -> LazyAttrData:
         """Get a subsettable key from an attribute (array-like) or an attribute.
 
         Returns a LazyAttrData object which provides subsetting over the specified
@@ -955,12 +956,12 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         return LazyAttrData(self, attr, key)
 
     @property
-    def has_backed(self):
+    def has_backed(self) -> bool:
         """`True` if `adatas` have backed AnnData objects, `False` otherwise."""
         return any(adata.isbacked for adata in self.adatas)
 
     @property
-    def attrs_keys(self):
+    def attrs_keys(self) -> dict[str, list[str]]:
         """Dict of all accessible attributes and their keys."""
         _attrs_keys = {}
         for attr in self._attrs:
@@ -969,7 +970,7 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
         _attrs_keys.update(self._view_attrs_keys)
         return _attrs_keys
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         n_obs, n_vars = self.shape
         descr = f"AnnCollection object with n_obs × n_vars = {n_obs} × {n_vars}"
         descr += f"\n  constructed from {len(self.adatas)} AnnData objects"
@@ -995,12 +996,12 @@ class AnnCollection(_ConcatViewMixin, _IterateViewMixin):
 
 
 class LazyAttrData(_IterateViewMixin):
-    def __init__(self, adset: AnnCollection, attr: str, key: str | None = None):
+    def __init__(self, adset: AnnCollection, attr: str, key: str | None = None) -> None:
         self.adset = adset
         self.attr = attr
         self.key = key
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: Index) -> AlignedArray:
         oidx = None
         vidx = None
 
@@ -1016,14 +1017,14 @@ class LazyAttrData(_IterateViewMixin):
         return attr_arr if vidx is None else attr_arr[:, vidx]
 
     @property
-    def shape(self):
+    def shape(self) -> tuple[int, int] | tuple[int] | None:
         shape = self.adset.shape
         if self.attr in {"X", "layers"}:
             return shape
         elif self.attr == "obs":
             return (shape[0],)
         elif self.attr == "obsm" and self.key is not None:
-            return shape[0], self[:1].shape[1]
+            return shape[0], known_dim(self[:1].shape[1])
         else:
             return None
 

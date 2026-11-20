@@ -127,9 +127,9 @@ test-min = [
     "scikit-learn",
 ]
 typing = [
-    "cupy-stubs>=1.2",
+    "cupy-stubs>=1.3.1",
     "docutils-stubs",
-    "mudata",           # `anndata.acc`
+    "mudata",            # `anndata.acc`
     "pandas-stubs",
     "scipy-stubs",
     "types-boltons",
@@ -174,13 +174,6 @@ lint.select = [
     "W",    # Warning detected by Pycodestyle
 ]
 lint.ignore = [
-    # TODO: fix these
-    "ANN001",
-    "ANN002",
-    "ANN003",
-    "ANN201",
-    "ANN202",
-    "ANN204",
     "C408",    # dict() syntax is preferable for dicts used as kwargs
     "E501",    # line too long -> we accept long comment lines; formatter gets rid of long code lines
     "E731",    # Do not assign a lambda expression, use a def -> AnnData allows lambda expression assignments,
@@ -191,7 +184,8 @@ lint.ignore = [
     "TID252",  # We use relative imports from parent modules
 ]
 # PLR0913, PLR0917: tests can use a lot of “arguments” that are actually fixtures
-lint.per-file-ignores."tests/**/*.py" = [ "PLR0913", "PLR0917" ]
+# RUF018: assert statements are not optimized away in tests
+lint.per-file-ignores."tests/**/*.py" = [ "PLR0913", "PLR0917", "RUF018" ]
 # E721 comparing types, but we specifically are checking that we aren't getting subtypes (views)
 lint.per-file-ignores."tests/test_readwrite.py" = [ "E721" ]
 lint.allowed-confusables = [ "×", "–", "’", "α" ]
@@ -203,6 +197,81 @@ lint.isort.known-first-party = [ "anndata" ]
 lint.isort.required-imports = [ "from __future__ import annotations" ]
 lint.pylint.max-args = 7
 lint.pylint.max-positional-args = 5
+
+# Missing annotations (ANN0*, ANN2*): annotate these files and remove their entries.
+# New files have to be fully annotated.
+[tool.ruff.lint.extend-per-file-ignores]
+"benchmarks/benchmarks/anndata.py" = [ "ANN001", "ANN002", "ANN201", "ANN202" ]
+"benchmarks/benchmarks/backed_hdf5.py" = [ "ANN001", "ANN002", "ANN201" ]
+"benchmarks/benchmarks/dataset2d.py" = [ "ANN002", "ANN201" ]
+"benchmarks/benchmarks/readwrite.py" = [ "ANN001", "ANN002", "ANN201" ]
+"benchmarks/benchmarks/sparse_dataset.py" = [ "ANN001", "ANN002", "ANN201" ]
+"benchmarks/benchmarks/subsetting.py" = [ "ANN002", "ANN201" ]
+"benchmarks/benchmarks/utils.py" = [ "ANN001", "ANN002", "ANN003", "ANN201", "ANN202" ]
+"docs/**/*.ipynb" = [ "ANN001", "ANN002", "ANN003", "ANN201", "ANN202", "ANN204" ]
+"src/anndata/_core/aligned_df.py" = [ "ANN202" ]
+"src/anndata/_core/anndata.py" = [ "ANN001", "ANN202", "ANN204" ]
+"src/anndata/_core/file_backing.py" = [ "ANN001", "ANN202", "ANN204" ]
+"src/anndata/_core/index.py" = [ "ANN001", "ANN202" ]
+"src/anndata/_core/merge.py" = [ "ANN001", "ANN002", "ANN202", "ANN204" ]
+"src/anndata/_core/raw.py" = [ "ANN001", "ANN202", "ANN204" ]
+"src/anndata/_core/sparse_dataset.py" = [ "ANN001", "ANN202", "ANN204" ]
+"src/anndata/_core/storage.py" = [ "ANN202" ]
+"src/anndata/_core/views.py" = [ "ANN001", "ANN002", "ANN003", "ANN202", "ANN204" ]
+"src/anndata/_core/xarray.py" = [ "ANN202", "ANN204" ]
+"src/anndata/_io/__init__.py" = [ "ANN202" ]
+"src/anndata/_io/h5ad.py" = [ "ANN001", "ANN003", "ANN202" ]
+"src/anndata/_io/read.py" = [ "ANN001", "ANN003" ]
+"src/anndata/_io/specs/lazy_methods.py" = [ "ANN001" ]
+"src/anndata/_io/specs/methods.py" = [ "ANN001", "ANN202" ]
+"src/anndata/_io/specs/registry.py" = [ "ANN001", "ANN002", "ANN003", "ANN202", "ANN204" ]
+"src/anndata/_io/utils.py" = [ "ANN001", "ANN002", "ANN003", "ANN202" ]
+"src/anndata/_io/write.py" = [ "ANN001", "ANN202" ]
+"src/anndata/_io/zarr.py" = [ "ANN001", "ANN003", "ANN202" ]
+"src/anndata/experimental/backed/_io.py" = [ "ANN202" ]
+"src/anndata/experimental/backed/_lazy_arrays.py" = [ "ANN002", "ANN003", "ANN202", "ANN204" ]
+"src/anndata/experimental/merge.py" = [ "ANN001", "ANN002", "ANN003", "ANN201", "ANN202", "ANN204" ]
+"src/anndata/experimental/multi_files/_anncollection.py" = [ "ANN001", "ANN202", "ANN204" ]
+"src/anndata/experimental/pytorch/_annloader.py" = [ "ANN003", "ANN202", "ANN204" ]
+"src/anndata/tests/helpers.py" = [ "ANN001", "ANN002", "ANN003", "ANN201", "ANN202" ]
+"src/anndata/utils.py" = [ "ANN001", "ANN003", "ANN201", "ANN202" ]
+"tests/accessors/test_get_set.py" = [ "ANN001", "ANN202", "ANN204" ]
+"tests/accessors/test_write_use.py" = [ "ANN003" ]
+"tests/conftest.py" = [ "ANN001", "ANN201" ]
+"tests/lazy/conftest.py" = [ "ANN001", "ANN201" ]
+"tests/lazy/test_concat.py" = [ "ANN201" ]
+"tests/lazy/test_read.py" = [ "ANN001", "ANN201" ]
+"tests/lazy/test_write.py" = [ "ANN201" ]
+"tests/test_annot.py" = [ "ANN001", "ANN201" ]
+"tests/test_awkward.py" = [ "ANN001", "ANN201", "ANN202" ]
+"tests/test_backed_dense.py" = [ "ANN201" ]
+"tests/test_backed_hdf5.py" = [ "ANN001", "ANN201" ]
+"tests/test_backed_sparse.py" = [ "ANN001", "ANN201", "ANN202" ]
+"tests/test_base.py" = [ "ANN001", "ANN002", "ANN003", "ANN201", "ANN202" ]
+"tests/test_concatenate.py" = [ "ANN001", "ANN201", "ANN202" ]
+"tests/test_concatenate_disk.py" = [ "ANN001", "ANN002", "ANN003", "ANN201", "ANN202" ]
+"tests/test_dask.py" = [ "ANN001", "ANN201" ]
+"tests/test_dask_view_mem.py" = [ "ANN001", "ANN201" ]
+"tests/test_deprecations.py" = [ "ANN001", "ANN201" ]
+"tests/test_extensions.py" = [ "ANN001" ]
+"tests/test_gpu.py" = [ "ANN201" ]
+"tests/test_helpers.py" = [ "ANN001", "ANN201" ]
+"tests/test_inplace_subset.py" = [ "ANN001", "ANN201" ]
+"tests/test_io_backwards_compat.py" = [ "ANN001", "ANN201" ]
+"tests/test_io_conversion.py" = [ "ANN001", "ANN201" ]
+"tests/test_io_dispatched.py" = [ "ANN001", "ANN003", "ANN201", "ANN202" ]
+"tests/test_io_elementwise.py" = [ "ANN001", "ANN201", "ANN202" ]
+"tests/test_io_utils.py" = [ "ANN001", "ANN201", "ANN202" ]
+"tests/test_layers.py" = [ "ANN001", "ANN201" ]
+"tests/test_obsmvarm.py" = [ "ANN001", "ANN201" ]
+"tests/test_obspvarp.py" = [ "ANN001", "ANN201" ]
+"tests/test_raw.py" = [ "ANN001", "ANN201" ]
+"tests/test_repr.py" = [ "ANN001", "ANN201" ]
+"tests/test_structured_arrays.py" = [ "ANN001", "ANN201" ]
+"tests/test_transpose.py" = [ "ANN001", "ANN201", "ANN202" ]
+"tests/test_views.py" = [ "ANN001", "ANN201" ]
+"tests/test_x.py" = [ "ANN001", "ANN201", "ANN202", "ANN204" ]
+"tests/test_xarray.py" = [ "ANN001", "ANN201" ]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "legacy_api_wrap.legacy_api".msg = "Use anndata.compat.old_positionals instead"
@@ -221,14 +290,20 @@ skip = ".git,*.pdf,*.svg"
 indent = 4
 table_format = "short"
 expand_tables = [
+    "tool.ruff.lint.extend-per-file-ignores",
     "tool.ruff.lint.flake8-tidy-imports.banned-api",
 ]
 
 [tool.mypy]
 mypy_path = [ "$MYPY_CONFIG_FILE_DIR/src" ]
 explicit_package_bases = true
+# enable these once everything is annotated (i.e. `tool.ruff.lint.extend-per-file-ignores` above is gone)
+# disallow_any_unimported = true
+# disallow_any_generics = true
+# disallow_untyped_defs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
+show_error_codes = true
 
 # Installed, but shipping no `py.typed` marker:
 # infer types from their source instead of falling back to `Any`.

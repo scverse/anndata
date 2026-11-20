@@ -73,7 +73,7 @@ def adata(sizes):
     return AnnData(X, obs=obs, var=var)
 
 
-def test_dask_X_view():
+def test_dask_X_view() -> None:
     import dask.array as da
 
     M, N = 50, 30
@@ -326,7 +326,7 @@ def test_dask_to_memory_unbacked(array_func, mem_type):
 
 @pytest.mark.parametrize("to_dask", [*BASE_MATRIX_PARAMS, *DASK_MATRIX_PARAMS])
 def test_dask_to_disk_view(
-    to_dask: Callable[[NDArray], DaskArray],
+    to_dask: Callable[[NDArray[np.generic]], DaskArray],
     diskfmt: Literal["h5ad", "zarr"],
     diskfmt_store: Path | MemoryStore,
 ) -> None:
@@ -342,7 +342,7 @@ def test_dask_to_disk_view(
 
 
 # Test if dask arrays turn into numpy arrays after to_memory is called
-def test_dask_to_memory_copy_unbacked():
+def test_dask_to_memory_copy_unbacked() -> None:
     import numpy as np
 
     orig = gen_adata((15, 10), X_type=as_dense_dask_array, **GEN_ADATA_DASK_ARGS)

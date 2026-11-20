@@ -349,7 +349,7 @@ def _read_raw(
     rdasp: Callable[[h5py.Dataset], CSMatrix] | None = None,
     *,
     attrs: Collection[str] = ("X", "var", "varm"),
-) -> dict:
+) -> dict[str, Any]:  # any: Raw will go
     raw: dict[str, RWAble] = {}
     if "X" in attrs and "raw/X" in f:
         if "raw/X" in as_sparse:

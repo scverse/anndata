@@ -25,6 +25,8 @@ from .utils import is_float
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Iterator, Mapping, MutableMapping
 
+    from numpy.typing import DTypeLike, NDArray
+
 
 @old_positionals("first_column_names", "dtype")
 def read_csv(
@@ -58,7 +60,7 @@ def read_csv(
 
 
 def read_excel(
-    filename: PathLike[str] | str, sheet: str | int, dtype: str = "float32"
+    filename: PathLike[str] | str, sheet: str | int, dtype: DTypeLike = "float32"
 ) -> AnnData:
     """\
     Read `.xlsx` (Excel) file.
@@ -151,7 +153,9 @@ def read_hdf(filename: PathLike[str] | str, key: str) -> AnnData:
 
 
 def _fmt_loom_axis_attrs(
-    input: MutableMapping, idx_name: str, dimm_mapping: Mapping[str, Iterable[str]]
+    input: MutableMapping[str, NDArray[np.generic]],
+    idx_name: str,
+    dimm_mapping: Mapping[str, Iterable[str]],
 ) -> tuple[pd.DataFrame, Mapping[str, np.ndarray]]:
     axis_df = pd.DataFrame()
     axis_mapping = {}

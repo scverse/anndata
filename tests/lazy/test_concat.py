@@ -281,7 +281,7 @@ def test_concat_data_subsetting(
     adata_remote: AnnData,
     adata_orig: AnnData,
     join: Join_T,
-    index: slice | NDArray | Literal["a"] | None,
+    index: slice | NDArray[np.integer | np.bool_] | Literal["a"] | None,
 ):
     from anndata._core.xarray import Dataset2D
 
@@ -344,7 +344,7 @@ def test_concat_df_ds_mixed_types(
     assert_equal(mixed_concatenated, in_memory_concatenated)
 
 
-def test_concat_bad_mixed_types():
+def test_concat_bad_mixed_types() -> None:
     orig = gen_adata((100, 200), np.array, **GEN_ADATA_NO_XARRAY_ARGS)
     orig.write_zarr(store := MemoryStore())
     remote = read_lazy(store)

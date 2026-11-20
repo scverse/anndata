@@ -85,8 +85,8 @@ def test_gen_random_column(dtype):
 
 
 # Does this work for every warning?
-def test_report_name():
-    def raise_error():
+def test_report_name() -> None:
+    def raise_error() -> None:
         msg = "an error occurred!"
         raise Exception(msg)
 
@@ -176,7 +176,7 @@ def test_assert_equal_raw():
         assert_equal(orig, to_compare)
 
 
-def test_assert_equal_raw_presence():
+def test_assert_equal_raw_presence() -> None:
     # This was causing some testing issues during
     # https://github.com/scverse/anndata/pull/542
     a = gen_adata((10, 20))
@@ -192,7 +192,7 @@ def test_assert_equal_raw_presence():
 
 # TODO: Should views be equal to actual?
 # Should they not be if an exact comparison is made?
-def test_assert_equal_aligned_mapping():
+def test_assert_equal_aligned_mapping() -> None:
     adata1 = gen_adata((10, 10))
     adata2 = adata1.copy()
 
@@ -215,7 +215,7 @@ def test_assert_equal_aligned_mapping():
         assert_equal(getattr(adata1, attr), getattr(var_subset, attr))
 
 
-def test_assert_equal_aligned_mapping_empty():
+def test_assert_equal_aligned_mapping_empty() -> None:
     chars = np.array(list(ascii_letters))
     adata = ad.AnnData(
         X=np.zeros((10, 10)),
@@ -235,7 +235,7 @@ def test_assert_equal_aligned_mapping_empty():
         assert_equal(getattr(adata, attr), getattr(same_idx, attr))
 
 
-def test_assert_equal_dask_arrays():
+def test_assert_equal_dask_arrays() -> None:
     import dask.array as da
 
     a = da.from_array([[1, 2, 3], [4, 5, 6]])
@@ -263,7 +263,7 @@ def test_assert_equal_sparse_index_dtype(attr):
         assert_equal(a, b, exact=True)
 
 
-def test_assert_equal_dask_sparse_arrays():
+def test_assert_equal_dask_sparse_arrays() -> None:
     import dask.array as da
     from scipy import sparse
 

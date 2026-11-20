@@ -8,7 +8,7 @@ from anndata import AnnData
 from anndata.tests.helpers import assert_equal
 
 
-def test_uns_color_subset():
+def test_uns_color_subset() -> None:
     # Tests for https://github.com/scverse/anndata/issues/257
     obs = pd.DataFrame(
         {
