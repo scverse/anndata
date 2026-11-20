@@ -564,6 +564,11 @@ class DFAcc[R: AdRef](RefAcc[R, str | None, MuData | AnnData, DataFrameLike, Arr
             if self.frame_acc is None:
                 msg = f"{self!r} has no `frame_acc` to set the data frame in."
                 raise TypeError(msg)
+            if not _is_frame(value):
+                msg = (
+                    f"Cannot set {self!r} to {type(value).__name__}, not a data frame."
+                )
+                raise TypeError(msg)
             self.frame_acc.set(data, NO_IDX, value)
             return
         frame: Any = self.frame(data)  # value is validated by the frame itself
