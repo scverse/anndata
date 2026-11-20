@@ -47,7 +47,7 @@ from .index import (
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from types import EllipsisType, ModuleType
+    from types import EllipsisType, ModuleType, UnionType
     from typing import Any, Literal
 
     from .._types import _ArrayStorageType, _GroupStorageType
@@ -102,11 +102,20 @@ def _index_in_memory(
     return cast("Any", mtx)[row, col]
 
 
-def _group_array(group: _GroupStorageType, key: str) -> _ArrayStorageType:
-    if not isinstance(arr := group[key], zarr.Array | h5py.Dataset):
+def _check_array(
+    arr: object,
+    group: object,
+    key: str,
+    kinds: type | UnionType = zarr.Array | h5py.Dataset,
+) -> None:
+    if not isinstance(arr, kinds):
         msg = f"Expected {key!r} of {group} to be an array, got {type(arr)}"
         raise ValueError(msg)
-    return arr
+
+
+def _group_array(group: _GroupStorageType, key: str) -> _ArrayStorageType:
+    _check_array(arr := group[key], group, key)
+    return cast("_ArrayStorageType", arr)
 
 
 def slice_len(s: slice, l: int) -> int:
@@ -119,6 +128,38 @@ def slice_as_int(s: slice, l: int) -> int:
     out = list(range(*s.indices(l)))
     assert len(out) == 1
     return out[0]
+
+
+def _memory_format(format: Literal["csr", "csc"]) -> type[SparseMatrixType]:
+    """The in-memory class a sparse matrix of `format` is read into."""
+    if is_gpu():
+        return CupyCSRMatrix if format == "csr" else CupyCSCMatrix
+    if settings.use_sparse_array_on_read:
+        return ss.csr_array if format == "csr" else ss.csc_array
+    return ss.csr_matrix if format == "csr" else ss.csc_matrix
+
+
+def _construct(
+    format: Literal["csr", "csc"],
+    arg1: tuple[DenseType, DenseType, DenseType] | tuple[int, int],
+    /,
+    *,
+    shape: tuple[int, int] | None = None,
+    dtype: np.dtype | None = None,
+) -> SparseMatrixType:
+    """Create an in-memory matrix of `format` from buffers or a shape."""
+    # `_memory_format` and the buffers’ backend both follow `is_gpu()`, which mypy can’t see
+    return _memory_format(format)(arg1, shape=shape, dtype=dtype)  # type: ignore[arg-type]
+
+
+def _shape_from_attrs(attrs: Mapping[str, Any]) -> tuple[int, int]:
+    """Shape of a sparse matrix, read off its group’s attributes."""
+    shape = _read_attr(attrs, "shape", None)
+    if shape is None:
+        # TODO warn
+        shape = _read_attr(attrs, "h5sparse_shape")
+    n_obs, n_vars = cast("Iterable[int]", shape)
+    return int(n_obs), int(n_vars)
 
 
 @dataclass
@@ -138,11 +179,7 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
 
     @property
     def memory_format(self) -> type[SparseMatrixType]:
-        if is_gpu():
-            return CupyCSRMatrix if self.format == "csr" else CupyCSCMatrix
-        if settings.use_sparse_array_on_read:
-            return ss.csr_array if self.format == "csr" else ss.csc_array
-        return ss.csr_matrix if self.format == "csr" else ss.csc_matrix
+        return _memory_format(self.format)
 
     def _construct(
         self,
@@ -153,8 +190,7 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
         dtype: np.dtype | None = None,
     ) -> SparseMatrixType:
         """Create an in-memory matrix of :attr:`memory_format` from buffers or a shape."""
-        # `memory_format` and the buffers’ backend both follow `is_gpu()`, which mypy can’t see
-        return self.memory_format(arg1, shape=shape, dtype=dtype)  # type: ignore[arg-type]
+        return _construct(self.format, arg1, shape=shape, dtype=dtype)
 
     @property
     def np_module(self) -> ModuleType:
@@ -368,13 +404,17 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
 
 
 def _get_group_format(group: _GroupStorageType) -> str:
-    if "h5sparse_format" in group.attrs:
+    return _format_from_attrs(group.attrs, group)
+
+
+def _format_from_attrs(attrs: Mapping[str, Any], group: object) -> str:
+    if "h5sparse_format" in attrs:
         # TODO: Warn about an old format
         # If this is only just going to be public, I could insist it's not like this
-        fmt = _read_attr(group.attrs, "h5sparse_format")
+        fmt = _read_attr(attrs, "h5sparse_format")
     else:
         # Should this be an extra field?
-        fmt = _read_attr(group.attrs, "encoding-type")
+        fmt = _read_attr(attrs, "encoding-type")
     if not isinstance(fmt, str):
         msg = f"Expected a string sparse format for {group}, got {fmt!r}"
         raise ValueError(msg)
@@ -442,12 +482,7 @@ class BaseCompressedSparseDataset[GroupT: _GroupStorageType](
     @property
     def shape(self) -> tuple[int, int]:
         """Shape of the matrix read off disk."""
-        shape = _read_attr(self.group.attrs, "shape", None)
-        if shape is None:
-            # TODO warn
-            shape = _read_attr(self.group.attrs, "h5sparse_shape")
-        n_obs, n_vars = cast("Iterable[int]", shape)
-        return int(n_obs), int(n_vars)
+        return _shape_from_attrs(self.group.attrs)
 
     def __repr__(self) -> str:
         name = type(self).__name__.removeprefix("_")

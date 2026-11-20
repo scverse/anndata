@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -10,11 +11,28 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 import zarr
 
-from anndata._io.utils import report_read_key_on_error, report_write_key_on_error
+from anndata._io.utils import (
+    add_read_key_note,
+    report_read_key_on_error,
+    report_write_key_on_error,
+)
 from anndata._settings import settings
-from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
+from anndata._types import (
+    Read,
+    ReadLazy,
+    _ReadAsync,
+    _ReadAsyncInternal,
+    _ReadInternal,
+    _ReadLazyInternal,
+)
 from anndata._write_compat import WriteCompat
-from anndata.compat import DaskArray, _read_attr, has_xp
+from anndata.compat import (
+    DaskArray,
+    _read_attr,
+    has_xp,
+    zarr_async_node,
+    zarr_loop,
+)
 
 from ...utils import warn
 
@@ -85,7 +103,7 @@ class IORegistryError(Exception):
         cls,
         method: str,
         registry: Mapping,
-        src_typ: type[StorageType],
+        src_typ: type,
         spec: IOSpec,
     ) -> IORegistryError:
         # TODO: Improve error message if type exists, but version does not
@@ -111,7 +129,10 @@ def write_spec[W: Callable[..., Any]](spec: IOSpec) -> Callable[[W], W]:
     return decorator
 
 
-class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
+class IORegistry[
+    RI: (_ReadInternal, _ReadLazyInternal, _ReadAsyncInternal),
+    R: (Read, ReadLazy, _ReadAsync),
+]:
     read: dict[tuple[type, IOSpec, frozenset[str]], RI]
     read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable]
     write: dict[tuple[type, WriteSrcType, frozenset[str]], _WriteInternal]
@@ -197,7 +218,7 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         spec: IOSpec,
         modifiers: frozenset[str] = frozenset(),
         *,
-        reader: Reader,
+        reader: Reader | AsyncReader,
     ) -> R:
         if (src_type, spec, modifiers) not in self.read:
             raise IORegistryError._from_read_parts("read", self.read, src_type, spec)  # noqa: EM101
@@ -250,6 +271,7 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
 
 _REGISTRY: IORegistry[_ReadInternal, Read] = IORegistry()
 _LAZY_REGISTRY: IORegistry[_ReadLazyInternal, ReadLazy] = IORegistry()
+_ASYNC_REGISTRY: IORegistry[_ReadAsyncInternal, _ReadAsync] = IORegistry()
 
 
 @singledispatch
@@ -268,7 +290,7 @@ def proc_spec_mapping(spec: Mapping[str, str]) -> IOSpec:
     return IOSpec(**{k.replace("-", "_"): v for k, v in spec.items()})
 
 
-def get_spec(elem: StorageType) -> IOSpec:
+def get_spec(elem: StorageType | zarr.AsyncGroup | zarr.AsyncArray) -> IOSpec:
     return proc_spec({
         k: _read_attr(elem.attrs, k, "") for k in ["encoding-type", "encoding-version"]
     })
@@ -346,6 +368,43 @@ class LazyReader(Reader):
         if "chunks" in read_params:
             kwargs["chunks"] = chunks
         return read_func(elem, **kwargs)
+
+
+class AsyncReader:
+    """Reads zarr elements with coroutines on the running event loop.
+
+    Unlike :class:`Reader`, this takes no callback,
+    and an encoding without an async reader is an error.
+    """
+
+    def __init__(self, registry: IORegistry) -> None:
+        self.registry = registry
+
+    async def read_elem(self, elem: zarr.AsyncGroup | zarr.AsyncArray) -> RWAble:
+        """Read an element from a store. See exported function for more details."""
+        try:
+            iospec = get_spec(elem)
+            if not self.registry.has_read(type(elem), iospec):
+                sync_type = (
+                    zarr.Group if isinstance(elem, zarr.AsyncGroup) else zarr.Array
+                )
+                if not _REGISTRY.has_read(sync_type, iospec):
+                    name = "read"
+                    raise IORegistryError._from_read_parts(
+                        name, _REGISTRY.read, type(elem), iospec
+                    )
+                msg = (
+                    f"No async read method registered for {iospec}. "
+                    "Read this element with `anndata.io.read_elem`."
+                )
+                raise NotImplementedError(msg)
+            read_func: _ReadAsync = self.registry.get_read(
+                type(elem), iospec, reader=self
+            )
+            return await read_func(elem)
+        except Exception as e:
+            add_read_key_note(e, elem)
+            raise
 
 
 class Writer:
@@ -461,6 +520,81 @@ def read_elem(elem: StorageType) -> RWAble:
         The stored element.
     """
     return Reader(_REGISTRY).read_elem(elem)
+
+
+async def read_elem_async(
+    elem: zarr.Group | zarr.Array | zarr.AsyncGroup | zarr.AsyncArray,
+) -> RWAble:
+    """
+    Read an element from a zarr store asynchronously.
+
+    The asynchronous counterpart of :func:`anndata.io.read_elem` for zarr.
+    Reads of child elements (e.g. the columns of a dataframe,
+    or `data`, `indices`, and `indptr` of a sparse matrix) run concurrently.
+    Gather several calls to also read several elements or stores concurrently.
+    The function sets no limit on the number of store requests in flight,
+    so a remote store needs a limit in the store layer.
+
+    A store’s async resources (e.g. an `s3fs` session) are bound to the event loop
+    that opened the store, so the read runs on that loop:
+
+    - :class:`zarr.Group` and :class:`zarr.Array` are opened through zarr’s own event loop.
+      When awaited from another loop (e.g. in Jupyter), the read is submitted to zarr’s loop.
+    - :class:`zarr.AsyncGroup` and :class:`zarr.AsyncArray` are read on the running loop.
+
+    The result (e.g. a dataframe) is also constructed on that loop’s thread,
+    so the loop runs nothing else meanwhile.
+
+    Read callbacks (see :func:`~anndata.experimental.read_dispatched`) are not supported.
+
+    Parameters
+    ----------
+    elem
+        The stored element.
+
+    Returns
+    -------
+    The element, as returned by :func:`anndata.io.read_elem`.
+
+    Raises
+    ------
+    NotImplementedError
+        If `elem`, or an element inside it, has an encoding that only
+        :func:`anndata.io.read_elem` reads (e.g. an element without encoding metadata,
+        or a dataframe of encoding version 0.1.0).
+
+    Examples
+    --------
+    >>> import asyncio
+    >>> import tempfile
+    >>> import anndata as ad
+    >>> import zarr
+    >>> from scanpy.datasets import pbmc68k_reduced
+    >>> zarr_path = tempfile.gettempdir() + "/pbmc68k_reduced.zarr"
+    >>> pbmc68k_reduced().write_zarr(zarr_path)
+
+    Read the `obs` dataframes of several stores concurrently:
+
+    >>> obs_groups = [zarr.open_group(zarr_path, mode="r")["obs"] for _ in range(3)]
+    >>> async def read_all_obs():
+    ...     return await asyncio.gather(
+    ...         *(ad.experimental.read_elem_async(g) for g in obs_groups)
+    ...     )
+    >>> obs_list = asyncio.run(read_all_obs())
+    >>> [obs.shape for obs in obs_list]
+    [(700, 8), (700, 8), (700, 8)]
+    """
+    reader = AsyncReader(_ASYNC_REGISTRY)
+    if isinstance(elem, zarr.AsyncGroup | zarr.AsyncArray):
+        return await reader.read_elem(elem)
+    if not isinstance(elem, zarr.Group | zarr.Array):
+        msg = f"`read_elem_async` reads zarr groups and arrays, not {type(elem)}."
+        raise TypeError(msg)
+    coro = reader.read_elem(zarr_async_node(elem))
+    loop = zarr_loop()
+    if asyncio.get_running_loop() is loop:
+        return await coro
+    return await asyncio.wrap_future(asyncio.run_coroutine_threadsafe(coro, loop))
 
 
 def read_elem_lazy(

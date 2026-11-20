@@ -197,6 +197,7 @@ Low level methods for reading and writing elements of an {class}`AnnData` object
 .. autosummary::
    :toctree: generated/
 
+   experimental.read_elem_async
    experimental.read_elem_lazy
    experimental.read_lazy
 ```

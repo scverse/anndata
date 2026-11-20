@@ -22,6 +22,7 @@ from anndata.types import SupportsArrayApi, SupportsArrayApiBase
 from .._warnings import warn
 
 if TYPE_CHECKING:
+    import asyncio
     from contextlib import AbstractContextManager
     from typing import Any, Self, TypeAlias, TypeGuard, TypeIs
 
@@ -198,6 +199,27 @@ else:
     XZarrArrayWrapper = type(
         "ZarrArrayWrapper", (), dict(__module__="xarray.backends.zarr")
     )
+
+
+def zarr_async_node(
+    elem: zarr.Group | zarr.Array,
+) -> zarr.AsyncGroup | zarr.AsyncArray:
+    """The async object behind a sync zarr node.
+
+    zarr has no public accessor for a group, and `Array.async_array` only from 3.1.4.
+    """
+    import zarr
+
+    if isinstance(elem, zarr.Group):
+        return elem._async_group
+    return elem.async_array if hasattr(elem, "async_array") else elem._async_array
+
+
+def zarr_loop() -> asyncio.AbstractEventLoop:
+    """The event loop of zarr’s synchronous API, which zarr keeps private."""
+    from zarr.core.sync import _get_loop
+
+    return _get_loop()
 
 
 # https://github.com/scverse/anndata/issues/1749

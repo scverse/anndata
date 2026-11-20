@@ -10,7 +10,7 @@ from functools import partial, wraps
 from importlib.metadata import version
 from itertools import product
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, cast
 
 import h5py
 import numpy as np
@@ -796,7 +796,10 @@ def _to_hdf5_vlen_strings(value: np.ndarray) -> np.ndarray:
 def read_recarray(
     d: _ArrayStorageType, *, _reader: Reader
 ) -> np.recarray | npt.NDArray:
-    value = np.asarray(d[()])
+    return _recarray_from_raw(np.asarray(d[()]))
+
+
+def _recarray_from_raw(value: np.ndarray) -> np.recarray | npt.NDArray:
     return _decode_structured_array(
         _from_fixed_length_strings(value), dtype=value.dtype
     )
@@ -1089,13 +1092,17 @@ def write_awkward(
 @_REGISTRY.register_read(h5py.Group, IOSpec("awkward-array", "0.1.0"))
 @_REGISTRY.register_read(zarr.Group, IOSpec("awkward-array", "0.1.0"))
 def read_awkward(elem: _GroupStorageType, *, _reader: Reader) -> AwkArray:
+    container = {k: _reader.read_elem(elem[k]) for k in elem}
+    return _awkward_from_parts(container, elem.attrs)
+
+
+def _awkward_from_parts(
+    container: Mapping[str, Any], attrs: Mapping[str, Any]
+) -> AwkArray:
     from anndata.compat import awkward as ak
 
-    attrs: Mapping[str, Any] = elem.attrs
     form = _read_attr(attrs, "form")
     length = _read_attr(attrs, "length")
-    container = {k: _reader.read_elem(elem[k]) for k in elem}
-
     return ak.from_buffers(form, int(length), container)
 
 
@@ -1164,14 +1171,26 @@ def write_dataframe(
 @_REGISTRY.register_read(h5py.Group, IOSpec("dataframe", "0.2.0"))
 @_REGISTRY.register_read(zarr.Group, IOSpec("dataframe", "0.2.0"))
 def read_dataframe(elem: _GroupStorageType, *, _reader: Reader) -> pd.DataFrame:
-    attrs: Mapping[str, Any] = elem.attrs
-    columns = list(_read_attr(attrs, "column-order"))
-    idx_key = _read_attr(attrs, "_index")
-    df = pd.DataFrame(
+    columns, idx_key = _dataframe_keys(elem.attrs)
+    return _dataframe_from_parts(
         {k: _reader.read_elem(elem[k]) for k in columns},
-        index=_reader.read_elem(elem[idx_key]),
-        columns=columns if columns else None,
+        _reader.read_elem(elem[idx_key]),
+        columns,
+        idx_key,
     )
+
+
+def _dataframe_keys(attrs: Mapping[str, Any]) -> tuple[list[str], str]:
+    return list(_read_attr(attrs, "column-order")), _read_attr(attrs, "_index")
+
+
+def _dataframe_from_parts(
+    data: Mapping[str, Any],
+    index: pd.Index | np.ndarray | pd.api.extensions.ExtensionArray,
+    columns: list[str],
+    idx_key: str,
+) -> pd.DataFrame:
+    df = pd.DataFrame(data, index=index, columns=columns if columns else None)
     if idx_key != "_index":
         df.index.name = idx_key
     return df
@@ -1278,10 +1297,21 @@ def write_categorical(
 @_REGISTRY.register_read(h5py.Group, IOSpec("categorical", "0.2.0"))
 @_REGISTRY.register_read(zarr.Group, IOSpec("categorical", "0.2.0"))
 def read_categorical(elem: _GroupStorageType, *, _reader: Reader) -> pd.Categorical:
+    return _categorical_from_parts(
+        _reader.read_elem(elem["codes"]),
+        _reader.read_elem(elem["categories"]),
+        elem.attrs,
+    )
+
+
+def _categorical_from_parts(
+    codes: np.ndarray, categories: np.ndarray, attrs: Mapping[str, Any]
+) -> pd.Categorical:
+    # pandas’ stubs describe fewer array types than `from_codes` accepts
     return pd.Categorical.from_codes(
-        codes=_reader.read_elem(elem["codes"]),
-        categories=_reader.read_elem(elem["categories"]),
-        ordered=bool(_read_attr(elem.attrs, "ordered")),
+        codes=cast("Any", codes),
+        categories=cast("Any", categories),
+        ordered=bool(_read_attr(attrs, "ordered")),
     )
 
 
@@ -1387,10 +1417,15 @@ class _BaseMaskedArray(Protocol):
 def _read_nullable(
     elem: _GroupStorageType, *, _reader: Reader, array_type: _BaseMaskedArray
 ) -> pd.api.extensions.ExtensionArray:
-    return array_type(
-        _reader.read_elem(elem["values"]),
-        mask=_reader.read_elem(elem["mask"]),
+    return _nullable_from_parts(
+        _reader.read_elem(elem["values"]), _reader.read_elem(elem["mask"]), array_type
     )
+
+
+def _nullable_from_parts(
+    values: np.ndarray, mask: np.ndarray, array_type: _BaseMaskedArray
+) -> pd.api.extensions.ExtensionArray:
+    return array_type(values, mask=mask)
 
 
 _REGISTRY.register_read(h5py.Group, IOSpec("nullable-integer", "0.1.0"))(
@@ -1415,9 +1450,15 @@ def _read_nullable_string(
 ) -> pd.api.extensions.ExtensionArray:
     values = _reader.read_elem(elem["values"])
     mask = _reader.read_elem(elem["mask"])
+    return _nullable_string_from_parts(values, mask, elem.attrs)
+
+
+def _nullable_string_from_parts(
+    values: np.ndarray, mask: np.ndarray, attrs: Mapping[str, Any]
+) -> pd.api.extensions.ExtensionArray:
     dtype = pd.StringDtype(
         na_value=np.nan
-        if _read_attr(elem.attrs, "na-value", default="NA") == "NaN"
+        if _read_attr(attrs, "na-value", default="NA") == "NaN"
         else pd.NA
     )
 
@@ -1609,11 +1650,17 @@ del store_type, acc_type
 def read_accessor(
     elem: _ArrayStorageType, *, _reader: Reader
 ) -> acc.AdRef | acc.LayerAcc | acc.MultiAcc | acc.GraphAcc:
+    read = read_hdf5_string if isinstance(elem, h5py.Dataset) else read_zarr_string
+    return _accessor_from_json(read(elem, _reader=_reader), elem.attrs)
+
+
+def _accessor_from_json(
+    text: str, attrs: Mapping[str, Any]
+) -> acc.AdRef | acc.LayerAcc | acc.MultiAcc | acc.GraphAcc:
     from anndata.acc._entry_points import load_acc
 
-    read = read_hdf5_string if isinstance(elem, h5py.Dataset) else read_zarr_string
-    adacc = load_acc(str(_read_attr(elem.attrs, "accessor-project")))
-    return adacc.from_json(json.loads(read(elem, _reader=_reader)))
+    adacc = load_acc(str(_read_attr(attrs, "accessor-project")))
+    return adacc.from_json(json.loads(text))
 
 
 # @_REGISTRY.register_write(np.bytes_, IOSpec("bytes", "0.2.0"))
