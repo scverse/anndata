@@ -1613,11 +1613,7 @@ class AnnData:  # noqa: PLW1641
         from anndata._io.specs.registry import _REGISTRY
         from anndata.acc import AdRef, RefAcc
 
-        writeable_elems = {
-            src_type
-            for (dest_type, src_type, __) in _REGISTRY.write
-            if store_type is None or store_type in dest_type.__module__
-        }
+        writeable_elems = _REGISTRY.writeable_types(compat, store_type)
 
         def predicate(  # noqa: PLR0911
             elem: RWAble | Raw,
@@ -1665,8 +1661,10 @@ class AnnData:  # noqa: PLW1641
                     predicate(v, accumulate=accumulate) for v in elem.values()
                 )
             if isinstance(elem, AdRef | RefAcc):
-                # writeable, but only with the `accessor` flag and a known project
-                if accumulate or not compat.accessor:
+                # subclasses use their base’s writer, which needs a known project
+                if accumulate or not any(
+                    isinstance(elem, t) for t in (AdRef, RefAcc) if t in writeable_elems
+                ):
                     return True
                 from anndata.acc._entry_points import to_json
 
