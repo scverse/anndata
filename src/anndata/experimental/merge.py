@@ -315,7 +315,7 @@ def _write_concat_mappings(  # noqa: PLR0913, PLR0917
         "encoding-version": layout.encoding_version if layout else "0.1.0",
     })
     if layout:
-        write_elem(mapping_group, layout.names_key, np.array(list(keys), dtype=object))
+        layout.write_names(mapping_group, list(keys))
     for i, k in enumerate(keys):
         elems = [m[k] for m in mappings]
         _write_concat_sequence(
