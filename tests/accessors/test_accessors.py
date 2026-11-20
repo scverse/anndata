@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import importlib.resources
 import json
+import re
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING
 
@@ -177,7 +178,9 @@ def test_from_json_vec_mismatch(
 
 @pytest.mark.parametrize("acc", [A.obs, A.uns["n"].AD.var], ids=str)
 def test_to_json_unsupported(acc: MetaAcc) -> None:
-    with pytest.raises(TypeError, match=r"Unsupported accessor A\.(obs|var)"):
+    with pytest.raises(
+        TypeError, match=rf"Unsupported accessor {re.escape(repr(acc))}$"
+    ):
         A.to_json(acc)
 
 

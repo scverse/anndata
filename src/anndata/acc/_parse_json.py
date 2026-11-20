@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import TYPE_CHECKING, cast
 
 from . import AdRef, DFAcc, GraphAcc, ItemAcc, LayerAcc, MetaAcc, MultiAcc
@@ -93,34 +92,26 @@ def _idx_2d_ser(idx: Idx2D) -> tuple[str | None, str | None]:
     return (i if isinstance(i, str) else None, j if isinstance(j, str) else None)
 
 
-def _unscoped[A: RefAcc](acc: A) -> A:
-    """Get `acc` as if it were relative to the `.AD` cast it’s in."""
-    if isinstance(acc, DFAcc) and acc.frame_acc is not None:
-        return replace(acc, scope=None, frame_acc=_unscoped(acc.frame_acc))
-    return replace(acc, scope=None)
+def to_json(ref: AdRef | RefAcc) -> list[str | int | AccJson | None]:
+    local = _local_json(ref)
+    scope = (ref.acc if isinstance(ref, AdRef) else ref).scope
+    while scope is not None:  # wrap from the innermost `.AD` outwards
+        local = [*_local_json(scope), ["AD", local]]
+        scope = scope.scope
+    return local
 
 
-def to_json(ref: AdRef | RefAcc) -> list[str | int | AccJson | None]:  # noqa: PLR0911
-    acc = ref.acc if isinstance(ref, AdRef) else ref
-    if (scope := acc.scope) is not None:
-        local = to_json(
-            type(ref)(_unscoped(ref.acc), ref.idx)
-            if isinstance(ref, AdRef)
-            else _unscoped(ref)
-        )
-        while scope is not None:  # wrap from the innermost `.AD` outwards
-            local = [*to_json(_unscoped(scope)), ["AD", local]]
-            scope = scope.scope
-        return local
+def _local_json(ref: AdRef | RefAcc) -> list[str | int | AccJson | None]:  # noqa: PLR0911
+    """Serialize `ref` relative to the `.AD` cast it’s in, ignoring its scope."""
     match ref:
         case AdRef(LayerAcc() | GraphAcc() as acc, idx):
-            return [*to_json(acc), *_idx_2d_ser(idx)]
+            return [*_local_json(acc), *_idx_2d_ser(idx)]
         case AdRef(MetaAcc(dim), idx):
             return [dim, idx]
         case AdRef(DFAcc(frame_acc=MultiAcc() | ItemAcc() as frame), col):
-            return [*to_json(frame), ["DF", col]]
+            return [*_local_json(frame), ["DF", col]]
         case AdRef(MultiAcc() as acc, i):
-            return [*to_json(acc), i]
+            return [*_local_json(acc), i]
         case LayerAcc(k):
             return ["layers", k]
         case MultiAcc(dim, k):
@@ -128,7 +119,7 @@ def to_json(ref: AdRef | RefAcc) -> list[str | int | AccJson | None]:  # noqa: P
         case GraphAcc(dim, k):
             return [f"{dim}p", k]
         case DFAcc(frame_acc=MultiAcc() | ItemAcc() as frame):
-            return [*to_json(frame), ["DF"]]
+            return [*_local_json(frame), ["DF"]]
         case ItemAcc(path=path):
             return ["uns", list(path)]
         case _:
