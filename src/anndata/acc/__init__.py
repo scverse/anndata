@@ -63,6 +63,10 @@ type Idx2DList = (
 )
 type IdxMultiList = list[int] | pd.Index[int] | tuple[slice, list[int] | pd.Index[int]]
 
+type MultiIdx = int | slice | tuple[slice | int, ...]
+"""Index into a multi-dimensional annotation (`obsm`/`varm`): a single column, a column slice,
+or a chain of column slices/indices (see :meth:`AdRef.__getitem__`), e.g. `[:, :30][:, 0]`."""
+
 type Array = InMemoryArray | pd.api.extensions.ExtensionArray | XVariable
 
 type DataFrameLike = pd.DataFrame | Dataset2D
@@ -163,6 +167,19 @@ class AdRef[I: Hashable, D: MuData | AnnData]:
     def __repr__(self) -> str:
         return self.__repr
 
+    def __getitem__(self, idx: Any, /) -> Self | list[Self]:  # noqa: ANN401
+        """Chain another index onto this reference, e.g. `A.obsm["pca"][:, :30][:, 0]`.
+
+        Whether chaining is supported depends on the accessor (see :meth:`RefAcc.chain`).
+
+        Examples
+        --------
+        >>> from anndata.acc import A
+        >>> A.obsm["pca"][:, :30][:, 0]
+        A.obsm['pca'][:, :30][:, 0]
+        """
+        return self.acc.chain(self.idx, idx)
+
 
 class MapAcc[R: RefAcc](abc.ABC):
     r"""Accessor for mapping containers."""
@@ -249,6 +266,15 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData](abc.ABC):
         """
         msg = f"{type(self).__name__} does not support setting values."
         raise NotImplementedError(msg)
+
+    def chain(self, idx: I, new_idx: Any, /) -> R | list[R]:  # noqa: ANN401
+        """Chain another index onto an existing reference index.
+
+        Used to implement :meth:`AdRef.__getitem__`, e.g. `A.obsm["pca"][:, :30][:, 0]`.
+        Subclasses that support it override this; the default raises :class:`TypeError`.
+        """
+        msg = f"{type(self).__name__} does not support chained indexing."
+        raise TypeError(msg)
 
     def _maybe_flatten(
         self, idx: I, a: AlignedArray | pd.api.extensions.ExtensionArray
@@ -481,7 +507,9 @@ class MetaAcc[R: AdRef[str | None, MuData | AnnData]](
 
 
 @dataclass(frozen=True)
-class MultiAcc[R: AdRef[int, MuData | AnnData]](RefAcc[R, int, MuData | AnnData]):
+class MultiAcc[R: AdRef[MultiIdx, MuData | AnnData]](
+    RefAcc[R, MultiIdx, MuData | AnnData]
+):
     r"""Reference accessor for arrays from multi-dimensional containers (`A.`\ :attr:`~AdAcc.obsm`/`A.`\ :attr:`~AdAcc.varm`).
 
     Examples
@@ -490,6 +518,10 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](RefAcc[R, int, MuData | AnnData]
     >>> assert isinstance(A.obsm["pca"], MultiAcc)
     >>> A.obsm["pca"][:, 0]
     A.obsm['pca'][:, 0]
+    >>> A.obsm["pca"][:, :30]
+    A.obsm['pca'][:, :30]
+    >>> A.obsm["pca"][:, :30][:, 0]
+    A.obsm['pca'][:, :30][:, 0]
 
     Note that something like this is invalid,
     as it references an array that isn’t aligned to an anndata dimension.
@@ -507,70 +539,130 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](RefAcc[R, int, MuData | AnnData]
     """Key this accessor refers to, e.g. `A.varm['x'].k == 'x'`."""
 
     @staticmethod
-    def process_idx(i: object, /) -> int:
+    def process_idx(i: object, /) -> MultiIdx:
         # bool is an int subclass, but boolean indexing isn’t supported
-        if not isinstance(i := _drop_multi_slice(i), int) or isinstance(i, bool):
+        if isinstance(i := _drop_multi_slice(i), bool) or not isinstance(
+            i, int | slice
+        ):
             msg = f"Unsupported index {i!r}"
             raise TypeError(msg)
         return i
 
     @overload
-    def __getitem__(self, i: int | tuple[slice, int], /) -> R: ...
+    def __getitem__(self, i: int | slice | tuple[slice, int | slice], /) -> R: ...
     @overload
     def __getitem__(self, i: IdxMultiList, /) -> list[R]: ...
-    def __getitem__(self, i: int | tuple[slice, int] | IdxMultiList, /) -> R | list[R]:
+    def __getitem__(
+        self, i: int | slice | tuple[slice, int | slice] | IdxMultiList, /
+    ) -> R | list[R]:
         # TODO: add docstring once sphinx-autodoc-typehints can render `pd.Index[int]` in `IdxMultiList`
         if _is_t_list(idx := _drop_multi_slice(i), int):
             return [self[j] for j in idx]
         return super().__getitem__(idx)
 
-    def dims(self, i: int, /) -> Axes:
+    def chain(self, idx: MultiIdx, new_idx: Any, /) -> R | list[R]:  # noqa: ANN401
+        """Chain another column index onto a column slice, e.g. `[:, :30][:, 0]`."""
+        if isinstance(idx, tuple):
+            ops = idx
+        elif isinstance(idx, slice):
+            ops = (idx,)
+        else:
+            msg = (
+                f"Cannot index {self.idx_repr(idx)} further: "
+                "only a column slice can be indexed again."
+            )
+            raise TypeError(msg)
+        if isinstance(ops[-1], int):
+            msg = (
+                f"Cannot index {self.idx_repr(idx)} further: "
+                "it already selects a single column."
+            )
+            raise TypeError(msg)
+        op = _drop_multi_slice(new_idx)
+        if _is_t_list(op, int):
+            return [self.chain(idx, j) for j in op]
+        if isinstance(op, bool) or not isinstance(op, int | slice):
+            msg = f"Unsupported index {op!r}"
+            raise TypeError(msg)
+        return self.ref_class(self, (*ops, op))
+
+    def dims(self, i: MultiIdx, /) -> Axes:
         return {self.dim}
 
     def __repr__(self) -> str:
         return f"A.{self.dim}m[{self.k!r}]"
 
-    def idx_repr(self, i: int) -> str:
-        return f"[:, {i!r}]"
+    def idx_repr(self, i: MultiIdx) -> str:
+        def fmt(op: int | slice, /) -> str:
+            return repr(op) if isinstance(op, int) else _fmt_slice(op)
 
-    def isin(self, data: MuData | AnnData, idx: int | None = None) -> bool:
+        if isinstance(i, tuple):
+            return "".join(f"[:, {fmt(op)}]" for op in i)
+        return f"[:, {fmt(i)}]"
+
+    def isin(self, data: MuData | AnnData, idx: MultiIdx | None = None) -> bool:
         m: AxisArrays = getattr(data, f"{self.dim}m")
         if (arr := m.get(self.k)) is None:
             return False
-        n_cols = known_dim(arr.shape[1])
-        return idx is None or -n_cols <= idx < n_cols
+        return idx is None or (
+            _resolve_multi_idx(idx, known_dim(arr.shape[1])) is not None
+        )
 
     @overload
     def get(self, data: MuData | AnnData, /) -> AlignedArray: ...
     @overload
-    def get(self, data: MuData | AnnData, i: int, /) -> InMemoryArray: ...
-    def get(self, data: MuData | AnnData, i: int | NO_IDX = NO_IDX, /) -> AlignedArray:
+    def get(self, data: MuData | AnnData, i: MultiIdx, /) -> InMemoryArray: ...
+    def get(
+        self, data: MuData | AnnData, i: MultiIdx | NO_IDX = NO_IDX, /
+    ) -> AlignedArray:
         full: AlignedArray = getattr(data, f"{self.dim}m")[self.k]
         if i is NO_IDX:
             return full
         n_cols = known_dim(full.shape[1])
-        if not -n_cols <= i < n_cols:
-            msg = (
-                f"Column index `{i}` is out of range for {self} with {n_cols} columns."
-            )
+        if isinstance(i, int):
+            if not -n_cols <= i < n_cols:
+                msg = f"Column index `{i}` is out of range for {self} with {n_cols} columns."
+                raise IndexError(msg)
+            cols = i + n_cols * (i < 0)
+        elif (cols := _resolve_multi_idx(i, n_cols)) is None:
+            msg = f"Column index `{self.idx_repr(i)}` is out of range for {self} with {n_cols} columns."
             raise IndexError(msg)
-        i += n_cols * (i < 0)
-        if isinstance(full, pd.DataFrame):
-            return full.iloc[:, i].array
-        if isinstance(full, Dataset2D):
-            return full[full.columns[i]].variable
-        # TODO: remove slicing when dropping scipy <1.14
-        return self._maybe_flatten(i, full[:, i : i + 1])
+        if isinstance(cols, int):
+            if isinstance(full, pd.DataFrame):
+                result = full.iloc[:, cols].array
+            elif isinstance(full, Dataset2D):
+                result = full[full.columns[cols]].variable
+            else:
+                # TODO: remove slicing when dropping scipy <1.14
+                result = self._maybe_flatten(cols, full[:, cols : cols + 1])
+        elif isinstance(full, pd.DataFrame):
+            result = full.iloc[:, cols]
+        elif isinstance(full, Dataset2D):
+            result = full[full.columns[cols]]
+        else:
+            if not _is_in_memory(full):
+                msg = f"Cannot get {self.idx_repr(i)} from {type(full).__name__}, load it into memory first."
+                raise TypeError(msg)
+            result = full[:, cols]
+        return result
 
-    def set(self, data: MuData | AnnData, i: int | NO_IDX, value: object, /) -> None:
+    def set(
+        self, data: MuData | AnnData, i: MultiIdx | NO_IDX, value: object, /
+    ) -> None:
         if i is NO_IDX:
             getattr(data, f"{self.dim}m")[self.k] = value
             return
         full = _check_settable(self.get(data))
-        if not -full.shape[1] <= i < full.shape[1]:
-            msg = f"Column index `{i}` is out of range for {self} with {full.shape[1]} columns."
+        if isinstance(i, int):
+            if not -full.shape[1] <= i < full.shape[1]:
+                msg = f"Column index `{i}` is out of range for {self} with {full.shape[1]} columns."
+                raise IndexError(msg)
+            full[:, i] = value
+            return
+        if (cols := _resolve_multi_idx(i, full.shape[1])) is None:
+            msg = f"Column index `{self.idx_repr(i)}` is out of range for {self} with {full.shape[1]} columns."
             raise IndexError(msg)
-        full[:, i] = value
+        full[:, cols] = value
 
 
 @dataclass(frozen=True)
@@ -1008,6 +1100,39 @@ def _drop_multi_slice(i: object, /) -> object:
         msg = f"Unsupported slice {i!r}"
         raise ValueError(msg)
     return i[1]
+
+
+def _fmt_slice(s: slice, /) -> str:
+    """Format a slice as it would appear in code, e.g. `:30`, `5:` or `::2`."""
+
+    def fmt(v: int | None, /) -> str:
+        return "" if v is None else repr(v)
+
+    out = f"{fmt(s.start)}:{fmt(s.stop)}"
+    return out if s.step is None else f"{out}:{fmt(s.step)}"
+
+
+def _resolve_multi_idx(idx: MultiIdx, n_cols: int, /) -> int | slice | None:
+    """Resolve a multi-dimensional index to a single column index or slice.
+
+    Returns `None` if the index is out of range or selects no columns.
+    Chained indices are applied left to right, e.g. `[:, :30][:, 0]` resolves to `0`.
+    """
+    cols: int | range = range(n_cols)
+    for op in idx if isinstance(idx, tuple) else (idx,):
+        try:
+            cols = cols[op]
+        except (IndexError, ValueError):
+            return None
+    if isinstance(cols, int):
+        return cols
+    if len(cols) == 0:
+        return None
+    # A negative-step range ends at `stop == -1` (meaning “down to 0”),
+    # which a slice would read as `n - 1`; use `None` instead so the
+    # round-trip stays faithful, e.g. `range(2)[::-1]` → `slice(1, None, -1)`.
+    stop = None if cols.step < 0 and cols.stop == -1 else cols.stop
+    return slice(cols.start, stop, cols.step)
 
 
 def _is_idx2d_list(idx: Idx2D | Idx2DList) -> TypeGuard[Idx2DList]:

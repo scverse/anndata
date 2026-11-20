@@ -69,6 +69,20 @@ DF_PATHS: list[tuple[AdRef, Callable[[AnnData], object]]] = [
     (A.varm["df"][:, -1], lambda ad: _varm_df(ad)["b"]),
 ]
 
+# Slicing a multi-dimensional annotation (#2740): `A.obsm["umap"][:, :30]`
+# selects columns, and the result can be indexed again (`[:, :30][:, 0]`).
+MULTI_SLICE_PATHS: list[tuple[AdRef, Callable[[AnnData], object]]] = [
+    (A.obsm["umap"][:, :1], lambda ad: asarray(ad.obsm["umap"])[:, :1]),
+    (A.obsm["umap"][:, 1:], lambda ad: asarray(ad.obsm["umap"])[:, 1:]),
+    (A.obsm["umap"][:, :], lambda ad: asarray(ad.obsm["umap"])[:, :]),
+    (A.obsm["umap"][:, ::-1], lambda ad: asarray(ad.obsm["umap"])[:, ::-1]),
+    (A.obsm["umap"][:, :1][:, 0], lambda ad: asarray(ad.obsm["umap"])[:, 0]),
+    (A.obsm["umap"][:, ::-1][:, 0], lambda ad: asarray(ad.obsm["umap"])[:, -1]),
+    (A.obsm["umap"][:, 1:][:, 0], lambda ad: asarray(ad.obsm["umap"])[:, 1]),
+    (A.obsm["umap"][:, :][:, -1], lambda ad: asarray(ad.obsm["umap"])[:, -1]),
+    (A.obsm["umap"][:, :2][:, 0:1], lambda ad: asarray(ad.obsm["umap"])[:, 0:1]),
+]
+
 
 def _varm_df(adata: AnnData) -> pd.DataFrame | Dataset2D:
     df = adata.varm["df"]
@@ -239,6 +253,82 @@ def test_get_multi_out_of_range(
 
 
 @pytest.mark.parametrize(
+    ("ad_ref", "ad_expected"),
+    MULTI_SLICE_PATHS,
+    ids=[str(p[0]) for p in MULTI_SLICE_PATHS],
+)
+def test_get_multi_slice_values(
+    adata: AnnData,
+    ad_ref: AdRef,
+    ad_expected: Callable[[AnnData], object],
+) -> None:
+    """Slicing columns of `obsm`/`varm` (#2740), including chained indexing."""
+    vals = adata[ad_ref]
+    np.testing.assert_array_equal(asarray(vals), ad_expected(adata), strict=True)
+
+
+@pytest.mark.parametrize(
+    ("ad_ref", "ad_expected"),
+    MULTI_SLICE_PATHS,
+    ids=[str(p[0]) for p in MULTI_SLICE_PATHS],
+)
+def test_get_multi_slice_sparse(
+    adata: AnnData,
+    ad_ref: AdRef,
+    ad_expected: Callable[[AnnData], object],
+) -> None:
+    """Slicing columns of a sparse `obsm` matrix (#2740)."""
+    adata.obsm["umap"] = sp.csr_array(adata.obsm["umap"])
+    vals = adata[ad_ref]
+    expected = ad_expected(adata)
+    assert isinstance(expected, np.ndarray)
+    if expected.ndim == 2:
+        assert isinstance(vals, sp.csr_array)
+    else:
+        assert isinstance(vals, np.ndarray)
+    np.testing.assert_array_equal(asarray(vals), expected, strict=True)
+
+
+def test_get_multi_slice_df(adata: AnnData) -> None:
+    """Slicing columns of a dataframe `varm` entry (#2740)."""
+    df = _varm_df(adata)
+    assert isinstance(df, pd.DataFrame)
+    vals = adata[A.varm["df"][:, 1:]]
+    assert isinstance(vals, pd.DataFrame)
+    pd.testing.assert_frame_equal(vals, df.iloc[:, 1:])
+    vals = adata[A.varm["df"][:, :][:, -1]]
+    np.testing.assert_array_equal(np.asarray(vals), df["b"].to_numpy(), strict=True)
+
+
+@pytest.mark.skipif(not find_spec("xarray"), reason="xarray not installed.")
+def test_get_multi_slice_xarray(adata: AnnData) -> None:
+    """Slicing columns of an xarray-backed `varm` entry (#2740)."""
+    convert_dataframes(adata, XDataset.from_dataframe)
+    df = _varm_df(adata).to_memory()
+    vals = adata[A.varm["df"][:, 1:]]
+    assert isinstance(vals, Dataset2D)
+    assert vals.shape == (adata.n_vars, 1)
+    pd.testing.assert_frame_equal(vals.to_memory(), df.iloc[:, 1:])
+
+
+@pytest.mark.parametrize(
+    "ad_ref",
+    [
+        A.obsm["umap"][:, 2:],
+        A.obsm["umap"][:, 5:3],
+        A.obsm["umap"][:, :2][:, 2],
+        A.obsm["umap"][:, :2][:, -3],
+    ],
+    ids=str,
+)
+def test_get_multi_slice_out_of_range(adata: AnnData, ad_ref: AdRef) -> None:
+    """Out-of-range column slices raise instead of yielding an empty array."""
+    assert ad_ref not in adata
+    with pytest.raises(IndexError, match="out of range"):
+        adata[ad_ref]
+
+
+@pytest.mark.parametrize(
     "ad_ref",
     [
         A.X[:, "gene-3"],
@@ -318,3 +408,33 @@ def test_subclass_without_set_warns() -> None:
 def test_set_multi_out_of_range(adata: AnnData) -> None:
     with pytest.raises(IndexError, match=r"out of range"):
         adata[A.obsm["umap"][2]] = np.zeros(adata.n_obs)
+
+
+@pytest.mark.parametrize("view", [False, True], ids=["actual", "view"])
+def test_set_multi_slice_values(adata: AnnData, *, view: bool) -> None:
+    """Assigning into column slices of `obsm` (#2740), including chained indexing."""
+    if view:
+        adata = adata[:, :]
+    value = np.arange(adata.n_obs * 2, dtype=np.float32).reshape(adata.n_obs, 2)
+    adata[A.obsm["umap"][:, :]] = value
+    assert not adata.is_view
+    np.testing.assert_array_equal(asarray(adata[A.obsm["umap"][:, :]]), value)
+    adata[A.obsm["umap"][:, :][:, 1]] = np.full(adata.n_obs, 7, dtype=np.float32)
+    np.testing.assert_array_equal(
+        asarray(adata[A.obsm["umap"][1]]),
+        np.full(adata.n_obs, 7, dtype=np.float32),
+    )
+
+
+def test_set_multi_slice_sparse(adata: AnnData) -> None:
+    """Assigning into column slices of a sparse `obsm` matrix (#2740)."""
+    adata.obsm["umap"] = sp.csr_array(adata.obsm["umap"])
+    adata[A.obsm["umap"][:, :]] = np.zeros((adata.n_obs, 2))
+    np.testing.assert_array_equal(
+        adata.obsm["umap"].toarray(), np.zeros((adata.n_obs, 2))
+    )
+
+
+def test_set_multi_slice_out_of_range(adata: AnnData) -> None:
+    with pytest.raises(IndexError, match=r"out of range"):
+        adata[A.obsm["umap"][:, 2:]] = np.zeros((adata.n_obs, 1))

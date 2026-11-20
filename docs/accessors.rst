@@ -33,6 +33,13 @@ For these purposes, they are
     >>> A.varm["PCs"][:, 30] in adata
     True
 
+    or to select the first 30 principal components:
+
+    >>> A.obsm["X_pca"][:, :30]  # reference to `adata.obsm["X_pca"][:, :30]`
+    A.obsm['X_pca'][:, :30]
+    >>> A.obsm["X_pca"][:, :30][:, 0]  # chained: first PC of the first 30
+    A.obsm['X_pca'][:, :30][:, 0]
+
     or to extract the referenced vector:
 
     >>> adata[A.obs["louvain"]].categories[:2]  # doctest: +ELLIPSIS

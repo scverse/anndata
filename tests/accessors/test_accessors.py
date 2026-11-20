@@ -158,6 +158,39 @@ def test_to_json_unsupported() -> None:
 
 
 @pytest.mark.parametrize(
+    "ad_ref",
+    [A.obsm["umap"][:, :1], A.obsm["umap"][:, :1][:, 0]],  # #2740
+    ids=str,
+)
+def test_to_json_slice_unsupported(ad_ref: AdRef) -> None:
+    """Column slices can’t be represented in the v1 JSON schema."""
+    with pytest.raises(TypeError, match=r"Unsupported accessor"):
+        A.to_json(ad_ref)
+
+
+@pytest.mark.parametrize(
+    "ad_ref",
+    [
+        A.obsm["umap"][:, :1],  # #2740
+        A.obsm["umap"][:, 1:],  # #2740
+        A.obsm["umap"][:, ::-1],  # #2740
+        A.obsm["umap"][:, :1][:, 0],  # #2740
+        A.obsm["umap"][:, ::-1][:, 0],  # #2740
+        A.varm["PCs"][:, 5:],  # #2740
+    ],
+    ids=str,
+)
+def test_repr_slice(ad_ref: AdRef) -> None:
+    """Column-slice references round-trip through `repr` (#2740)."""
+    from anndata.acc import A  # for eval
+
+    assert repr(ad_ref) == str(ad_ref)
+    assert repr(ad_ref)[:2] == "A."
+    assert eval(repr(ad_ref)) == ad_ref
+    del A
+
+
+@pytest.mark.parametrize(
     ("ad_ref", "dims"),
     [
         pytest.param(A.X[:, :], {"obs", "var"}, id="x"),
@@ -166,6 +199,8 @@ def test_to_json_unsupported() -> None:
         pytest.param(A.layers["y"]["c", :], {"var"}, id="layer-obs"),
         pytest.param(A.var["a"], {"var"}, id="var"),
         pytest.param(A.obsm["c"][:, 0], {"obs"}, id="obsm"),
+        pytest.param(A.obsm["c"][:, :2], {"obs"}, id="obsm-slice"),  # #2740
+        pytest.param(A.obsm["c"][:, :2][:, 0], {"obs"}, id="obsm-slice-chain"),  # #2740
         pytest.param(A.varp["d"][:, :], ("var", "var"), id="varp"),
         pytest.param(A.varp["d"][:, "c2"], {"var"}, id="varp-col"),
     ],
@@ -225,6 +260,9 @@ def test_match(*, obj: object, expected: object) -> None:
         pytest.param(lambda a: a.obsm["a"]["b"], id="obsm-noint"),
         pytest.param(lambda a: a.obsm["a"][True], id="obsm-bool"),
         pytest.param(lambda a: a.obsm["a"][[True, False]], id="obsm-bool-list"),
+        pytest.param(lambda a: a.obsm["a"][:, 0][:, 0], id="obsm-chain-1d"),
+        pytest.param(lambda a: a.obsm["a"][:, :2][:, 0][:, 0], id="obsm-chain-1d-2"),
+        pytest.param(lambda a: a.layers["a"][:, :][:, "g"], id="layer-chain"),
         pytest.param(lambda a: a.varp[0], id="varps-nostr"),
         pytest.param(lambda a: a.varp["x"][0, :], id="varp-nostr-inner"),
         pytest.param(lambda a: a.varp["x"]["a", "b"], id="varp-twostr"),
@@ -307,6 +345,8 @@ def test_special[C](
         A.obsm["umap"],
         A.obsm["umap"][-1],  # negative indices count from the end, as in numpy
         A.obsm["umap"][-2],
+        A.obsm["umap"][:, :1],  # #2740
+        A.obsm["umap"][:, :1][:, 0],  # #2740
         A.varp,
         A.varp["cons"],
     ],
@@ -324,6 +364,7 @@ def test_in(adata: AnnData, ref_or_acc: AdRef | MapAcc) -> None:
         A.layers["b"],
         A.obsm["umap"][:, 3],
         A.obsm["umap"][:, -3],
+        A.obsm["umap"][:, 2:],  # #2740: empty column slice
         A.obsm["b"],
         A.obsp,
         A.varp["cons"]["cell-1", :],  # not a var name
