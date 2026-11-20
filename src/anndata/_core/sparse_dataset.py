@@ -15,7 +15,7 @@ from __future__ import annotations
 from abc import ABC
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from functools import cached_property, singledispatchmethod
+from functools import singledispatchmethod
 from itertools import accumulate, chain, pairwise
 from math import floor
 from pathlib import Path
@@ -121,6 +121,15 @@ def slice_as_int(s: slice, l: int) -> int:
     return out[0]
 
 
+def _memory_format(fmt: Literal["csr", "csc"]) -> type[SparseMatrixType]:
+    """The in-memory type that sparse matrices of format `fmt` are read as."""
+    if is_gpu():
+        return CupyCSRMatrix if fmt == "csr" else CupyCSCMatrix
+    if settings.use_sparse_array_on_read:
+        return ss.csr_array if fmt == "csr" else ss.csc_array
+    return ss.csr_matrix if fmt == "csr" else ss.csc_matrix
+
+
 @dataclass
 class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
     """\
@@ -138,11 +147,7 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
 
     @property
     def memory_format(self) -> type[SparseMatrixType]:
-        if is_gpu():
-            return CupyCSRMatrix if self.format == "csr" else CupyCSCMatrix
-        if settings.use_sparse_array_on_read:
-            return ss.csr_array if self.format == "csr" else ss.csc_array
-        return ss.csr_matrix if self.format == "csr" else ss.csc_matrix
+        return _memory_format(self.format)
 
     def _construct(
         self,
@@ -324,10 +329,13 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
         compressed_vectors = self._get_contiguous_compressed_slice(
             slice(major_index.start, major_index.stop)
         )
-        return self._construct(
-            compressed_vectors,
-            shape=self._gen_maj_min_tuple(major_index_size, self.minor_axis_size),
-        )[self._gen_maj_min_tuple(slice(None), minor_index)]
+        return self._minor_subset(
+            self._construct(
+                compressed_vectors,
+                shape=self._gen_maj_min_tuple(major_index_size, self.minor_axis_size),
+            ),
+            minor_index,
+        )
 
     @_get.register
     def _get_arrayXslice(
@@ -342,9 +350,20 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
         if isinstance(major_index, np.ndarray) and major_index.dtype == bool:
             major_index = np.flatnonzero(major_index)
         out_shape = self._gen_maj_min_tuple(len(major_index), self.minor_axis_size)
-        return self._construct(
-            self.get_compressed_vectors(major_index), shape=out_shape
-        )[self._gen_maj_min_tuple(slice(None), minor_index)]
+        return self._minor_subset(
+            self._construct(self.get_compressed_vectors(major_index), shape=out_shape),
+            minor_index,
+        )
+
+    def _minor_subset(
+        self, mtx: SparseMatrixType, minor_index: slice
+    ) -> SparseMatrixType:
+        """`mtx` subset along the minor axis, without the copy that selecting all of it makes."""
+        if minor_index.step in {None, 1} and (
+            slice_len(minor_index, self.minor_axis_size) == self.minor_axis_size
+        ):
+            return mtx
+        return mtx[self._gen_maj_min_tuple(slice(None), minor_index)]
 
     def subset_by_major_axis_mask(
         self: BackedSparseMatrix, mask: np.ndarray
@@ -390,6 +409,12 @@ def is_sparse_indexing_overridden(
         isinstance(major_indexer, int | np.integer | slice)
         or (isinstance(major_indexer, np.ndarray) and major_indexer.ndim == 1)
     )
+
+
+# Where a `BaseCompressedSparseDataset` caches, in its `__dict__`,
+# its open backing arrays (per name and zarr buffer mode) and its `indptr` values (per buffer mode)
+_ARRAY_CACHE = "_arrays"
+_INDPTR_CACHE = "_indptr_values"
 
 
 class BaseCompressedSparseDataset[GroupT: _GroupStorageType](
@@ -579,36 +604,43 @@ class BaseCompressedSparseDataset[GroupT: _GroupStorageType](
         indices.resize((orig_data_size + sparse_matrix.indices.shape[0],))
         indices[orig_data_size:] = append_indices
 
-        # Clear cached property
-        for attr in ["_indptr", "_indices", "_data"]:
-            if hasattr(self, attr):
-                delattr(self, attr)
+        # Clear cached arrays
+        self.__dict__.pop(_ARRAY_CACHE, None)
+        self.__dict__.pop(_INDPTR_CACHE, None)
 
-    @cached_property
+    def _array(self, key: Literal["data", "indices", "indptr"]) -> _ArrayStorageType:
+        """Open (and cache) a backing array.
+
+        Arrays are cached per zarr buffer mode (host or GPU memory),
+        because the codec pipeline chosen when an array is opened must support the mode it is read in.
+        """
+        cache: dict[tuple[str, bool], _ArrayStorageType]
+        cache = self.__dict__.setdefault(_ARRAY_CACHE, {})
+        if (cache_key := (key, is_gpu())) not in cache:
+            cache[cache_key] = _group_array(self.group, key)
+        return cache[cache_key]
+
+    @property
     def _indptr(self) -> DenseType | _ArrayStorageType:
         """\
-        Other than `data` and `indices`, this is only as long as the major axis
+        Other than `data` and `indices`, this is only as long as the major axis.
 
-        It should therefore fit into memory, so we cache it for faster access.
+        It should therefore fit into memory, so we cache it (per buffer mode) for faster access.
         """
-        indptr = _group_array(self.group, "indptr")
-        if self._should_cache_indptr:
-            return _read_dense(indptr, ...)
-        return indptr
+        if not self._should_cache_indptr:
+            return self._array("indptr")
+        cache: dict[bool, DenseType] = self.__dict__.setdefault(_INDPTR_CACHE, {})
+        if (gpu := is_gpu()) not in cache:
+            cache[gpu] = _read_dense(self._array("indptr"), ...)
+        return cache[gpu]
 
-    @cached_property
+    @property
     def _indices(self) -> _ArrayStorageType:
-        """\
-        Cache access to the indices to prevent unnecessary reads of the zarray
-        """
-        return _group_array(self.group, "indices")
+        return self._array("indices")
 
-    @cached_property
+    @property
     def _data(self) -> _ArrayStorageType:
-        """\
-        Cache access to the data to prevent unnecessary reads of the zarray
-        """
-        return _group_array(self.group, "data")
+        return self._array("data")
 
     def _to_backed(self) -> BackedSparseMatrix:
         mtx = BackedSparseMatrix(
