@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import zarr
+import zarr.storage
 
 import anndata as ad
 from anndata._io.specs.registry import read_elem_partial
@@ -21,6 +22,11 @@ if TYPE_CHECKING:
     from typing import Literal
 
     from zarr.storage import MemoryStore
+
+
+needs_xarray = pytest.mark.skipif(
+    not find_spec("xarray"), reason="xarray not installed"
+)
 
 
 def test_compares_by_features() -> None:
@@ -153,6 +159,7 @@ def test_indexed_layout_on_disk(
             check(f)
 
 
+@needs_xarray
 def test_column_named_index(
     diskfmt_store: Path | MemoryStore, diskfmt: Literal["h5ad", "zarr"]
 ) -> None:
@@ -170,6 +177,7 @@ def test_column_named_index(
     pd.testing.assert_frame_equal(lazy.obs.to_memory(), df)
 
 
+@needs_xarray
 def test_index_named_index(
     diskfmt_store: Path | MemoryStore, diskfmt: Literal["h5ad", "zarr"]
 ) -> None:
@@ -184,6 +192,7 @@ def test_index_named_index(
     assert lazy.obs.to_memory().index.name == "_index"
 
 
+@needs_xarray
 def test_dataframe_without_index() -> None:
     """The convention makes `df:index` optional, so we read a range index then."""
     g = zarr.open_group(zarr.storage.MemoryStore())
@@ -199,11 +208,10 @@ def test_dataframe_without_index() -> None:
     pd.testing.assert_frame_equal(cast("pd.DataFrame", ad.io.read_elem(g)), expected)
     partial = read_elem_partial(g, indices=(slice(1, 3), slice(None)))
     pd.testing.assert_frame_equal(partial, expected.iloc[1:3])
-    if find_spec("xarray"):
-        lazy = cast("Dataset2D", ad.experimental.read_elem_lazy(g))
-        assert list(lazy.columns) == ["a"]
-        np.testing.assert_array_equal(lazy["a"], [1, 2, 3])
-        assert list(lazy.index) == ["0", "1", "2"]
+    lazy = cast("Dataset2D", ad.experimental.read_elem_lazy(g))
+    assert list(lazy.columns) == ["a"]
+    np.testing.assert_array_equal(lazy["a"], [1, 2, 3])
+    assert list(lazy.index) == ["0", "1", "2"]
 
 
 def test_no_indexed_keys_before_0_14(tmp_path: Path) -> None:
@@ -237,10 +245,10 @@ def test_empty_key(
     assert list(getattr(back, attr)) == [""]
 
 
+@needs_xarray
 def test_indexed_keys_read_lazy(
     diskfmt_store: Path | MemoryStore, diskfmt: Literal["h5ad", "zarr"]
 ) -> None:
-    pytest.importorskip("xarray")
     index = pd.Index(["c1", "c2"], name="cell/id")
     obs = pd.DataFrame({"a/b": [1, 2], "c:d": [3, 4]}, index=index)
     adata = ad.AnnData(
