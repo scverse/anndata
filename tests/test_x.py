@@ -68,7 +68,7 @@ def test_setter_view(orig_array_type, new_array_type):
 ###############################
 
 
-def test_set_x_is_none():
+def test_set_x_is_none() -> None:
     # test setter and getter
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]), dict(o1=[1, 2], o2=[3, 4]))
     adata.X = None
@@ -111,7 +111,7 @@ def test_init_x_as_none_shape_from_obs_var(obs, var, shape_expected):
     assert adata.shape == shape_expected
 
 
-def test_init_x_as_none_explicit_shape():
+def test_init_x_as_none_explicit_shape() -> None:
     shape = (3, 5)
     adata = AnnData(None, uns=dict(test=np.array((3, 3))), shape=shape)
     assert adata.X is None
@@ -127,7 +127,7 @@ def test_transpose_with_X_as_none(shape):
     assert_equal(adataT.T, adata)
 
 
-def test_copy():
+def test_copy() -> None:
     adata = AnnData(
         None,
         obs=pd.DataFrame(index=[f"cell{i:03}" for i in range(100)]),
@@ -136,7 +136,7 @@ def test_copy():
     assert_equal(adata.copy(), adata)
 
 
-def test_copy_view():
+def test_copy_view() -> None:
     adata = AnnData(
         None,
         obs=pd.DataFrame(index=[f"cell{i:03}" for i in range(100)]),
@@ -164,7 +164,7 @@ def test_io_missing_X(diskfmt_store, diskfmt):
     assert_equal(from_disk, adata)
 
 
-def test_fail_on_non_csr_csc_matrix():
+def test_fail_on_non_csr_csc_matrix() -> None:
     X = sparse.eye(100, format="coo")
     with pytest.raises(
         ValueError,
@@ -191,8 +191,12 @@ class _ArrayApiNoDLPack:
     def __getitem__(self, k):
         return _ArrayApiNoDLPack(self._arr[k])
 
+    @property
+    def T(self) -> _ArrayApiNoDLPack:
+        return _ArrayApiNoDLPack(self._arr.T)
 
-def test_store_array_api_without_dlpack():
+
+def test_store_array_api_without_dlpack() -> None:
     X = _ArrayApiNoDLPack(np.arange(6.0).reshape(2, 3))
     adata = ad.AnnData(X)
     assert adata.X is X

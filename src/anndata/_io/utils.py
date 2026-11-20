@@ -15,7 +15,7 @@ from .._core.sparse_dataset import BaseCompressedSparseDataset
 from ..utils import warn
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Iterator
+    from collections.abc import Callable, Collection, Iterable, Iterator
     from typing import Any, Literal
 
     import h5py
@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from pandas.core.dtypes.dtypes import BaseMaskedDtype
 
     from .. import AnnData
+    from .._core.raw import Raw
     from .._types import (
         StorageType,
         _ArrayStorageType,
@@ -43,7 +44,7 @@ if TYPE_CHECKING:
 
 
 # Could be numba’d if it returned tuples instead of slices
-def idx_chunks_along_axis(shape: tuple, axis: int, chunk_size: int):
+def idx_chunks_along_axis(shape: tuple[int, ...], axis: int, chunk_size: int):
     """\
     Gives indexer tuples chunked along an axis.
 
@@ -526,14 +527,14 @@ def read_df_index(group: _GroupStorageType) -> pd.Index:
 # -------------------------------------------------------------------------------
 
 
-def _read_legacy_raw(
+def _read_legacy_raw[M: (dict[str, Any], Raw)](
     f: zarr.Group | h5py.Group,
-    modern_raw,  # TODO: type
+    modern_raw: M | None,
     read_df: Callable,
     read_attr: Callable,
     *,
-    attrs=("X", "var", "varm"),
-) -> dict:
+    attrs: Collection[str] = ("X", "var", "varm"),
+) -> M | dict[str, Any]:
     """\
     Backwards compat for reading legacy raw.
     Makes sure that no modern raw group coexists with legacy raw.* groups.

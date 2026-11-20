@@ -6,7 +6,7 @@ if TYPE_CHECKING:
     from types import CapsuleType
     from typing import Any, Self
 
-    from array_api.latest import ArrayNamespace
+    from array_api.latest import Array, ArrayNamespace
 
 
 __all__ = ["SupportsArrayApi", "SupportsArrayApiBase", "WriteCompatStr"]
@@ -23,21 +23,24 @@ class SupportsArrayApiBase(Protocol):
     """
 
     @property
-    def device(self) -> str: ...
+    def device(self) -> object: ...
     @property
     def dtype(self) -> object: ...
     @property
     def ndim(self) -> int: ...
+    # lazy arrays may have unknown dimensions
     @property
-    def shape(self) -> tuple[int, ...]: ...
+    def shape(self) -> tuple[int | None, ...]: ...
     @property
-    def size(self) -> int: ...
+    def size(self) -> int | None: ...
+    @property
+    def T(self) -> Self: ...
 
     def __array_namespace__(
         self,
         *,
         api_version: Literal["2021.12", "2022.12", "2023.12", "2024.12"] | None = None,
-    ) -> ArrayNamespace:
+    ) -> ArrayNamespace[Array[object, object], object, object]:
         """See :meth:`array_api.array.__array_namespace__`."""
 
     # `device` and the index are implementation-defined objects
@@ -70,7 +73,7 @@ class SupportsArrayApi(SupportsArrayApiBase, Protocol):
         """See :meth:`array_api.array.__dlpack_device__`."""
 
 
-def __getattr__(key: str):
+def __getattr__(key: str) -> object:
     match key:
         case "ExtensionNamespace":
             from scverse_misc import ExtensionNamespace

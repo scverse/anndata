@@ -11,13 +11,16 @@ from anndata import AnnData
 from anndata.tests.helpers import gen_vstr_recarray
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from pathlib import Path
     from typing import Literal
 
     from zarr.storage import MemoryStore
 
 
-def assert_str_contents_equal(A, B):
+def assert_str_contents_equal(
+    A: Iterable[Iterable[object]], B: Iterable[Iterable[object]]
+) -> None:
     lA = [
         [str(el) if not isinstance(el, bytes) else el.decode("utf-8") for el in a]
         for a in A

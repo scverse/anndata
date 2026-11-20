@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pytest
 from scipy.sparse import csr_matrix
@@ -9,11 +11,16 @@ import anndata as ad
 from anndata.compat import CSArray, CSMatrix
 from anndata.experimental.multi_files import AnnCollection
 
+if TYPE_CHECKING:
+    from typing import Literal
+
+    from anndata import AnnData
+
 _dense = lambda a: a.toarray() if isinstance(a, CSMatrix | CSArray) else a
 
 
 @pytest.fixture
-def adatas(request):
+def adatas(request: pytest.FixtureRequest) -> tuple[AnnData, AnnData]:
     adata1 = ad.AnnData(X=request.param([[1, 2, 0], [4, 5, 0], [7, 8, 0]]))
     adata1.obs["a_test"] = ["a", "a", "b"]
     adata1.obsm["o_test"] = np.ones((adata1.n_obs, 2))
@@ -26,7 +33,7 @@ def adatas(request):
 
 
 @pytest.mark.parametrize("adatas", [np.array, csr_matrix], indirect=True)
-def test_full_selection(adatas):
+def test_full_selection(adatas: tuple[AnnData, AnnData]) -> None:
     dat = AnnCollection(adatas, index_unique="_")
     adt_concat = ad.concat(adatas, index_unique="_")
 
@@ -35,7 +42,8 @@ def test_full_selection(adatas):
     for adata in (adatas[0], adt_concat):
         adt_view = adata[:2, :2]
         np.testing.assert_allclose(_dense(dat_view.X), _dense(adt_view.X))
-        np.testing.assert_allclose(dat_view.obsm["o_test"], adt_view.obsm["o_test"])
+        assert isinstance(o_test := adt_view.obsm["o_test"], np.ndarray)
+        np.testing.assert_allclose(dat_view.obsm["o_test"], o_test)
         np.testing.assert_array_equal(dat_view.obs["a_test"], adt_view.obs["a_test"])
 
     # sorted and unsorted selection from 2 adatas
@@ -44,7 +52,8 @@ def test_full_selection(adatas):
         dat_view = dat[select, :2]
         adt_view = adt_concat[select, :2]
         np.testing.assert_allclose(_dense(dat_view.X), _dense(adt_view.X))
-        np.testing.assert_allclose(dat_view.obsm["o_test"], adt_view.obsm["o_test"])
+        assert isinstance(o_test := adt_view.obsm["o_test"], np.ndarray)
+        np.testing.assert_allclose(dat_view.obsm["o_test"], o_test)
         np.testing.assert_array_equal(dat_view.obs["a_test"], adt_view.obs["a_test"])
 
     # test duplicate selection
@@ -56,7 +65,7 @@ def test_full_selection(adatas):
 
 
 @pytest.mark.parametrize("adatas", [np.array, csr_matrix], indirect=True)
-def test_creation(adatas):
+def test_creation(adatas: tuple[AnnData, AnnData]) -> None:
     adatas_inner = [adatas[0], adatas[1][:, :2].copy()]
 
     dat = AnnCollection(adatas_inner, join_vars="inner", index_unique="_")
@@ -64,8 +73,31 @@ def test_creation(adatas):
     np.testing.assert_array_equal(dat.var_names, adt_concat.var_names)
 
 
+@pytest.mark.parametrize("axis", [0, 1])
+@pytest.mark.parametrize(
+    ("n", "n_other", "batch_size"),
+    [
+        pytest.param(5, 5, 2, id="short_last_batch"),
+        pytest.param(6, 2, 4, id="other_axis_shorter_than_batch"),
+    ],
+)
+def test_iterate_axis_drop_last(
+    *, axis: Literal[0, 1], n: int, n_other: int, batch_size: int
+) -> None:
+    shape = (n, n_other) if axis == 0 else (n_other, n)
+    dat = AnnCollection([ad.AnnData(np.ones(shape))])
+
+    batches = list(dat.iterate_axis(batch_size, axis=axis, drop_last=True))
+
+    # only the full batches, regardless of the other axis’ length
+    assert [idx for _, idx in batches] == [
+        list(range(i, i + batch_size)) for i in range(0, n - batch_size + 1, batch_size)
+    ]
+    assert all(batch.shape[axis] == batch_size for batch, _ in batches)
+
+
 @pytest.mark.parametrize("adatas", [np.array], indirect=True)
-def test_convert(adatas):
+def test_convert(adatas: tuple[AnnData, AnnData]) -> None:
     dat = AnnCollection(adatas, index_unique="_")
 
     le = LabelEncoder()

@@ -117,7 +117,7 @@ class AnnDataFileManager:
             raise ValueError(msg)
         self._file = h5py.File(self.filename, self._filemode)
 
-    def close(self):
+    def close(self) -> None:
         """Close the backing file, remember filename, do *not* change to memory mode."""
         if self._file is not None:
             self._file.close()
@@ -167,7 +167,7 @@ def _(x: DaskArray, *, copy: bool = False):
 
 
 @to_memory.register(Mapping)
-def _(x: Mapping, *, copy: bool = False):
+def _(x: Mapping[str, object], *, copy: bool = False):
     return {k: to_memory(v, copy=copy) for k, v in x.items()}
 
 

@@ -13,7 +13,7 @@ class BackedHDF5Indexing:
     param_names = ("arr_type",)
     params = ("sparse",)
 
-    def setup_cache(self):
+    def setup_cache(self) -> None:
         X_sparse = sparse.random(
             10000,
             50000,

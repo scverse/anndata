@@ -87,7 +87,7 @@ def test_readwrite(X: np.ndarray | None, backing_h5ad):
     assert (asarray(adata.layers["L"]) == asarray(adata_read.layers["L"])).all()
 
 
-def test_backed():
+def test_backed() -> None:
     # backed mode for layers isn’t implemented, layers stay in memory
     pass
 
@@ -110,7 +110,7 @@ def test_copy_on_disk(tmp_path: Path):
         assert adata.layers.copy()["L"] is ds
 
 
-def test_shape_error():
+def test_shape_error() -> None:
     adata = AnnData(X=X_)
     with pytest.raises(
         ValueError,
@@ -204,7 +204,7 @@ def test_replace_layers_does_not_mutate_input():
     assert None not in new_layers
 
 
-def test_explicit_x_removal_still_works():
+def test_explicit_x_removal_still_works() -> None:
     adata = AnnData(X=X_, layers=dict(L=L.copy()))
     del adata.X
     assert adata.layers.keys() == {"L"}

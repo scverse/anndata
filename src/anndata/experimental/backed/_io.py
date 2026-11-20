@@ -131,7 +131,9 @@ def read_lazy(
             has_keys = False
             f = zarr.open_group(store, mode="r")
 
-    def callback(func: Read, /, elem_name: str, elem: StorageType, *, iospec: IOSpec):
+    def callback(
+        func: Read, /, elem_name: str, elem: StorageType, *, iospec: IOSpec
+    ) -> object:
         if iospec.encoding_type in {"anndata", "raw"} or elem_name.endswith("/"):
             group = _as_group(elem)
             iter_object = (

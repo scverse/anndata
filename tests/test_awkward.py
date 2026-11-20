@@ -98,7 +98,7 @@ def test_set_awkward(field, value, valid):
     """
     adata = gen_adata((10, 20), varm_types=(), obsm_types=(), layers_types=())
 
-    def _assign():
+    def _assign() -> None:
         getattr(adata, field)["test"] = value
 
     if not valid:

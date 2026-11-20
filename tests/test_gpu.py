@@ -15,7 +15,7 @@ from anndata.tests.helpers import assert_equal
 
 
 @pytest.mark.gpu
-def test_gpu():
+def test_gpu() -> None:
     """
     For testing that the gpu mark works
     """
