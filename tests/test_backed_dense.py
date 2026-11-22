@@ -32,7 +32,7 @@ def test_create_delete(
     file: h5py.File | zarr.Group,
     assign: Literal["init", "assign"],
     attr: Literal["X", "obsm", "varm", "layers"],
-):
+) -> None:
     x = np.random.randn(10, 10)
     write_elem(file, "a", x)
 
@@ -73,7 +73,9 @@ def test_create_delete(
 @pytest.mark.parametrize(
     "num_indexing_ops", [1, 2], ids=["single_index", "double_index"]
 )
-def test_assign_x_subset(file: h5py.File | zarr.Group, num_indexing_ops: Literal[1, 2]):
+def test_assign_x_subset(
+    file: h5py.File | zarr.Group, num_indexing_ops: Literal[1, 2]
+) -> None:
     x = np.ones((10, 10))
     write_elem(file, "a", x)
 

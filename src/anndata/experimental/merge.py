@@ -61,7 +61,7 @@ EAGER_TYPES = {"dataframe", "awkward-array"}
 # Wrapper to reindexer that stores if there is a change
 # and won't do anything if there is
 class IdentityReindexer:
-    def __init__(self):
+    def __init__(self) -> None:
         self.no_change = True
 
     def __call__(self, x, *args, **kwargs):

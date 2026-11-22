@@ -15,6 +15,7 @@ from scipy import sparse
 from zarr.errors import GroupNotFoundError
 
 from .._core.anndata import AnnData
+from .._core.sparse_dataset import is_gpu
 from .._warnings import OldFormatWarning
 from .._write_compat import WriteCompat
 from ..compat import _clean_uns, _from_fixed_length_strings
@@ -30,7 +31,6 @@ from .utils import (
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
-    from contextlib import AbstractContextManager
     from typing import Any
 
     from zarr.storage import StoreLike
@@ -47,30 +47,29 @@ from packaging.version import Version
 
 
 @contextmanager
-def fast_zarr_context(*, prefer_zarrs: bool = True):
+def fast_zarr_context():
     # We are going to be "guinea pigs" for this new pipeline because it should be much faster
     # and we're shortchanging our users otherwise.
     # So we change the pipeline if it has not been changed by the user i.e.,
     # it is the old BatchedCodecPipeline.
     # This pipeline fully passes ours, zarr's, and zarr's downstream CI. - Ilan
     old_pipeline = zarr.config.get("codec_pipeline.path")
-    # Keep the pipeline when zarr reads into GPU memory (`zarr.config.enable_gpu()`):
-    # zarrs only reads into host memory (https://github.com/zarrs/zarrs-python/issues/201),
-    # and the fused pipeline fails to read uncompressed shards into GPU memory.
-    if "gpu" in zarr.config.get("ndbuffer", "cpu"):
+    if is_gpu():
+        # zarrs requires host buffers: https://github.com/zarrs/zarrs-python/issues/201
+        # https://github.com/zarr-developers/zarr-python/issues/4654
+        if old_pipeline == "zarr.core.codec_pipeline.FusedCodecPipeline":
+            msg = (
+                "FusedCodecPipeline can fail to read uncompressed shards into GPU "
+                "buffers. Select BatchedCodecPipeline to read those shards."
+            )
+            warn(msg, UserWarning)
         yield
         return
     use_zarr_fused = "Batched" in old_pipeline and Version(version("zarr")) >= Version(
         "3.3"
     )
-    # Switch to zarrs if the old pipeline is just the default.
-    # With `prefer_zarrs=False`, zarrs is only a fallback for when the fused pipeline is unavailable
-    # (zarrs is slower than the fused pipeline for large integer selections, as in sparse subsetting).
-    use_zarrs = (
-        find_spec("zarrs")
-        and "Batched" in old_pipeline
-        and (prefer_zarrs or not use_zarr_fused)
-    )
+    # Switch to zarrs if the old pipeline is just the default
+    use_zarrs = find_spec("zarrs") and "Batched" in old_pipeline
     zarr_context = (
         zarr.config.set({
             "codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline",
@@ -79,7 +78,6 @@ def fast_zarr_context(*, prefer_zarrs: bool = True):
         if use_zarr_fused
         else nullcontext()
     )
-    context: AbstractContextManager[object]
     if use_zarrs:
 
         @contextmanager
@@ -229,7 +227,10 @@ def read_zarr(store: StoreLike | zarr.Group) -> AnnData:
 
         # Backwards compat (should figure out which version)
         if "raw.X" in f:
-            raw = AnnData(**_read_legacy_raw(f, adata.raw, read_dataframe, read_elem))
+            legacy_raw = _read_legacy_raw(f, adata.raw, read_dataframe, read_elem)
+            # a modern `adata.raw` would have raised
+            assert isinstance(legacy_raw, dict)
+            raw = AnnData(**legacy_raw)
             raw.obs_names = adata.obs_names
             adata.raw = raw
 
@@ -267,7 +268,9 @@ def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
         "Consider rewriting it."
     )
     warn(msg, OldFormatWarning)
-    df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
+    value = dataset[()]
+    assert isinstance(value, np.ndarray), "legacy dataframes are structured arrays"
+    df = pd.DataFrame(_from_fixed_length_strings(value))
     return df.set_index(df.columns[0])
 
 

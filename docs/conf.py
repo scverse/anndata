@@ -163,6 +163,9 @@ nitpick_ignore = [  # APIs without an intersphinx entry
     ("py:class", "anndata._core.raw.Raw"),
     ("py:class", "pandas.api.typing.NAType"),
     ("py:class", "anndata.utils.Default"),
+    ("py:class", "anndata.experimental.multi_files._anncollection.LazyAttrData"),
+    # recursive, so sphinx-autodoc-typehints doesn’t expand it
+    ("py:type", "anndata.experimental.multi_files._anncollection.ConvertType"),
     # TODO: remove zappy support; the zappy repo is archived
     ("py:class", "anndata.compat.ZappyArray"),
     #### type variables (in generic bases, PEP 695 ones are rendered as `typing.*`)

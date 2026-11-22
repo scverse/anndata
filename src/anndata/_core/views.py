@@ -25,6 +25,7 @@ from ..compat import (
     ZappyArray,
     has_xp,
     has_xp_base,
+    known_dim,
     pandas_no_chained_assignment_warning,
 )
 from ..utils import warn
@@ -532,7 +533,7 @@ def _resolve_idx_array_api(
 
     # handle slice indexing by converting to array indices
     if isinstance(new, slice):
-        new = xp.arange(*new.indices(old.shape[0]))
+        new = xp.arange(*new.indices(known_dim(old.shape[0])))
     if not has_xp_base(new):  # pragma: no cover
         msg = "New indexer must have array api compatibility"
         raise RuntimeError(msg)
@@ -542,13 +543,13 @@ def _resolve_idx_array_api(
         raise RuntimeError(msg)
     if xp.isdtype(old.dtype, "bool"):
         if xp.isdtype(new.dtype, "bool"):
-            n = old.shape[0]
-            selected = xp.nonzero(old)[0][new]
+            n = known_dim(old.shape[0])
+            selected = xp.nonzero(old)[0][new]  # type: ignore[arg-type, index]  # https://github.com/data-apis/array-api-compat/issues/485
             return xp.any(
                 xp.arange(n)[:, None] == selected[None, :],
                 axis=1,
             )
-        old = xp.nonzero(old)[0]
+        old = xp.nonzero(old)[0]  # type: ignore[arg-type]  # https://github.com/data-apis/array-api-compat/issues/485
     return old[new]
 
 

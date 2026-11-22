@@ -10,6 +10,7 @@ from pandas.api.extensions import ExtensionArray
 from scipy import sparse as sp
 
 from anndata import read_h5ad
+from anndata._core.xarray import Dataset2D
 from anndata.acc import A
 from anndata.compat import (
     CSArray,
@@ -64,8 +65,16 @@ ND_PATHS: list[tuple[AdRef, Callable[[AnnData], object]]] = [
 DF_PATHS: list[tuple[AdRef, Callable[[AnnData], object]]] = [
     (A.obs["type"], lambda ad: ad.obs["type"]),
     (A.obs.index, lambda ad: ad.obs.index),
-    # TODO: copy entries from above that can also hold dataframes?
+    (A.varm["df"][:, 0], lambda ad: _varm_df(ad)["a"]),  # #2722
+    (A.varm["df"][:, -1], lambda ad: _varm_df(ad)["b"]),
 ]
+
+
+def _varm_df(adata: AnnData) -> pd.DataFrame | Dataset2D:
+    df = adata.varm["df"]
+    assert isinstance(df, pd.DataFrame | Dataset2D)
+    return df
+
 
 DASK_TYPES = [
     # TODO: check inner type
@@ -136,10 +145,10 @@ def convert_ndarrays(
 
     for k, v in adata.layers.items():
         adata.layers[k] = conv(v)
-    for k, v in adata.varm.items():
-        adata.varm[k] = conv(v)
-    for k, v in adata.obsm.items():
-        adata.obsm[k] = conv(v)
+    for m in (adata.obsm, adata.varm):
+        for k, v in m.items():
+            if not isinstance(v, pd.DataFrame):
+                m[k] = conv(v)
     for k, v in adata.obsp.items():
         adata.obsp[k] = conv(v)
     for k, v in adata.varp.items():
@@ -153,6 +162,10 @@ def convert_dataframes(
     adata.obs = df_conv(adata.obs)
     assert isinstance(adata.var, pd.DataFrame)
     adata.var = df_conv(adata.var)
+    for m in (adata.obsm, adata.varm):
+        for k, v in m.items():
+            if isinstance(v, pd.DataFrame):
+                m[k] = df_conv(v)
 
 
 def _expected2np(expected: object, ad_ref: AdRef, /) -> np.ndarray:

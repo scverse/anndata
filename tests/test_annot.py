@@ -47,13 +47,16 @@ def test_to_categorical_ordering(dtype):
     pd.testing.assert_series_equal(expected, a.obs["str"])
 
 
-def test_non_str_to_not_categorical():
+def test_non_str_to_not_categorical() -> None:
     # Test case based on https://github.com/scverse/anndata/issues/141#issuecomment-802105259
-    obs = pd.DataFrame(index=[f"cell-{i}" for i in range(5)]).assign(
-        str_with_nan=["foo", "bar", None, np.nan, "foo"],
-        boolean_with_nan_and_none=[True, False, np.nan, None, True],
-        boolean_with_nan=[True, False, np.nan, np.nan, True],
-        boolean_with_none=[True, False, None, None, True],
+    obs = pd.DataFrame(
+        dict(
+            str_with_nan=["foo", "bar", None, np.nan, "foo"],
+            boolean_with_nan_and_none=[True, False, np.nan, None, True],
+            boolean_with_nan=[True, False, np.nan, np.nan, True],
+            boolean_with_none=[True, False, None, None, True],
+        ),
+        index=[f"cell-{i}" for i in range(5)],
     )
     adata = ad.AnnData(obs=obs.copy())
 
@@ -66,13 +69,14 @@ def test_non_str_to_not_categorical():
 
     assert expected_dtypes == result_dtypes
 
+    assert isinstance(adata.obs, pd.DataFrame)
     expected_non_transformed = obs.drop(columns=["str_with_nan"])
     result_non_transformed = adata.obs.drop(columns=["str_with_nan"])
 
     pd.testing.assert_frame_equal(expected_non_transformed, result_non_transformed)
 
 
-def test_error_col_multiindex():
+def test_error_col_multiindex() -> None:
     adata = ad.AnnData(np.random.rand(100, 10))
     df = get_multiindex_columns_df((adata.shape[0], 20))
     with pytest.raises(ValueError, match=r"MultiIndex columns are not supported"):
@@ -158,7 +162,7 @@ def test_arrow_index(restrict_index_types):
         )
 
 
-def test_arrow_index_write():
+def test_arrow_index_write() -> None:
     ad.settings.restrict_index_types = False
     # See: https://github.com/pandas-dev/pandas/issues/64889 for why we can't just use dicts/lists in the arrow extension array
     arr = pa.array(

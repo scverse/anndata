@@ -71,7 +71,7 @@ class BatchIndexSampler(Sampler):
 
 
 # maybe replace use_cuda with explicit device option
-def default_converter(arr: Array, *, use_cuda: bool, pin_memory: bool):
+def default_converter(arr: Array, *, use_cuda: bool, pin_memory: bool) -> Array:
     if isinstance(arr, torch.Tensor):
         if use_cuda:
             arr = arr.cuda()
@@ -159,7 +159,7 @@ class AnnLoader(DataLoader):
         use_default_converter: bool = True,
         use_cuda: bool = False,
         **kwargs,
-    ):
+    ) -> None:
         dataset: AnnCollection | AnnCollectionView
         if isinstance(adatas, AnnData):
             adatas = [adatas]

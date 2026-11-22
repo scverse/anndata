@@ -14,7 +14,6 @@ import pandas as pd
 import pytest
 import zarr
 from packaging.version import Version
-from scipy import sparse
 
 import anndata as ad
 from anndata._io.specs.registry import IORegistryError, to_writeable
@@ -78,7 +77,7 @@ def test_write_error_info(diskfmt, diskfmt_store):
         write(a)
 
 
-def test_clean_uns():
+def test_clean_uns() -> None:
     adata = ad.AnnData(
         uns=dict(species_categories=["a", "b"]),
         obs=pd.DataFrame({"species": [0, 1, 0]}, index=["a", "b", "c"]),
@@ -123,13 +122,13 @@ def test_only_child_key_reported_on_failure(tmp_path, group_fn):
 
 
 @pytest.mark.parametrize("to", [np.array, pd.Series, lambda x: x])
-def test_to_writeable_passthrough(to: Callable[[list], np.ndarray | pd.Series | list]):
+def test_to_writeable_passthrough(to: Callable[[list[int]], object]):
     x = to([1, 2, 3])
     result = to_writeable(x)
     assert result is x
 
 
-def get_gpu_devices() -> list:
+def get_gpu_devices() -> list[object]:
     assert jnp is not None
     return [
         d
@@ -211,6 +210,8 @@ def test_zarr_context(
         fake_module.__spec__ = importlib.machinery.ModuleSpec("zarrs", loader=None)
 
         monkeypatch.setitem(sys.modules, "zarrs", fake_module)
+    else:
+        monkeypatch.setitem(sys.modules, "zarrs", None)
     outer_ctx = (
         zarr.config.set({
             "codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline"
@@ -236,6 +237,26 @@ def test_zarr_context(
             assert "Batched" in zarr.config.get("codec_pipeline.path")
 
 
+@pytest.mark.parametrize(
+    "pipeline",
+    [
+        "zarr.core.codec_pipeline.BatchedCodecPipeline",
+        "zarr.core.codec_pipeline.FusedCodecPipeline",
+        "zarr_kvikio.KvikioCodecPipeline",
+    ],
+)
+def test_zarr_context_gpu(pipeline: str):
+    with (
+        zarr.config.enable_gpu(),
+        zarr.config.set({"codec_pipeline.path": pipeline}),
+        pytest.warns(UserWarning, match="uncompressed shards")
+        if pipeline.endswith(".FusedCodecPipeline")
+        else nullcontext(),
+        fast_zarr_context(),
+    ):
+        assert zarr.config.get("codec_pipeline.path") == pipeline
+
+
 @pytest.mark.parametrize("output_format", ["zarr", "h5ad"])
 def test_write_chunk_size(tmp_path, output_format):
     pth = tmp_path / f"test.{output_format}"
@@ -250,53 +271,3 @@ def test_write_chunk_size(tmp_path, output_format):
         with h5py.File(pth, mode="r") as store:
             assert store["X"].chunks == adata.X.chunksize
             np.testing.assert_array_equal(store["X"], adata.X)
-
-
-@pytest.mark.skipif(not has_fused, reason="No fused pipeline available")
-def test_read_elem_lazy_fast_pipeline(monkeypatch, tmp_path):
-    from anndata._io.specs import lazy_methods
-    from anndata.experimental import read_elem_lazy
-
-    # zarrs is slower than the fused pipeline for integer selections, so lazily read sparse matrices prefer fused
-    fake_module = types.ModuleType("zarrs")
-    fake_module.__spec__ = importlib.machinery.ModuleSpec("zarrs", loader=None)
-    monkeypatch.setitem(sys.modules, "zarrs", fake_module)
-
-    task_pipelines: set[str] = set()
-    compute_chunk = lazy_methods._compute_chunk
-
-    def record_pipeline(f, block_info):
-        task_pipelines.update(
-            type(arr._async_array.codec_pipeline).__name__
-            for arr in [f._data, f._indices]
-        )
-        return compute_chunk(f, block_info)
-
-    monkeypatch.setattr(lazy_methods, "_compute_chunk", record_pipeline)
-
-    g = zarr.open_group(tmp_path / "test.zarr", mode="w")
-    ad.io.write_elem(g, "X", sparse.random(10, 5, density=0.5, format="csr"))
-    pipeline_before = zarr.config.get("codec_pipeline.path")
-    # the fused pipeline decodes a shard’s chunks one after another, so whole sparse datasets keep the configured one
-    backed = ad.io.sparse_dataset(g["X"])
-    assert {
-        type(arr._async_array.codec_pipeline).__name__
-        for arr in [backed._data, backed._indices]
-    } == {pipeline_before.rsplit(".", 1)[-1]}
-    lazy = read_elem_lazy(g["X"], chunks=(5, -1)).compute()
-    assert task_pipelines == {"FusedCodecPipeline"}
-    # the global config is left untouched
-    assert zarr.config.get("codec_pipeline.path") == pipeline_before
-    np.testing.assert_array_equal(lazy.toarray(), backed[:].toarray())
-
-
-@pytest.mark.parametrize("prefer_zarrs", [True, False])
-def test_zarr_context_keeps_gpu_pipeline(monkeypatch, *, prefer_zarrs: bool):
-    fake_module = types.ModuleType("zarrs")
-    fake_module.__spec__ = importlib.machinery.ModuleSpec("zarrs", loader=None)
-    monkeypatch.setitem(sys.modules, "zarrs", fake_module)
-    # zarrs can't read into GPU memory, and the fused pipeline can't for uncompressed shards
-    with zarr.config.enable_gpu():
-        pipeline = zarr.config.get("codec_pipeline.path")
-        with fast_zarr_context(prefer_zarrs=prefer_zarrs):
-            assert zarr.config.get("codec_pipeline.path") == pipeline

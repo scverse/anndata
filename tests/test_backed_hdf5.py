@@ -92,7 +92,7 @@ def backed_mode(request) -> Literal["r+", "r", False]:
 
 
 @pytest.fixture(params=(("X",), ()))
-def as_dense(request) -> tuple[str] | tuple:
+def as_dense(request) -> tuple[str, ...]:
     return request.param
 
 
@@ -112,7 +112,7 @@ def test_read_write_X(
     ],
     backed_mode: Literal["r+", "r", False],
     *,
-    as_dense: tuple[str] | tuple,
+    as_dense: tuple[str, ...],
 ):
     orig_pth = tmp_path / "orig.h5ad"
     backed_pth = tmp_path / "backed.h5ad"

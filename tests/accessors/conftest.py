@@ -27,5 +27,6 @@ def adata() -> AnnData:
         index="gene-" + np.arange(50).astype(str),
     )
     obsm = dict(umap=gen.random((100, 2)))
+    varm = dict(df=pd.DataFrame(gen.random((50, 2)), var.index, ["a", "b"]))
     varp = dict(cons=sp.csr_array(sp.random(50, 50)))
-    return AnnData(x, obs, var, layers=layers, obsm=obsm, varm={}, obsp={}, varp=varp)
+    return AnnData(x, obs, var, layers=layers, obsm=obsm, varm=varm, obsp={}, varp=varp)

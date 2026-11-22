@@ -1,8 +1,8 @@
 # archives
 
 This directory contains an archive of anndata files written by older versions of the library.
-It's for testing backwards compat.
-This should really live somewhere else, but it's here for now.
+It’s for testing backwards compat.
+This should really live somewhere else, but it’s here for now.
 
 ## Directories
 
