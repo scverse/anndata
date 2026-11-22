@@ -274,8 +274,9 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
         return CompressedVectors.from_buffers(data, indices, indptr)
 
     def get_compressed_vector(self, idx: int) -> CompressedVectors:
-        # Zarr slice bounds must be Python integers when indptr is a CuPy array.
-        s = slice(*_read_dense(self.indptr, slice(idx, idx + 2)).tolist())
+        bounds = _read_dense(self.indptr, slice(idx, idx + 2))
+        # Zarr needs host integer offsets even when the matrix is read on GPU.
+        s = slice(*(bounds.get() if isinstance(bounds, CupyArray) else bounds))
         data = _read_dense(self.data, s)
         indices = _read_dense(self.indices, s)
         indptr = [0, len(data)]
