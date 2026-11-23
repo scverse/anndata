@@ -177,7 +177,7 @@ class AdRef[I: Hashable, D: AnnDataLikeMetadataOnly]:
         return self.__repr
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class MapAcc[
     R: RefAcc,
     M: Mapping[str, object] | Mapping[str | None, object] = Mapping[str, object],
@@ -185,7 +185,7 @@ class MapAcc[
     r"""Accessor for mapping containers."""
 
     ref_acc_cls: type[R]
-    scope: ScopeAcc | None
+    scope: ScopeAcc | None = None
     """Accessor for the element whose `.AD` cast the mapping is in, see :attr:`anndata.acc.RefAcc.scope`."""
 
     @abc.abstractmethod
@@ -456,7 +456,6 @@ class LayerMapAcc[R: AdRef](
     _: KW_ONLY
     ref_class: type[R]
     ref_acc_cls: type[LayerAcc] = LayerAcc
-    scope: ScopeAcc | None = None
 
     def __getitem__(self, k: str | None, /) -> LayerAcc[R]:
         """Get a reference accessor for a layer.
@@ -776,7 +775,6 @@ class MultiMapAcc[R: AdRef](MapAcc[MultiAcc, "AxisArrays | AxisArraysView"]):
     _: KW_ONLY
     ref_class: type[R]
     ref_acc_cls: type[MultiAcc] = MultiAcc
-    scope: ScopeAcc | None = None
 
     def __getitem__(self, k: str, /) -> MultiAcc[R]:
         """Get a reference accessor for an array, e.g. `A.obsm["pca"]`.
@@ -908,7 +906,6 @@ class GraphMapAcc[R: AdRef](MapAcc[GraphAcc, "PairwiseArrays | PairwiseArraysVie
     _: KW_ONLY
     ref_class: type[R]
     ref_acc_cls: type[GraphAcc] = GraphAcc
-    scope: ScopeAcc | None = None
 
     def __getitem__(self, k: str, /) -> GraphAcc[R]:
         """Get a reference accessor for a graph, e.g. `A.obsp["distances"]`.
@@ -1049,7 +1046,6 @@ class UnsMapAcc[R: AdRef](MapAcc[ItemAcc, "MutableMapping[str, Any]"]):
     _: KW_ONLY
     ref_class: type[R]
     ref_acc_cls: type[ItemAcc] = ItemAcc
-    scope: ScopeAcc | None = None
 
     def __getitem__(self, k: str, /) -> ItemAcc[R]:
         """Get an accessor for an item, e.g. `A.uns["foo"]`.
