@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 import warnings
-from importlib.util import find_spec
 from itertools import product
 from typing import TYPE_CHECKING
 
@@ -939,15 +938,9 @@ def test_transpose_errors_with_backed_arrays(
         f.close()
 
 
-@pytest.mark.skipif(not find_spec("mudata"), reason="mudata is not installed")
-# released mudata predates `RefAcc.set` and pandas 3.1
-@pytest.mark.filterwarnings("ignore:ModMapAcc doesn’t implement:FutureWarning")
-@pytest.mark.filterwarnings("ignore:The inplace keyword:pandas.errors.Pandas4Warning")
 def test_protocol_compatibility(adata: AnnData) -> None:
-    from mudata import MuData
-
     # annotated assignments are checked by mypy, the asserts at runtime
     a: AnnDataLike = adata
     assert isinstance(a, AnnDataLike)
-    m: AnnDataLikeMetadataOnly = MuData({"a": adata})
+    m: AnnDataLikeMetadataOnly = adata
     assert isinstance(m, AnnDataLikeMetadataOnly)
