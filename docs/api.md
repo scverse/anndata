@@ -30,8 +30,8 @@ that should work with any class implementing (a subset of) the `AnnData` API, fo
 .. autosummary::
    :toctree: generated/
 
-   typing.AnnDataLikeMetadataOnly
-   typing.AnnDataLike
+   types.AnnDataLikeMetadataOnly
+   types.AnnDataLike
 ```
 
 (combining-api)=

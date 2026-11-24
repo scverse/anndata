@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from types import EllipsisType
-from typing import TYPE_CHECKING, Never, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Never, TypeVar
 
 import h5py
 import numpy as np
@@ -32,16 +32,8 @@ __all__ = ["AlignedArray", "Index", "Index1D", "RWAble", "Storable"]
 
 
 if TYPE_CHECKING:
-    from collections.abc import MutableMapping
-    from typing import Any, TypeAlias, TypeIs
+    from typing import TypeAlias, TypeIs
 
-    from .acc import (
-        AdRef,
-        Array,
-        DataFrameLike,
-        MapAcc,
-        RefAcc,
-    )
 
 # private aliases are no `type`s, so subscripting substitutes into the union and Sphinx expands them in the public ones
 _M = TypeVar("_M", bound=IndexManager, default=Never)
@@ -129,41 +121,6 @@ type Storable = _StorableArrayOrScalar | dict[str, "Storable"] | list["Storable"
 
 type RWAble = Storable | AnnData | pd.api.extensions.ExtensionArray
 """A superset of :type:`anndata.typing.Storable` (i.e., including :class:`anndata.AnnData`) which is everything can be read/written by :func:`anndata.io.read_elem` and :func:`anndata.io.write_elem`."""
-
-
-@runtime_checkable
-class AnnDataLikeMetadataOnly(Protocol):
-    """The AnnData API excluding data matrices.
-
-    This can be used for `isinstance()` checks in code that only accesses metadata.
-    """
-
-    shape: tuple[int, int]
-    n_obs: int
-    n_vars: int
-    obs: pd.DataFrame | Dataset2D
-    var: pd.DataFrame | Dataset2D
-    obs_names: pd.Index
-    var_names: pd.Index
-    obsm: MutableMapping[str, AlignedAny]
-    varm: MutableMapping[str, AlignedAny]
-    obsp: MutableMapping[str, AlignedArray]
-    varp: MutableMapping[str, AlignedArray]
-    uns: MutableMapping[str, Any]
-
-    def __getitem__(
-        self, index: Index | AdRef | RefAcc | MapAcc
-    ) -> AnnDataLikeMetadataOnly | DataFrameLike | AlignedArray | Array: ...
-    def __setitem__(self, index: AdRef | RefAcc, value: object) -> None: ...
-    def __len__(self) -> int: ...
-
-
-@runtime_checkable
-class AnnDataLike(AnnDataLikeMetadataOnly, Protocol):
-    """The full AnnData API."""
-
-    X: AlignedArray | None
-    layers: MutableMapping[str, AlignedArray]
 
 
 def __getattr__(name: str) -> object:

@@ -1,15 +1,40 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, overload, runtime_checkable
 
 if TYPE_CHECKING:
+    from collections.abc import MutableMapping
     from types import CapsuleType
     from typing import Any, Self
 
-    from array_api.latest import Array, ArrayNamespace
+    import pandas as pd
+    from array_api import latest as array_api
+
+    from ._core.xarray import Dataset2D
+    from .acc import (
+        AdRef,
+        Array,
+        DataFrameLike,
+        GraphAcc,
+        LayerAcc,
+        MetaAcc,
+        MultiAcc,
+        RefAcc,
+    )
+    from .typing import AlignedAny, AlignedArray, Index
 
 
-__all__ = ["SupportsArrayApi", "SupportsArrayApiBase", "WriteCompatStr"]
+__all__ = [
+    "AnnDataLike",
+    "AnnDataLikeMetadataOnly",
+    "SupportsArrayApi",
+    "SupportsArrayApiBase",
+    "WriteCompatStr",
+]
+
+
+type WriteCompatStr = Literal["0.13", "0.14"]
+"""The values of :class:`~anndata.WriteCompat`, which write functions also accept."""
 
 
 @runtime_checkable
@@ -40,7 +65,7 @@ class SupportsArrayApiBase(Protocol):
         self,
         *,
         api_version: Literal["2021.12", "2022.12", "2023.12", "2024.12"] | None = None,
-    ) -> ArrayNamespace[Array[object, object], object, object]:
+    ) -> array_api.ArrayNamespace[array_api.Array[object, object], object, object]:
         """See :meth:`array_api.array.__array_namespace__`."""
 
     # `device` and the index are implementation-defined objects
@@ -73,6 +98,75 @@ class SupportsArrayApi(SupportsArrayApiBase, Protocol):
         """See :meth:`array_api.array.__dlpack_device__`."""
 
 
+@runtime_checkable
+class AnnDataLikeMetadataOnly(Protocol):
+    """The AnnData API excluding data matrices.
+
+    This can be used for `isinstance()` checks in code that only accesses metadata.
+    Indexing with a bare `str` is not portable:
+    :class:`~anndata.AnnData` selects an observation, :class:`~mudata.MuData` a modality.
+    """
+
+    # read-only, so implementations may have setters or not
+    @property
+    def shape(self) -> tuple[int, int, *tuple[int, ...]]:
+        """`(n_obs, n_vars, ...)`, implementations may have more dimensions."""
+
+    @property
+    def n_obs(self) -> int: ...
+    @property
+    def n_vars(self) -> int: ...
+    @property
+    def obs(self) -> pd.DataFrame | Dataset2D: ...
+    @property
+    def var(self) -> pd.DataFrame | Dataset2D: ...
+    @property
+    def obs_names(self) -> pd.Index: ...
+    @property
+    def var_names(self) -> pd.Index: ...
+    @property
+    def obsm(self) -> MutableMapping[str, AlignedAny]: ...
+    @property
+    def varm(self) -> MutableMapping[str, AlignedAny]: ...
+    @property
+    def obsp(self) -> MutableMapping[str, AlignedArray]: ...
+    @property
+    def varp(self) -> MutableMapping[str, AlignedArray]: ...
+    @property
+    def uns(self) -> MutableMapping[str, Any]: ...
+
+    @overload
+    def __getitem__(self, index: MetaAcc) -> DataFrameLike: ...
+    @overload
+    def __getitem__(self, index: MultiAcc | GraphAcc) -> AlignedArray: ...
+    @overload
+    def __getitem__(self, index: AdRef) -> Array: ...
+    @overload
+    def __getitem__(self, index: Index) -> Self: ...
+    def __setitem__(self, index: AdRef | RefAcc, value: object) -> None: ...
+    def __len__(self) -> int: ...
+
+
+@runtime_checkable
+class AnnDataLike(AnnDataLikeMetadataOnly, Protocol):
+    """The full AnnData API."""
+
+    @property
+    def X(self) -> AlignedArray | None: ...
+    @property
+    def layers(self) -> MutableMapping[str | None, AlignedArray]: ...
+
+    # overloads replace the parent’s as a whole, so repeat them and add `LayerAcc`
+    @overload
+    def __getitem__(self, index: MetaAcc) -> DataFrameLike: ...
+    @overload
+    def __getitem__(self, index: LayerAcc | MultiAcc | GraphAcc) -> AlignedArray: ...
+    @overload
+    def __getitem__(self, index: AdRef) -> Array: ...
+    @overload
+    def __getitem__(self, index: Index) -> Self: ...
+
+
 def __getattr__(key: str) -> object:
     match key:
         case "ExtensionNamespace":
@@ -86,14 +180,6 @@ def __getattr__(key: str) -> object:
             )
             warn(msg, FutureWarning)
             return ExtensionNamespace
-        case "SupportsArrayApi":
-            return SupportsArrayApi
-        case "SupportsArrayApiBase":
-            return SupportsArrayApiBase
         case _:
             msg = f"types has no attribute {key!r}"
             raise AttributeError(msg)
-
-
-type WriteCompatStr = Literal["0.13", "0.14"]
-"""The values of :class:`~anndata.WriteCompat`, which write functions also accept."""
