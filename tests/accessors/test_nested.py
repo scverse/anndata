@@ -9,12 +9,12 @@ import pandas as pd
 import pytest
 
 from anndata import AnnData
-from anndata.acc import A, AdRef, DFAcc, ItemAcc, RefAcc, UnsMapAcc
+from anndata.acc import A, AdRef, DFAcc, ItemAcc, UnsMapAcc
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from anndata.acc import MapAcc
+    from anndata.acc import MapAcc, RefAcc
 
 
 @pytest.fixture
@@ -152,7 +152,7 @@ def test_cast_invalid_not_in(adata: AnnData, acc: AdRef | RefAcc | MapAcc) -> No
     assert acc not in adata
     if isinstance(acc, AdRef):
         assert not acc.acc.isin(adata, acc.idx)
-    elif isinstance(acc, RefAcc):
+    else:
         assert not acc.isin(adata)
 
 

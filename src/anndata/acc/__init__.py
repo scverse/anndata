@@ -45,7 +45,13 @@ else:
     MuData = type("MuData", (), {"__module__": "mudata"})
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, MutableMapping, Sequence
+    from collections.abc import (
+        Callable,
+        Collection,
+        Mapping,
+        MutableMapping,
+        Sequence,
+    )
     from typing import Any, Literal, Self, TypeGuard
 
     from .._core.aligned_mapping import (
@@ -181,7 +187,10 @@ class AdRef[I: Hashable, D: MuData | AnnData]:
 
 
 @dataclass(frozen=True)
-class MapAcc[R: RefAcc](abc.ABC):
+class MapAcc[
+    R: RefAcc,
+    M: Mapping[str, object] | Mapping[str | None, object] = Mapping[str, object],
+](abc.ABC):
     r"""Accessor for mapping containers."""
 
     ref_acc_cls: type[R]
@@ -197,6 +206,24 @@ class MapAcc[R: RefAcc](abc.ABC):
         k
             The key of the mapped array.
         """
+
+    @future_abstractmethod(Deprecation("0.14.0"))
+    def get(self, data: MuData | AnnData, /) -> M:
+        """Get the referenced mapping from the AnnData object, e.g. `adata.obsm` for `A.obsm`."""
+        msg = f"{type(self).__name__} does not support getting the mapping."
+        raise NotImplementedError(msg)
+
+    def container(self, data: MuData | AnnData, /) -> MuData | AnnData:
+        """Get the AnnData object this accessor indexes into, see :meth:`anndata.acc.RefAcc.container`."""
+        return data if self.scope is None else self.scope.AD.container(data)
+
+    def isin(self, data: MuData | AnnData, /) -> bool:
+        """Check if the referenced mapping is in the AnnData object and has entries.
+
+        E.g. `A.obsm.isin(adata)` is `True` if `adata.obsm` isn’t empty.
+        Returns `False` if :attr:`~anndata.acc.MapAcc.scope` isn’t in `data` or isn’t an AnnData object.
+        """
+        return (self.scope is None or self.scope.AD.isin(data)) and bool(self.get(data))
 
 
 @dataclass(frozen=True)
@@ -237,7 +264,7 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData, E = object, V = object]
         TypeError
             If the element :attr:`~anndata.acc.RefAcc.scope` refers to isn’t an AnnData object.
         """
-        return _resolve(self.scope, data)
+        return data if self.scope is None else self.scope.AD.container(data)
 
     def process_idx(self, idx: Any, /) -> I:  # noqa: ANN401  # subclasses may override `idx` however they want
         self.dims(idx)
@@ -275,22 +302,18 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData, E = object, V = object]
     def idx_repr(self, idx: I, /) -> str:
         """Get a string representation of the index."""
 
+    @abc.abstractmethod
     def isin(self, data: D, idx: I | None = None, /) -> bool:
         """Check if the referenced array is in the AnnData object.
 
         Returns `False` if :attr:`~anndata.acc.RefAcc.scope` (or :attr:`~anndata.acc.DFAcc.frame_acc`) isn’t in `data`
         or doesn’t have the type this accessor casts it to (`.AD`/`.DF`).
-        Subclasses implement :meth:`~anndata.acc.RefAcc._isin` instead.
-        """
-        return _cast_in(self, data) and self._isin(data, idx)
 
-    @future_abstractmethod(Deprecation("0.14.0", "Rename your `isin` to `_isin`."))
-    def _isin(self, data: D, idx: I | None = None, /) -> bool:
-        """Check if the referenced array is in the AnnData object, called by :meth:`~anndata.acc.RefAcc.isin`.
-
-        Only called if :attr:`~anndata.acc.RefAcc.scope` (or :attr:`~anndata.acc.DFAcc.frame_acc`) is `None`, or in `data` with the type this accessor casts it to (`.AD`/`.DF`), so :meth:`~anndata.acc.RefAcc.container` won’t fail.
+        The base implementation only checks :attr:`~anndata.acc.RefAcc.scope`.
+        Subclasses should return `False` if `super().isin(data, idx)` does,
+        so :meth:`~anndata.acc.RefAcc.container` won’t fail afterwards.
         """
-        raise NotImplementedError
+        return self.scope is None or self.scope.AD.isin(data)
 
     @overload
     def get(self, data: D, /) -> E: ...
@@ -398,7 +421,9 @@ class LayerAcc[R: AdRef[Idx2D, AnnData]](
             raise TypeError(msg)
         return inner
 
-    def _isin(self, adata: AnnData, idx: Idx2D | None = None) -> bool:
+    def isin(self, adata: AnnData, idx: Idx2D | None = None) -> bool:
+        if not super().isin(adata, idx):
+            return False
         adata = self.container(adata)
         if adata.X is None if self.k is None else self.k not in adata.layers:
             return False
@@ -432,7 +457,7 @@ class LayerAcc[R: AdRef[Idx2D, AnnData]](
 
 
 @dataclass(frozen=True)
-class LayerMapAcc[R: AdRef](MapAcc[LayerAcc]):
+class LayerMapAcc[R: AdRef](MapAcc[LayerAcc, "Layers | LayersView"]):
     r"""Accessor for layers (`A.`\ :attr:`~AdAcc.layers`)."""
 
     _: KW_ONLY
@@ -456,8 +481,8 @@ class LayerMapAcc[R: AdRef](MapAcc[LayerAcc]):
     def __repr__(self) -> str:
         return f"{_root(self.scope)}.layers"
 
-    def get(self, adata: AnnData) -> Layers | LayersView:
-        return _resolve(self.scope, adata).layers
+    def get(self, adata: MuData | AnnData) -> Layers | LayersView:
+        return self.container(adata).layers
 
 
 @dataclass(frozen=True)
@@ -540,8 +565,12 @@ class DFAcc[R: AdRef](RefAcc[R, str | None, MuData | AnnData, DataFrameLike, Arr
     def idx_repr(self, k: str | None) -> str:
         return ".index" if k is None else f"[{k!r}]"
 
-    def _isin(self, data: MuData | AnnData, idx: str | None = None) -> bool:
-        return idx is None or idx in self.frame(data)
+    def isin(self, data: MuData | AnnData, idx: str | None = None) -> bool:
+        if (f := self.frame_acc) is None:  # e.g. `A.obs`, whose frame is always there
+            cast_in = super().isin(data, idx)
+        else:  # same scope as `self`, so checking `f` covers the `.AD` cast too
+            cast_in = f.isin(data) and _is_frame(f.get(data))
+        return cast_in and (idx is None or idx in self.frame(data))
 
     @overload
     def get(self, data: MuData | AnnData, /) -> DataFrameLike: ...
@@ -691,7 +720,9 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](
     def idx_repr(self, i: int) -> str:
         return f"[:, {i!r}]"
 
-    def _isin(self, data: MuData | AnnData, idx: int | None = None) -> bool:
+    def isin(self, data: MuData | AnnData, idx: int | None = None) -> bool:
+        if not super().isin(data, idx):
+            return False
         m: AxisArrays = getattr(self.container(data), f"{self.dim}m")
         if (arr := m.get(self.k)) is None:
             return False
@@ -732,7 +763,7 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](
 
 
 @dataclass(frozen=True)
-class MultiMapAcc[R: AdRef](MapAcc[MultiAcc]):
+class MultiMapAcc[R: AdRef](MapAcc[MultiAcc, "AxisArrays | AxisArraysView"]):
     r"""Accessor for multi-dimensional array containers (`A.`\ :attr:`~AdAcc.obsm`/`A.`\ :attr:`~AdAcc.varm`)."""
 
     dim: Literal["obs", "var"]
@@ -759,8 +790,8 @@ class MultiMapAcc[R: AdRef](MapAcc[MultiAcc]):
     def __repr__(self) -> str:
         return f"{_root(self.scope)}.{self.dim}m"
 
-    def get(self, adata: AnnData) -> AxisArrays | AxisArraysView:
-        return getattr(_resolve(self.scope, adata), f"{self.dim}m")
+    def get(self, adata: MuData | AnnData) -> AxisArrays | AxisArraysView:
+        return getattr(self.container(adata), f"{self.dim}m")
 
 
 @dataclass(frozen=True)
@@ -816,7 +847,9 @@ class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](
     def idx_repr(self, idx: Idx2D) -> str:
         return f"[{idx[0]!r}, {idx[1]!r}]"
 
-    def _isin(self, data: MuData | AnnData, idx: Idx2D | None = None) -> bool:
+    def isin(self, data: MuData | AnnData, idx: Idx2D | None = None) -> bool:
+        if not super().isin(data, idx):
+            return False
         data = self.container(data)
         if self.k not in getattr(data, f"{self.dim}p"):
             return False
@@ -862,7 +895,7 @@ class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](
 
 
 @dataclass(frozen=True)
-class GraphMapAcc[R: AdRef](MapAcc[GraphAcc]):
+class GraphMapAcc[R: AdRef](MapAcc[GraphAcc, "PairwiseArrays | PairwiseArraysView"]):
     r"""Accessor for graph containers (`A.`\ :attr:`~AdAcc.obsp`/`A.`\ :attr:`~AdAcc.varp`)."""
 
     dim: Literal["obs", "var"]
@@ -889,8 +922,8 @@ class GraphMapAcc[R: AdRef](MapAcc[GraphAcc]):
     def __repr__(self) -> str:
         return f"{_root(self.scope)}.{self.dim}p"
 
-    def get(self, adata: AnnData) -> PairwiseArrays | PairwiseArraysView:
-        return getattr(_resolve(self.scope, adata), f"{self.dim}p")
+    def get(self, adata: MuData | AnnData) -> PairwiseArrays | PairwiseArraysView:
+        return getattr(self.container(adata), f"{self.dim}p")
 
 
 @dataclass(frozen=True)
@@ -971,7 +1004,9 @@ class ItemAcc[R: AdRef](ScopeAcc[R, MuData | AnnData]):
     def idx_repr(self, idx: Never) -> str:
         return f"[{idx!r}]"
 
-    def _isin(self, data: MuData | AnnData, idx: None = None) -> bool:
+    def isin(self, data: MuData | AnnData, idx: None = None) -> bool:
+        if not super().isin(data, idx):
+            return False
         item = self.container(data).uns
         try:
             for k in self.path:
@@ -1000,7 +1035,7 @@ class ItemAcc[R: AdRef](ScopeAcc[R, MuData | AnnData]):
 
 
 @dataclass(frozen=True)
-class UnsMapAcc[R: AdRef](MapAcc[ItemAcc]):
+class UnsMapAcc[R: AdRef](MapAcc[ItemAcc, "MutableMapping[str, Any]"]):
     r"""Accessor for unstructured metadata (`A.`\ :attr:`~AdAcc.uns`)."""
 
     _: KW_ONLY
@@ -1024,8 +1059,8 @@ class UnsMapAcc[R: AdRef](MapAcc[ItemAcc]):
     def __repr__(self) -> str:
         return f"{_root(self.scope)}.uns"
 
-    def get(self, adata: AnnData) -> MutableMapping[str, Any]:
-        return _resolve(self.scope, adata).uns
+    def get(self, adata: MuData | AnnData) -> MutableMapping[str, Any]:
+        return self.container(adata).uns
 
 
 # `R`’s bound can’t double as its default before PEP 696 (Python 3.13)
@@ -1312,6 +1347,40 @@ class AdAcc[R: AdRef]:
 
         return parse(self, spec, strict=strict, vec=vec)
 
+    def container(self, data: MuData | AnnData, /) -> MuData | AnnData:
+        """Get the AnnData object this accessor indexes into.
+
+        That is `data` itself, or the nested object :attr:`scope` refers to in `data`.
+
+        >>> from anndata import AnnData
+        >>> adata = AnnData(shape=(3, 2), uns={"n": AnnData(shape=(5, 4))})
+        >>> A.container(adata) is adata
+        True
+        >>> A.uns["n"].AD.container(adata) is adata.uns["n"]
+        True
+
+        Raises
+        ------
+        TypeError
+            If the element :attr:`scope` refers to isn’t an AnnData object.
+        """
+        if self.scope is None:
+            return data
+        if not _is_anndata_like(elem := self.scope.get(data)):
+            msg = f"{self.scope!r} is {type(elem).__name__}, not an AnnData object, so `.AD` can’t index into it."
+            raise TypeError(msg)
+        return elem
+
+    def isin(self, data: MuData | AnnData, /) -> bool:
+        """Check if the nested AnnData object this accessor refers to is in `data`.
+
+        `True` for a top-level accessor like :data:`A`,
+        otherwise whether :attr:`scope` is in `data` and an AnnData object.
+        """
+        if self.scope is None:
+            return True
+        return self.scope.isin(data) and _is_anndata_like(self.scope.get(data))
+
     def __repr__(self) -> str:
         return "A" if self.scope is None else f"{self.scope!r}.AD"
 
@@ -1385,26 +1454,6 @@ def _root(scope: ScopeAcc | None, /) -> str:
     """Get the repr of the :class:`AdAcc` an accessor in `scope` belongs to."""
     # the scope’s `.AD` decides how it’s written, e.g. `A.uns['a'].AD`, or mudata’s `A.mod['rna']`
     return "A" if scope is None else repr(scope.AD)
-
-
-def _resolve(scope: ScopeAcc | None, data: MuData | AnnData, /) -> MuData | AnnData:
-    """Get the AnnData object `scope` refers to in `data`, validating the `.AD` cast."""
-    if scope is None:
-        return data
-    if not _is_anndata_like(elem := scope.get(data)):
-        msg = f"{scope!r} is {type(elem).__name__}, not an AnnData object, so `.AD` can’t index into it."
-        raise TypeError(msg)
-    return elem
-
-
-def _cast_in(acc: RefAcc | MapAcc | AdAcc, data: MuData | AnnData, /) -> bool:
-    """Check if the element `acc` is cast from is in `data` and has the right type."""
-    match acc:
-        case DFAcc(frame_acc=RefAcc() as frame):  # `.DF`
-            return frame in data and _is_frame(frame.get(data))
-        case _ if (scope := acc.scope) is not None:  # `.AD`
-            return scope in data and _is_anndata_like(scope.get(data))
-    return True
 
 
 def _is_frame(x: object, /) -> TypeGuard[DataFrameLike]:

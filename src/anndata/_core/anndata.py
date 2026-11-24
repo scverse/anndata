@@ -1146,14 +1146,14 @@ class AnnData:  # noqa: PLW1641
 
             Mapping accessors like `A.obsm` raise an :class:`IndexError`, as they don’t refer to an array.
         """
-        from ..acc import AdAcc, AdRef, MapAcc, RefAcc, _resolve
+        from ..acc import AdAcc, AdRef, MapAcc, RefAcc
 
         if isinstance(index, AdRef):
             return index.acc.get(self, index.idx)
         elif isinstance(index, RefAcc):
             return index.get(self)
         elif isinstance(index, AdAcc):
-            return _resolve(index.scope, self)
+            return index.container(self)
         elif isinstance(index, MapAcc):
             msg = f"Cannot index with {index} because this is not a path to an array-like structure."
             raise IndexError(msg)
@@ -1738,27 +1738,10 @@ class AnnData:  # noqa: PLW1641
             An accessor pointing to an array that might or might not be in `self`.
 
         """
-        from ..acc import (
-            AdAcc,
-            AdRef,
-            GraphMapAcc,
-            LayerMapAcc,
-            MapAcc,
-            MultiMapAcc,
-            RefAcc,
-            UnsMapAcc,
-            _cast_in,
-        )
+        from ..acc import AdAcc, AdRef, MapAcc, RefAcc
 
         match key:
-            case AdAcc():
-                return _cast_in(key, self)
-            case LayerMapAcc() | MultiMapAcc() | GraphMapAcc() | UnsMapAcc():
-                return _cast_in(key, self) and bool(key.get(self))
-            case MapAcc():  # to check MapAccs, we need to know the attribute name
-                msg = f"Unknown MapAcc subclass {type(key)}."
-                raise TypeError(msg)
-            case RefAcc():
+            case AdAcc() | MapAcc() | RefAcc():
                 return key.isin(self)
             case AdRef():
                 return key.acc.isin(self, key.idx)

@@ -282,9 +282,21 @@ There are three layers of extensibility:
     >>> A.obs[["a", "b"]]
     A.obs[['a', 'b']]
 
-    Note that for implementing :meth:`RefAcc.get` when subclassing, you will need :class:`NO_IDX`,
-    and that :meth:`RefAcc.get`/:meth:`~RefAcc.set`/:meth:`~RefAcc._isin` should go through
-    :meth:`RefAcc.container` to work when nested (e.g. in `A.uns["a"].AD`).
+    Note that for implementing :meth:`RefAcc.get` when subclassing, you will need :class:`NO_IDX`.
+    For your accessor to work when nested (e.g. in `A.uns["a"].AD`):
+
+    -   :meth:`RefAcc.get`, :meth:`~RefAcc.set`, and :meth:`~RefAcc.isin` should go through
+        :meth:`RefAcc.container` instead of using the passed AnnData object directly, and
+    -   :meth:`RefAcc.isin` should return `False` when `super().isin(data, idx)` does,
+        before calling :meth:`~RefAcc.container`, which would fail if e.g. the `.AD` cast is invalid:
+
+    ..  code-block:: python
+
+        def isin(self, data, idx=None, /):
+            if not super().isin(data, idx):
+                return False
+            return self.k in self.container(data).layers
+
     To refer to another data frame, subclass :class:`DFAcc` and override :meth:`DFAcc.frame`.
 
 
