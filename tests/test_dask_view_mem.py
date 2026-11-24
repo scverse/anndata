@@ -64,6 +64,15 @@ def _alloc_cache():
         m[0, 0] = 100
     _ = adata.to_memory(copy=False)
 
+    # pandas pyarrow-backed string arrays reserve a sizable one-time arena in
+    # pyarrow's own memory pool the first time any are constructed in a process.
+    # Whichever parametrized case in this file happens to run first in a given
+    # worker pays that one-off cost and blows its tight memray ceiling; warm it
+    # here for the same reason the block above warms dask's subclass check.
+    import pandas as pd
+
+    _ = pd.array(["a"], dtype="string[pyarrow]")
+
 
 # Theoretically this is expected to allocate:
 # N*N*4 bytes per matrix (we have 2).
