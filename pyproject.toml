@@ -76,7 +76,6 @@ dev = [
 test = [
     "anndata[lazy]",
     "fast-array-utils>=1.2.3",
-    "mudata",
     { include-group = "test-min" },
 ]
 dev-doc = [
