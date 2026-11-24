@@ -34,6 +34,7 @@ __all__ = ["AlignedArray", "Index", "Index1D", "RWAble", "Storable"]
 if TYPE_CHECKING:
     from typing import TypeAlias, TypeIs
 
+
 # private aliases are no `type`s, so subscripting substitutes into the union and Sphinx expands them in the public ones
 _M = TypeVar("_M", bound=IndexManager, default=Never)
 _I = TypeVar("_I")
@@ -110,6 +111,9 @@ type AlignedArray = (
     | Dataset2D
 )
 """Every array-like data structure anndata accepts, i.e. the full set of array types that can be stored in `X`, `layers`, and `{obs,var}{m,p}`."""
+
+type AlignedAny = AlignedArray | pd.DataFrame
+"""Every data structure that can be stored in `obsm` and `varm`."""
 
 _StorableArrayOrScalar: TypeAlias = AlignedArray | pd.DataFrame | np.number | str  # noqa: UP040
 type Storable = _StorableArrayOrScalar | dict[str, "Storable"] | list["Storable"]
