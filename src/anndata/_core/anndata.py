@@ -21,10 +21,8 @@ from natsort import natsorted
 from pandas.api.types import infer_dtype
 from scverse_misc import Deprecation, deprecated
 
-from anndata._core.access import ElementRef
-from anndata.types import SupportsArrayApiBase
-
 from .. import utils
+from .._core.access import ElementRef
 from .._settings import settings
 from .._warnings import ImplicitModificationWarning
 from .._write_compat import WriteCompat
@@ -41,6 +39,7 @@ from ..compat import (
     pandas_as_str,
 )
 from ..logging import anndata_logger as logger
+from ..types import AnnDataLikeMetadataOnly, SupportsArrayApiBase
 from ..utils import (
     asarray,
     axis_len,
@@ -1177,7 +1176,7 @@ class AnnData:  # noqa: PLW1641
         value
             The value to assign.
         """
-        from ..acc import NO_IDX, AdAcc, AdRef, MapAcc, RefAcc, _is_anndata_like
+        from ..acc import NO_IDX, AdAcc, AdRef, MapAcc, RefAcc
 
         if isinstance(index, AdRef):
             index.acc.set(self, index.idx, value)
@@ -1187,8 +1186,8 @@ class AnnData:  # noqa: PLW1641
             if index.scope is None:
                 msg = f"Cannot replace the object itself via {index!r}."
                 raise TypeError(msg)
-            if not _is_anndata_like(value):
-                msg = f"Cannot set {index!r} to {type(value).__name__}, not an AnnData object."
+            if not isinstance(value, AnnDataLikeMetadataOnly):
+                msg = f"Cannot set {index!r} to {type(value).__name__}, not an AnnData-like object."
                 raise TypeError(msg)
             index.scope.set(self, NO_IDX, value)
         elif isinstance(index, MapAcc):

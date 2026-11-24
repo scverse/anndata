@@ -23,7 +23,6 @@ import numpy as np
 import pandas as pd
 from scverse_misc import Deprecation, future_abstractmethod
 
-from .. import AnnData
 from .._core.views import ArrayView
 from .._core.xarray import Dataset2D
 from ..compat import (
@@ -35,14 +34,8 @@ from ..compat import (
     XVariable,
     known_dim,
 )
+from ..types import AnnDataLike, AnnDataLikeMetadataOnly
 from ..typing import AlignedArray, InMemoryArray, _is_in_memory
-
-if TYPE_CHECKING:
-    from typing import TypeAlias
-
-    from mudata import MuData
-else:
-    MuData = type("MuData", (), {"__module__": "mudata"})
 
 if TYPE_CHECKING:
     from collections.abc import (
@@ -52,13 +45,11 @@ if TYPE_CHECKING:
         MutableMapping,
         Sequence,
     )
-    from typing import Any, Literal, Self, TypeGuard
+    from typing import Any, Literal, Self, TypeAlias, TypeGuard
 
     from .._core.aligned_mapping import (
         AxisArrays,
         AxisArraysView,
-        Layers,
-        LayersView,
         PairwiseArrays,
         PairwiseArraysView,
     )
@@ -110,7 +101,7 @@ __all__ = [
 ]
 
 
-class AdRef[I: Hashable, D: MuData | AnnData]:
+class AdRef[I: Hashable, D: AnnDataLikeMetadataOnly]:
     r"""A reference to a 1D or 2D array along one or two dimensions of an AnnData object.
 
     Examples
@@ -208,16 +199,16 @@ class MapAcc[
         """
 
     @future_abstractmethod(Deprecation("0.14.0"))
-    def get(self, data: MuData | AnnData, /) -> M:
+    def get(self, data: AnnDataLikeMetadataOnly, /) -> M:
         """Get the referenced mapping from the AnnData object, e.g. `adata.obsm` for `A.obsm`."""
         msg = f"{type(self).__name__} does not support getting the mapping."
         raise NotImplementedError(msg)
 
-    def container(self, data: MuData | AnnData, /) -> MuData | AnnData:
+    def container(self, data: AnnDataLikeMetadataOnly, /) -> AnnDataLikeMetadataOnly:
         """Get the AnnData object this accessor indexes into, see :meth:`anndata.acc.RefAcc.container`."""
         return data if self.scope is None else self.scope.AD.container(data)
 
-    def isin(self, data: MuData | AnnData, /) -> bool:
+    def isin(self, data: AnnDataLikeMetadataOnly, /) -> bool:
         """Check if the referenced mapping is in the AnnData object and has entries.
 
         E.g. `A.obsm.isin(adata)` is `True` if `adata.obsm` isn’t empty.
@@ -227,7 +218,7 @@ class MapAcc[
 
 
 @dataclass(frozen=True)
-class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData, E = object, V = object](
+class RefAcc[R: AdRef, I: Hashable, D: AnnDataLikeMetadataOnly, E = object, V = object](
     abc.ABC
 ):
     r"""Abstract base class for reference accessors.
@@ -243,7 +234,7 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData, E = object, V = object]
     If `None`, this accessor refers into the object passed to :meth:`~anndata.acc.RefAcc.get`/:meth:`~anndata.acc.RefAcc.set`/:meth:`~anndata.acc.RefAcc.isin` itself.
     """
 
-    def container(self, data: D, /) -> MuData | AnnData:
+    def container(self, data: D, /) -> AnnDataLikeMetadataOnly:
         """Get the AnnData object this accessor indexes into.
 
         That is `data` itself, or the element :attr:`~anndata.acc.RefAcc.scope` refers to in `data`.
@@ -359,8 +350,8 @@ class RefAcc[R: AdRef, I: Hashable, D: MuData | AnnData, E = object, V = object]
 
 
 @dataclass(frozen=True)
-class LayerAcc[R: AdRef[Idx2D, AnnData]](
-    RefAcc[R, Idx2D, AnnData, AlignedArray, Array]
+class LayerAcc[R: AdRef[Idx2D, AnnDataLike]](
+    RefAcc[R, Idx2D, AnnDataLike, AlignedArray, Array]
 ):
     r"""Reference accessor for arrays in layers (`A.`\ :attr:`~AdAcc.layers`).
 
@@ -415,13 +406,13 @@ class LayerAcc[R: AdRef[Idx2D, AnnData]](
     def idx_repr(self, idx: Idx2D) -> str:
         return f"[{idx[0]!r}, {idx[1]!r}]"
 
-    def container(self, data: AnnData, /) -> AnnData:
-        if not isinstance(inner := super().container(data), AnnData):
+    def container(self, data: AnnDataLike, /) -> AnnDataLike:
+        if not isinstance(inner := super().container(data), AnnDataLike):
             msg = f"{self!r} can only refer into AnnData objects, not {type(inner).__name__}."
             raise TypeError(msg)
         return inner
 
-    def isin(self, adata: AnnData, idx: Idx2D | None = None) -> bool:
+    def isin(self, adata: AnnDataLike, idx: Idx2D | None = None) -> bool:
         if not super().isin(adata, idx):
             return False
         adata = self.container(adata)
@@ -433,10 +424,10 @@ class LayerAcc[R: AdRef[Idx2D, AnnData]](
         return True  # idx is None or [:, :]
 
     @overload
-    def get(self, adata: AnnData, /) -> AlignedArray: ...
+    def get(self, adata: AnnDataLike, /) -> AlignedArray: ...
     @overload
-    def get(self, adata: AnnData, idx: Idx2D, /) -> InMemoryArray: ...
-    def get(self, adata: AnnData, idx: Idx2D | NO_IDX = NO_IDX, /) -> AlignedArray:
+    def get(self, adata: AnnDataLike, idx: Idx2D, /) -> InMemoryArray: ...
+    def get(self, adata: AnnDataLike, idx: Idx2D | NO_IDX = NO_IDX, /) -> AlignedArray:
         adata = self.container(adata)
         if idx is NO_IDX:
             return adata.X if self.k is None else adata.layers[self.k]
@@ -444,7 +435,7 @@ class LayerAcc[R: AdRef[Idx2D, AnnData]](
         arr = adata[idx].X if self.k is None else adata[idx].layers[self.k]
         return self._maybe_flatten(idx, arr)
 
-    def set(self, adata: AnnData, idx: Idx2D | NO_IDX, value: object, /) -> None:
+    def set(self, adata: AnnDataLike, idx: Idx2D | NO_IDX, value: object, /) -> None:
         inner = self.container(adata)
         if idx is NO_IDX:
             if self.k is None:
@@ -457,7 +448,9 @@ class LayerAcc[R: AdRef[Idx2D, AnnData]](
 
 
 @dataclass(frozen=True)
-class LayerMapAcc[R: AdRef](MapAcc[LayerAcc, "Layers | LayersView"]):
+class LayerMapAcc[R: AdRef](
+    MapAcc[LayerAcc, "MutableMapping[str | None, AlignedArray]"]
+):
     r"""Accessor for layers (`A.`\ :attr:`~AdAcc.layers`)."""
 
     _: KW_ONLY
@@ -481,12 +474,19 @@ class LayerMapAcc[R: AdRef](MapAcc[LayerAcc, "Layers | LayersView"]):
     def __repr__(self) -> str:
         return f"{_root(self.scope)}.layers"
 
-    def get(self, adata: MuData | AnnData) -> Layers | LayersView:
-        return self.container(adata).layers
+    def get(
+        self, adata: AnnDataLikeMetadataOnly
+    ) -> MutableMapping[str | None, AlignedArray]:
+        if not isinstance(inner := self.container(adata), AnnDataLike):
+            msg = f"{self!r} can only refer into AnnData objects, not {type(inner).__name__}."
+            raise TypeError(msg)
+        return inner.layers
 
 
 @dataclass(frozen=True)
-class DFAcc[R: AdRef](RefAcc[R, str | None, MuData | AnnData, DataFrameLike, Array]):
+class DFAcc[R: AdRef](
+    RefAcc[R, str | None, AnnDataLikeMetadataOnly, DataFrameLike, Array]
+):
     r"""Reference accessor for columns of a data frame in an AnnData object.
 
     Created by casting another accessor to a data frame (`.DF`), which becomes its :attr:`frame_acc`.
@@ -517,7 +517,7 @@ class DFAcc[R: AdRef](RefAcc[R, str | None, MuData | AnnData, DataFrameLike, Arr
         """Index :class:`AdRef`, e.g. `A.obs.index` or `A.uns['df'].DF.index`."""
         return self[None]
 
-    def frame(self, data: MuData | AnnData, /) -> DataFrameLike:
+    def frame(self, data: AnnDataLikeMetadataOnly, /) -> DataFrameLike:
         """Get the data frame this accessor refers to.
 
         :meth:`~anndata.acc.RefAcc.get`, :meth:`~anndata.acc.RefAcc.set`, and :meth:`~anndata.acc.RefAcc.isin` use this,
@@ -565,7 +565,7 @@ class DFAcc[R: AdRef](RefAcc[R, str | None, MuData | AnnData, DataFrameLike, Arr
     def idx_repr(self, k: str | None) -> str:
         return ".index" if k is None else f"[{k!r}]"
 
-    def isin(self, data: MuData | AnnData, idx: str | None = None) -> bool:
+    def isin(self, data: AnnDataLikeMetadataOnly, idx: str | None = None) -> bool:
         if (f := self.frame_acc) is None:  # e.g. `A.obs`, whose frame is always there
             cast_in = super().isin(data, idx)
         else:  # same scope as `self`, so checking `f` covers the `.AD` cast too
@@ -573,13 +573,13 @@ class DFAcc[R: AdRef](RefAcc[R, str | None, MuData | AnnData, DataFrameLike, Arr
         return cast_in and (idx is None or idx in self.frame(data))
 
     @overload
-    def get(self, data: MuData | AnnData, /) -> DataFrameLike: ...
+    def get(self, data: AnnDataLikeMetadataOnly, /) -> DataFrameLike: ...
     @overload
     def get(
-        self, data: MuData | AnnData, k: str | None, /
+        self, data: AnnDataLikeMetadataOnly, k: str | None, /
     ) -> pd.api.extensions.ExtensionArray | XVariable: ...
     def get(
-        self, data: MuData | AnnData, k: str | NO_IDX | None = NO_IDX, /
+        self, data: AnnDataLikeMetadataOnly, k: str | NO_IDX | None = NO_IDX, /
     ) -> DataFrameLike | pd.api.extensions.ExtensionArray | XVariable:
         full = self.frame(data)
         if k is NO_IDX:
@@ -598,7 +598,7 @@ class DFAcc[R: AdRef](RefAcc[R, str | None, MuData | AnnData, DataFrameLike, Arr
                 raise TypeError(msg)
 
     def set(
-        self, data: MuData | AnnData, k: str | NO_IDX | None, value: object, /
+        self, data: AnnDataLikeMetadataOnly, k: str | NO_IDX | None, value: object, /
     ) -> None:
         if k is NO_IDX:
             if self.frame_acc is None:
@@ -619,7 +619,7 @@ class DFAcc[R: AdRef](RefAcc[R, str | None, MuData | AnnData, DataFrameLike, Arr
 
 
 @dataclass(frozen=True)
-class MetaAcc[R: AdRef[str | None, MuData | AnnData]](DFAcc[R]):
+class MetaAcc[R: AdRef[str | None, AnnDataLikeMetadataOnly]](DFAcc[R]):
     r"""Reference accessor for arrays from metadata containers (`A.`\ :attr:`~AdAcc.obs`/`A.`\ :attr:`~AdAcc.var`).
 
     Examples
@@ -639,7 +639,7 @@ class MetaAcc[R: AdRef[str | None, MuData | AnnData]](DFAcc[R]):
     dim: Literal["obs", "var"]
     """Axis this accessor refers to, e.g. `A.obs.dim == 'obs'`."""
 
-    def frame(self, data: MuData | AnnData, /) -> DataFrameLike:
+    def frame(self, data: AnnDataLikeMetadataOnly, /) -> DataFrameLike:
         return getattr(self.container(data), self.dim)
 
     def dims(self, k: str | None, /) -> Axes:
@@ -649,7 +649,7 @@ class MetaAcc[R: AdRef[str | None, MuData | AnnData]](DFAcc[R]):
         return f"{_root(self.scope)}.{self.dim}"
 
     def set(
-        self, data: MuData | AnnData, k: str | NO_IDX | None, value: object, /
+        self, data: AnnDataLikeMetadataOnly, k: str | NO_IDX | None, value: object, /
     ) -> None:
         # replacing the frame or index goes through AnnData to keep things aligned
         if k is NO_IDX:
@@ -661,8 +661,8 @@ class MetaAcc[R: AdRef[str | None, MuData | AnnData]](DFAcc[R]):
 
 
 @dataclass(frozen=True)
-class MultiAcc[R: AdRef[int, MuData | AnnData]](
-    RefAcc[R, int, MuData | AnnData, AlignedArray, Array]
+class MultiAcc[R: AdRef[int, AnnDataLikeMetadataOnly]](
+    RefAcc[R, int, AnnDataLikeMetadataOnly, AlignedArray, Array]
 ):
     r"""Reference accessor for arrays from multi-dimensional containers (`A.`\ :attr:`~AdAcc.obsm`/`A.`\ :attr:`~AdAcc.varm`).
 
@@ -720,7 +720,7 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](
     def idx_repr(self, i: int) -> str:
         return f"[:, {i!r}]"
 
-    def isin(self, data: MuData | AnnData, idx: int | None = None) -> bool:
+    def isin(self, data: AnnDataLikeMetadataOnly, idx: int | None = None) -> bool:
         if not super().isin(data, idx):
             return False
         m: AxisArrays = getattr(self.container(data), f"{self.dim}m")
@@ -730,10 +730,12 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](
         return idx is None or -n_cols <= idx < n_cols
 
     @overload
-    def get(self, data: MuData | AnnData, /) -> AlignedArray: ...
+    def get(self, data: AnnDataLikeMetadataOnly, /) -> AlignedArray: ...
     @overload
-    def get(self, data: MuData | AnnData, i: int, /) -> InMemoryArray: ...
-    def get(self, data: MuData | AnnData, i: int | NO_IDX = NO_IDX, /) -> AlignedArray:
+    def get(self, data: AnnDataLikeMetadataOnly, i: int, /) -> InMemoryArray: ...
+    def get(
+        self, data: AnnDataLikeMetadataOnly, i: int | NO_IDX = NO_IDX, /
+    ) -> AlignedArray:
         full: AlignedArray = getattr(self.container(data), f"{self.dim}m")[self.k]
         if i is NO_IDX:
             return full
@@ -751,7 +753,9 @@ class MultiAcc[R: AdRef[int, MuData | AnnData]](
         # TODO: remove slicing when dropping scipy <1.14
         return self._maybe_flatten(i, full[:, i : i + 1])
 
-    def set(self, data: MuData | AnnData, i: int | NO_IDX, value: object, /) -> None:
+    def set(
+        self, data: AnnDataLikeMetadataOnly, i: int | NO_IDX, value: object, /
+    ) -> None:
         if i is NO_IDX:
             getattr(self.container(data), f"{self.dim}m")[self.k] = value
             return
@@ -790,13 +794,13 @@ class MultiMapAcc[R: AdRef](MapAcc[MultiAcc, "AxisArrays | AxisArraysView"]):
     def __repr__(self) -> str:
         return f"{_root(self.scope)}.{self.dim}m"
 
-    def get(self, adata: MuData | AnnData) -> AxisArrays | AxisArraysView:
+    def get(self, adata: AnnDataLikeMetadataOnly) -> AxisArrays | AxisArraysView:
         return getattr(self.container(adata), f"{self.dim}m")
 
 
 @dataclass(frozen=True)
-class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](
-    RefAcc[R, Idx2D, MuData | AnnData, AlignedArray, Array]
+class GraphAcc[R: AdRef[Idx2D, AnnDataLikeMetadataOnly]](
+    RefAcc[R, Idx2D, AnnDataLikeMetadataOnly, AlignedArray, Array]
 ):
     r"""Reference accessor for arrays from graph containers (`A.`\ :attr:`~AdAcc.obsp`/`A.`\ :attr:`~AdAcc.varp`).
 
@@ -847,7 +851,7 @@ class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](
     def idx_repr(self, idx: Idx2D) -> str:
         return f"[{idx[0]!r}, {idx[1]!r}]"
 
-    def isin(self, data: MuData | AnnData, idx: Idx2D | None = None) -> bool:
+    def isin(self, data: AnnDataLikeMetadataOnly, idx: Idx2D | None = None) -> bool:
         if not super().isin(data, idx):
             return False
         data = self.container(data)
@@ -859,11 +863,11 @@ class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](
         return all(i in index for i in idx if isinstance(i, str))
 
     @overload
-    def get(self, data: MuData | AnnData, /) -> AlignedArray: ...
+    def get(self, data: AnnDataLikeMetadataOnly, /) -> AlignedArray: ...
     @overload
-    def get(self, data: MuData | AnnData, idx: Idx2D, /) -> InMemoryArray: ...
+    def get(self, data: AnnDataLikeMetadataOnly, idx: Idx2D, /) -> InMemoryArray: ...
     def get(
-        self, data: MuData | AnnData, idx: Idx2D | NO_IDX = NO_IDX, /
+        self, data: AnnDataLikeMetadataOnly, idx: Idx2D | NO_IDX = NO_IDX, /
     ) -> AlignedArray:
         data = self.container(data)
         full: AlignedArray = getattr(data, f"{self.dim}p")[self.k]
@@ -884,7 +888,7 @@ class GraphAcc[R: AdRef[Idx2D, MuData | AnnData]](
         return self._maybe_flatten(idx, sub)
 
     def set(
-        self, data: MuData | AnnData, idx: Idx2D | NO_IDX, value: object, /
+        self, data: AnnDataLikeMetadataOnly, idx: Idx2D | NO_IDX, value: object, /
     ) -> None:
         inner = self.container(data)
         if idx is NO_IDX:
@@ -922,12 +926,16 @@ class GraphMapAcc[R: AdRef](MapAcc[GraphAcc, "PairwiseArrays | PairwiseArraysVie
     def __repr__(self) -> str:
         return f"{_root(self.scope)}.{self.dim}p"
 
-    def get(self, adata: MuData | AnnData) -> PairwiseArrays | PairwiseArraysView:
+    def get(
+        self, adata: AnnDataLikeMetadataOnly
+    ) -> PairwiseArrays | PairwiseArraysView:
         return getattr(self.container(adata), f"{self.dim}p")
 
 
 @dataclass(frozen=True)
-class ScopeAcc[R: AdRef, D: MuData | AnnData, E = object](RefAcc[R, Never, D, E, E]):
+class ScopeAcc[R: AdRef, D: AnnDataLikeMetadataOnly, E = object](
+    RefAcc[R, Never, D, E, E]
+):
     r"""Abstract base class for accessors to elements that contain an AnnData-like object.
 
     Accessors for arrays in that object (created via :attr:`AD`)
@@ -948,7 +956,7 @@ class ScopeAcc[R: AdRef, D: MuData | AnnData, E = object](RefAcc[R, Never, D, E,
 
 
 @dataclass(frozen=True)
-class ItemAcc[R: AdRef](ScopeAcc[R, MuData | AnnData]):
+class ItemAcc[R: AdRef](ScopeAcc[R, AnnDataLikeMetadataOnly]):
     r"""Accessor for (possibly nested) items in `.uns` (`A.`\ :attr:`~AdAcc.uns`\ `[k]`).
 
     Indexing it with a key descends further into the item (treating it as a mapping).
@@ -1004,7 +1012,7 @@ class ItemAcc[R: AdRef](ScopeAcc[R, MuData | AnnData]):
     def idx_repr(self, idx: Never) -> str:
         return f"[{idx!r}]"
 
-    def isin(self, data: MuData | AnnData, idx: None = None) -> bool:
+    def isin(self, data: AnnDataLikeMetadataOnly, idx: None = None) -> bool:
         if not super().isin(data, idx):
             return False
         item = self.container(data).uns
@@ -1015,7 +1023,7 @@ class ItemAcc[R: AdRef](ScopeAcc[R, MuData | AnnData]):
             return False
         return True
 
-    def get(self, data: MuData | AnnData, idx: NO_IDX = NO_IDX, /) -> object:
+    def get(self, data: AnnDataLikeMetadataOnly, idx: NO_IDX = NO_IDX, /) -> object:
         if idx is not NO_IDX:
             msg = f"{self!r} can only be used to get the whole item."
             raise TypeError(msg)
@@ -1024,7 +1032,7 @@ class ItemAcc[R: AdRef](ScopeAcc[R, MuData | AnnData]):
             item = item[k]
         return item
 
-    def set(self, data: MuData | AnnData, idx: NO_IDX, value: object, /) -> None:
+    def set(self, data: AnnDataLikeMetadataOnly, idx: NO_IDX, value: object, /) -> None:
         if idx is not NO_IDX:
             msg = f"{self!r} can only be used to set the whole item."
             raise TypeError(msg)
@@ -1059,7 +1067,7 @@ class UnsMapAcc[R: AdRef](MapAcc[ItemAcc, "MutableMapping[str, Any]"]):
     def __repr__(self) -> str:
         return f"{_root(self.scope)}.uns"
 
-    def get(self, adata: MuData | AnnData) -> MutableMapping[str, Any]:
+    def get(self, adata: AnnDataLikeMetadataOnly) -> MutableMapping[str, Any]:
         return self.container(adata).uns
 
 
@@ -1347,7 +1355,7 @@ class AdAcc[R: AdRef]:
 
         return parse(self, spec, strict=strict, vec=vec)
 
-    def container(self, data: MuData | AnnData, /) -> MuData | AnnData:
+    def container(self, data: AnnDataLikeMetadataOnly, /) -> AnnDataLikeMetadataOnly:
         """Get the AnnData object this accessor indexes into.
 
         That is `data` itself, or the nested object :attr:`scope` refers to in `data`.
@@ -1366,12 +1374,12 @@ class AdAcc[R: AdRef]:
         """
         if self.scope is None:
             return data
-        if not _is_anndata_like(elem := self.scope.get(data)):
+        if not isinstance(elem := self.scope.get(data), AnnDataLikeMetadataOnly):
             msg = f"{self.scope!r} is {type(elem).__name__}, not an AnnData object, so `.AD` can’t index into it."
             raise TypeError(msg)
         return elem
 
-    def isin(self, data: MuData | AnnData, /) -> bool:
+    def isin(self, data: AnnDataLikeMetadataOnly, /) -> bool:
         """Check if the nested AnnData object this accessor refers to is in `data`.
 
         `True` for a top-level accessor like :data:`A`,
@@ -1379,7 +1387,9 @@ class AdAcc[R: AdRef]:
         """
         if self.scope is None:
             return True
-        return self.scope.isin(data) and _is_anndata_like(self.scope.get(data))
+        return self.scope.isin(data) and isinstance(
+            self.scope.get(data), AnnDataLikeMetadataOnly
+        )
 
     def __repr__(self) -> str:
         return "A" if self.scope is None else f"{self.scope!r}.AD"
@@ -1460,27 +1470,11 @@ def _is_frame(x: object, /) -> TypeGuard[DataFrameLike]:
     return isinstance(x, pd.DataFrame | Dataset2D)
 
 
-def _is_anndata_like(x: object, /) -> TypeGuard[MuData | AnnData]:
-    if isinstance(x, AnnData):
-        return True
-    # `MuData` is a placeholder at runtime, since importing mudata here would be circular.
-    # A MuData object can only exist if mudata was imported, so look it up there.
-    return (mudata := sys.modules.get("mudata")) is not None and isinstance(
-        x, mudata.MuData
-    )
-
-
 def _positional_idx(
-    data: MuData | AnnData, idx: Idx2D, dims: tuple[str, str], /
+    data: AnnDataLikeMetadataOnly, idx: Idx2D, dims: tuple[str, str], /
 ) -> tuple[int | slice, ...]:
     """Turn the names in a 2D index into positions along `dims`."""
     return tuple(
         getattr(data, dim).index.get_loc(i) if isinstance(i, str) else i
         for i, dim in zip(idx, dims, strict=True)
     )
-
-
-if not TYPE_CHECKING:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
-    R = AdRef[Hashable, MuData | AnnData]
-    I = Hashable
-    D = MuData | AnnData

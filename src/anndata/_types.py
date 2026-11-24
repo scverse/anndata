@@ -28,10 +28,6 @@ if TYPE_CHECKING:
     )
     from .compat import XDataset
 
-else:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
-    type S = StorageType
-    type RWAble = typing.RWAble
-
 
 __all__ = [
     "AnnDataElem",

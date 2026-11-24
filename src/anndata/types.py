@@ -154,8 +154,8 @@ class AnnDataLikeMetadataOnly(Protocol):
 class AnnDataLike(AnnDataLikeMetadataOnly, Protocol):
     """The full AnnData API."""
 
-    @property
-    def X(self) -> AlignedArray | None: ...
+    X: AlignedArray | None
+
     @property
     def layers(self) -> MutableMapping[str | None, AlignedArray]: ...
 

@@ -304,10 +304,17 @@ module = [
     "mudata.*",
     "numcodecs.*",
     "pyarrow.*",
-    "scanpy.*",
     "sklearn.*",
 ]
 follow_untyped_imports = true
+
+# scanpy’s `type` aliases contain `AdRef[AnnData]`, which mypy checks before resolving descriptors like `AnnData.obsm`,
+# so it wrongly concludes `AnnData` isn’t `AnnDataLikeMetadataOnly`, and that sticks for the whole run.
+# Remove once https://github.com/python/mypy/issues/22549 is fixed.
+[[tool.mypy.overrides]]
+module = [ "scanpy.*" ]
+ignore_missing_imports = true
+follow_imports = "skip"
 
 # Dependencies that ship no type information (absent or `Incomplete` annotations).
 [[tool.mypy.overrides]]
