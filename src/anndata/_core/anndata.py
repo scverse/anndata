@@ -1612,6 +1612,7 @@ class AnnData:  # noqa: PLW1641
 
         from anndata._io.specs.registry import _REGISTRY
         from anndata.acc import AdRef, RefAcc
+        from anndata.compat import canonical_type
 
         writeable_elems = {
             src_type
@@ -1676,7 +1677,7 @@ class AnnData:  # noqa: PLW1641
                     return True
                 return False
             return (
-                (accumulate or type(elem) not in writeable_elems)
+                (accumulate or canonical_type(type(elem)) not in writeable_elems)
                 if not isinstance(elem, SupportsArrayApiBase)
                 else accumulate
             )

@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import warnings
 from dataclasses import dataclass
-from functools import partial, singledispatch
+from functools import partial
 from types import FunctionType, UnionType
 from typing import TYPE_CHECKING, Literal, TypeAliasType, cast, get_args, get_origin
 
@@ -18,12 +18,14 @@ from ._core.sparse_dataset import BaseCompressedSparseDataset
 from ._core.xarray import Dataset2D
 from ._warnings import warn
 from .compat import (
+    AwkArray,
     CSArray,
     CSMatrix,
     CupyArray,
     CupySparseMatrix,
     DaskArray,
     pandas_sparse,
+    singledispatch,
 )
 from .logging import get_logger
 
@@ -190,102 +192,102 @@ def axis_len(x, axis: Literal[0, 1]) -> int | None:
     return x.shape[axis]
 
 
-try:
-    from .compat import awkward as ak
+def _size_at_depth(layout, depth, lateral_context, **kwargs):
+    """Callback function for dim_len_awkward, resolving the dim_len for a given level"""
+    import awkward as ak
 
-    def _size_at_depth(layout, depth, lateral_context, **kwargs):
-        """Callback function for dim_len_awkward, resolving the dim_len for a given level"""
-        if layout.is_numpy:
-            # if it's an embedded rectilinear array, we have to deal with its shape
-            # which might not be 1-dimensional
-            shape = (0,) if layout.is_unknown else layout.shape
-            numpy_axis = lateral_context["axis"] - depth + 1
-            if not (1 <= numpy_axis < len(shape)):
-                msg = f"axis={lateral_context['axis']} is too deep"
-                raise TypeError(msg)
-            lateral_context["out"] = shape[numpy_axis]
-            return ak.contents.EmptyArray()
+    if layout.is_numpy:
+        # if it's an embedded rectilinear array, we have to deal with its shape
+        # which might not be 1-dimensional
+        shape = (0,) if layout.is_unknown else layout.shape
+        numpy_axis = lateral_context["axis"] - depth + 1
+        if not (1 <= numpy_axis < len(shape)):
+            msg = f"axis={lateral_context['axis']} is too deep"
+            raise TypeError(msg)
+        lateral_context["out"] = shape[numpy_axis]
+        return ak.contents.EmptyArray()
 
-        elif layout.is_list and depth == lateral_context["axis"]:
-            if layout.parameter("__array__") in {"string", "bytestring"}:
-                # Strings are implemented like an array of lists of uint8 (ListType(NumpyType(...)))
-                # which results in an extra hierarchy-level that shouldn't show up in dim_len
-                # See https://github.com/scikit-hep/awkward/discussions/1654#discussioncomment-3736747
-                msg = f"axis={lateral_context['axis']} is too deep"
-                raise TypeError(msg)
-
-            if layout.is_regular:
-                # if it's a regular list, you want the size
-                lateral_context["out"] = layout.size
-            else:
-                # if it's an irregular list, you want a null token
-                lateral_context["out"] = -1
-            return ak.contents.EmptyArray()
-
-        elif layout.is_record and depth == lateral_context["axis"]:
-            lateral_context["out"] = len(layout.fields)
-            return ak.contents.EmptyArray()
-
-        elif layout.is_record:
-            # currently, we don't recurse into records
-            # in theory we could, just not sure how to do it at the moment
-            # Would need to consider cases like: scalars, unevenly sized values
-            msg = f"Cannot recurse into record type found at axis={lateral_context['axis']}"
+    elif layout.is_list and depth == lateral_context["axis"]:
+        if layout.parameter("__array__") in {"string", "bytestring"}:
+            # Strings are implemented like an array of lists of uint8 (ListType(NumpyType(...)))
+            # which results in an extra hierarchy-level that shouldn't show up in dim_len
+            # See https://github.com/scikit-hep/awkward/discussions/1654#discussioncomment-3736747
+            msg = f"axis={lateral_context['axis']} is too deep"
             raise TypeError(msg)
 
-        elif layout.is_union:
-            # if it's a union, you could get the result of each union branch
-            # separately and see if they're all the same; if not, it's an error
-            result = None
-            for content in layout.contents:
-                context = {"axis": lateral_context["axis"]}
-                ak.transform(
-                    _size_at_depth,
-                    content,
-                    lateral_context=context,
-                )
-                if result is None:
-                    result = context["out"]
-                elif result != context["out"]:
-                    # Union branches have different lengths -> return null token
-                    lateral_context["out"] = -1
-                    return ak.contents.EmptyArray()
-            lateral_context["out"] = result
-            return ak.contents.EmptyArray()
-
-    @axis_len.register(ak.Array)
-    def axis_len_awkward(array, axis: Literal[0, 1]) -> int | None:
-        """Get the length of an awkward array in a given axis
-
-        Returns None if the axis is of variable length.
-
-        Code adapted from @jpivarski's solution in https://github.com/scikit-hep/awkward/discussions/1654#discussioncomment-3521574
-        """
-        if axis < 0:  # negative axis is another can of worms... maybe later
-            msg = "Does not support negative axis"
-            raise NotImplementedError(msg)
-        elif axis == 0:
-            return len(array)
+        if layout.is_regular:
+            # if it's a regular list, you want the size
+            lateral_context["out"] = layout.size
         else:
-            # communicate with the recursive function using a context (lateral)
-            context = {"axis": axis}
+            # if it's an irregular list, you want a null token
+            lateral_context["out"] = -1
+        return ak.contents.EmptyArray()
 
-            # "transform" but we don't care what kind of array it returns
+    elif layout.is_record and depth == lateral_context["axis"]:
+        lateral_context["out"] = len(layout.fields)
+        return ak.contents.EmptyArray()
+
+    elif layout.is_record:
+        # currently, we don't recurse into records
+        # in theory we could, just not sure how to do it at the moment
+        # Would need to consider cases like: scalars, unevenly sized values
+        msg = f"Cannot recurse into record type found at axis={lateral_context['axis']}"
+        raise TypeError(msg)
+
+    elif layout.is_union:
+        # if it's a union, you could get the result of each union branch
+        # separately and see if they're all the same; if not, it's an error
+        result = None
+        for content in layout.contents:
+            context = {"axis": lateral_context["axis"]}
             ak.transform(
                 _size_at_depth,
-                array,
+                content,
                 lateral_context=context,
             )
+            if result is None:
+                result = context["out"]
+            elif result != context["out"]:
+                # Union branches have different lengths -> return null token
+                lateral_context["out"] = -1
+                return ak.contents.EmptyArray()
+        lateral_context["out"] = result
+        return ak.contents.EmptyArray()
 
-            # Use `None` as null token.
-            return None if context["out"] == -1 else context["out"]
 
-    @asarray.register(ak.Array)
-    def asarray_awkward(x):
-        return x
+@axis_len.register(AwkArray)
+def axis_len_awkward(array, axis: Literal[0, 1]) -> int | None:
+    """Get the length of an awkward array in a given axis
 
-except ImportError:
-    pass
+    Returns None if the axis is of variable length.
+
+    Code adapted from @jpivarski's solution in https://github.com/scikit-hep/awkward/discussions/1654#discussioncomment-3521574
+    """
+    import awkward as ak
+
+    if axis < 0:  # negative axis is another can of worms... maybe later
+        msg = "Does not support negative axis"
+        raise NotImplementedError(msg)
+    elif axis == 0:
+        return len(array)
+    else:
+        # communicate with the recursive function using a context (lateral)
+        context = {"axis": axis}
+
+        # "transform" but we don't care what kind of array it returns
+        ak.transform(
+            _size_at_depth,
+            array,
+            lateral_context=context,
+        )
+
+        # Use `None` as null token.
+        return None if context["out"] == -1 else context["out"]
+
+
+@asarray.register(AwkArray)
+def asarray_awkward(x):
+    return x
 
 
 def make_index_unique(index: pd.Index[str], join: str = "-") -> pd.Index[str]:

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from functools import singledispatch
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
@@ -9,7 +8,7 @@ from pandas.api.types import is_string_dtype
 
 from .._settings import settings
 from .._warnings import ImplicitModificationWarning
-from ..compat import XDataset, pandas_as_str
+from ..compat import XDataset, pandas_as_str, singledispatch
 from ..utils import warn
 from .xarray import Dataset2D
 

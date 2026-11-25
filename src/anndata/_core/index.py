@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from enum import Enum
-from functools import singledispatch, wraps
+from functools import wraps
 from itertools import repeat
 from types import EllipsisType
 from typing import TYPE_CHECKING, Literal, NamedTuple, cast, overload
@@ -23,6 +23,7 @@ from ..compat import (
     XDataArray,
     has_xp_base,
     known_dim,
+    singledispatch,
 )
 from ..types import SupportsArrayApiBase
 from .xarray import Dataset2D
@@ -522,6 +523,13 @@ def _subset_dataset(d: h5py.Dataset, subset_idx: NumpySubsetIdx) -> np.ndarray:
         return _safe_fancy_index_h5py(d, subset_idx)
     # from hdf5, then to real order
     return d[order][inv_order]
+
+
+@_subset_dispatch.register(XDataArray)
+def _subset_xarray(
+    a: XDataArray, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
+) -> XDataArray:
+    return a[subset_idx]
 
 
 @overload

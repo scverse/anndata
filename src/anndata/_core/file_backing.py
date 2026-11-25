@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import weakref
 from collections.abc import Mapping
-from functools import singledispatch
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 import h5py
 import zarr
 
-from ..compat import AwkArray, DaskArray
+from ..compat import AwkArray, DaskArray, singledispatch
 from .sparse_dataset import BaseCompressedSparseDataset
 from .xarray import Dataset2D
 

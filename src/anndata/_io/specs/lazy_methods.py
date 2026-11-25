@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from functools import partial, singledispatch
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, overload
 
@@ -14,7 +14,7 @@ from scipy import sparse
 import anndata as ad
 from anndata._core.file_backing import filename, get_elem_name
 from anndata._core.xarray import Dataset2D, requires_xarray
-from anndata.compat import DaskArray, XDataset, XVariable, pandas_as_str
+from anndata.compat import DaskArray, XDataset, XVariable, pandas_as_str, singledispatch
 
 from .registry import _LAZY_REGISTRY, IOSpec, read_elem
 
