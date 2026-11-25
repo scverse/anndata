@@ -139,6 +139,8 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
     ) -> Callable[[W], W]:
         spec = proc_spec(spec)
         modifiers = frozenset(modifiers)
+        # e.g. `dask.array.Array` is looked up as its stand-in `anndata.compat.DaskArray`
+        src_type = _canonical_src_type(src_type)
 
         # Record specification for src_type
         if src_type in self.write_specs and (spec != self.write_specs[src_type]):

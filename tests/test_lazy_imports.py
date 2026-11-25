@@ -125,3 +125,37 @@ def test_singledispatch(fake_module: str, *, register_before_import: bool) -> No
     Mapping.register(Thing)
     f._clear_cache()
     assert f(Thing()) == "thing"
+
+
+def test_register_write_real_class() -> None:
+    """Writers registered for a real class (not the stand-in) are found."""
+    da = pytest.importorskip("dask.array")
+    import zarr
+
+    from anndata._io.specs.registry import IORegistry, IOSpec
+
+    reg = IORegistry()
+
+    @reg.register_write(zarr.Group, da.Array, IOSpec("array", "0.2.0"))
+    def write(*args: object, **kwargs: object) -> None:
+        pass
+
+    from anndata.compat import DaskArray
+
+    assert reg.has_write(zarr.Group, DaskArray, frozenset())
+    assert reg.has_write(zarr.Group, da.Array, frozenset())
+    assert reg.get_spec(da.zeros(3)) == IOSpec("array", "0.2.0")
+
+
+def test_subclass_lazy_type(fake_module: str) -> None:
+    """Subclassing a stand-in imports and subclasses the real class."""
+    LazyThing = lazy_type(fake_module, "Thing")
+    Thing, _ = install_fake_module(fake_module)
+
+    class MyThing(LazyThing):  # type: ignore[misc,valid-type]
+        pass
+
+    assert not isinstance(MyThing, LazyType)
+    assert MyThing.__mro__[1] is Thing
+    assert isinstance(MyThing(), LazyThing)
+    assert MyThing.kind == "thing"

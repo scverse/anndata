@@ -5,13 +5,14 @@ so :mod:`anndata.compat` exposes a :class:`LazyType` for each of their classes i
 A lazy type behaves like the class it stands for in
 
 - :func:`isinstance` and :func:`issubclass` (and therefore in ``match`` class patterns),
-- :func:`functools.singledispatch`, which treats it as a virtual base class, and
-- calls and attribute access (e.g. ``XDataset.from_dataframe(...)``).
+- :func:`functools.singledispatch`, which treats it as a virtual base class,
+- calls and attribute access (e.g. ``XDataset.from_dataframe(...)``), and
+- ``class`` statements (``class MyArray(DaskArray)`` subclasses :class:`dask.array.Array`).
 
 The first two never import anything: an object can only be an instance of a class
 whose module has been imported, so until the *guard* module is in :data:`sys.modules`,
 the answer is simply “no”.
-Calls and attribute access do import the module, and fail if it isn’t installed.
+Calls, attribute access and subclassing do import the module, and fail if it isn’t installed.
 
 Mappings keyed by type (such as the IO registry) need to look up
 :func:`canonical_type` of a type, since a lazy type and its real class are different objects.
@@ -21,6 +22,7 @@ from __future__ import annotations
 
 import functools
 import sys
+import types
 from importlib import import_module
 from types import UnionType
 from typing import TYPE_CHECKING, cast, get_args, get_type_hints
@@ -44,6 +46,16 @@ class LazyType(type):
     _lazy_guard: str
     _lazy_load: Callable[[], type]
     _lazy_real: type | None
+
+    def __new__(
+        mcls, name: str, bases: tuple[type, ...], ns: dict[str, Any], **kwargs: object
+    ) -> type:
+        if "_lazy_load" in ns:  # created by `lazy_type`
+            return super().__new__(mcls, name, bases, ns, **kwargs)
+        # A class statement subclassing a stand-in (e.g. `class MyArray(DaskArray): ...`)
+        # imports the real class and subclasses that, like it did before imports were lazy.
+        real_bases = tuple(resolve(b) for b in bases)
+        return types.new_class(name, real_bases, kwargs, lambda d: d.update(ns))
 
     def _lazy_resolve(cls, *, force: bool = False) -> type | None:
         """Return the real class, or `None` if its module hasn’t been imported (and `force` is false)."""
@@ -131,15 +143,18 @@ def lazy_type(
                 obj = getattr(obj, part)
             return obj
 
-    cls = LazyType(
-        qualname.rpartition(".")[2],
-        bases,
-        dict(
-            __module__=module,
-            __qualname__=qualname,
-            _lazy_guard=guard or module,
-            _lazy_load=staticmethod(load),
-            _lazy_real=None,
+    cls = cast(
+        "LazyType",
+        LazyType(
+            qualname.rpartition(".")[2],
+            bases,
+            dict(
+                __module__=module,
+                __qualname__=qualname,
+                _lazy_guard=guard or module,
+                _lazy_load=staticmethod(load),
+                _lazy_real=None,
+            ),
         ),
     )
     _UNRESOLVED[cls] = None
