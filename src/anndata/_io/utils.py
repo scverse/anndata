@@ -598,7 +598,7 @@ def mapping_items(
     if (layout := IndexedLayout.of(group)) is None:
         if keys is None:
             return iter(dict(group).items())
-        return ((k, group[k]) for k in keys if k in group)
+        return ((k, group[k]) for k in group if k in keys)  # store order, like below
     names = layout.read_names(group)
     return (
         (k, group[layout.child_key(i)])
