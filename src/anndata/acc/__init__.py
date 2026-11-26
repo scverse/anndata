@@ -407,6 +407,8 @@ class LayerAcc[R: AdRef[Idx2D, AnnDataLike]](
         return f"[{idx[0]!r}, {idx[1]!r}]"
 
     def container(self, data: AnnDataLike, /) -> AnnDataLike:
+        if self.scope is None:  # trust the root object as passed (e.g. `Raw`)
+            return data
         if not isinstance(inner := super().container(data), AnnDataLike):
             msg = f"{self!r} can only refer into AnnData objects, not {type(inner).__name__}."
             raise TypeError(msg)

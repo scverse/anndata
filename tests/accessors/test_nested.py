@@ -192,7 +192,7 @@ def test_set_ad(adata: AnnData) -> None:
     new = AnnData(shape=(1, 1))
     adata[A.uns["nested"].AD] = new
     assert adata.uns["nested"] is new
-    with pytest.raises(TypeError, match=r"not an AnnData object"):
+    with pytest.raises(TypeError, match=r"not an AnnData-like object"):
         adata[A.uns["nested"].AD] = 0
     with pytest.raises(TypeError, match=r"Cannot replace the object itself"):
         adata[A] = new
