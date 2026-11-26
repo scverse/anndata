@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from typing import Any, Literal
 
     from anndata.acc import (
+        AdAcc,
         AdRef,
         DFAcc,
         GraphAcc,
@@ -31,7 +32,7 @@ if TYPE_CHECKING:
         MultiMapAcc,
     )
 
-    type MatrixAcc = LayerAcc | MultiAcc | GraphAcc | ItemAcc | DFAcc
+    type MatrixAcc = LayerAcc | MultiAcc | GraphAcc | ItemAcc | DFAcc | AdAcc
 
 
 type AdRefSer = Sequence[str | int | AdRefSer | None]
@@ -137,6 +138,8 @@ MATRICES: list[tuple[MatrixAcc, AdRefSer]] = [
     (A.obsm["df"].DF, ["obsm", "df", "DF"]),
     (A.uns["df"].DF, ["uns", ["df"], "DF"]),
     (A.uns["n"].AD.varm["df"].DF, ["uns", ["n"], "AD", ["varm", "df", "DF"]]),
+    (A.uns["n"].AD, ["uns", ["n"], "AD"]),
+    (A.uns["n"].AD.uns["m"].AD, ["uns", ["n"], "AD", ["uns", ["m"], "AD"]]),
 ]
 
 
@@ -176,8 +179,8 @@ def test_from_json_vec_mismatch(
         A.from_json(serialized, vec=vec)
 
 
-@pytest.mark.parametrize("acc", [A.obs, A.uns["n"].AD.var], ids=str)
-def test_to_json_unsupported(acc: MetaAcc) -> None:
+@pytest.mark.parametrize("acc", [A.obs, A.uns["n"].AD.var, A], ids=str)
+def test_to_json_unsupported(acc: MetaAcc | AdAcc) -> None:
     with pytest.raises(
         TypeError, match=rf"Unsupported accessor {re.escape(repr(acc))}$"
     ):

@@ -1209,7 +1209,14 @@ class AdAcc[R: AdRef]:
             object.__setattr__(self, f"{dim}p", graphs)
 
     def to_json(
-        self, ref: R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R] | DFAcc[R]
+        self,
+        ref: R
+        | LayerAcc[R]
+        | MultiAcc[R]
+        | GraphAcc[R]
+        | ItemAcc[R]
+        | DFAcc[R]
+        | AdAcc[R],
     ) -> list[str | int | AccJson | None]:
         """Serialize an :class:`AdRef` or a whole container accessor to a JSON-compatible list.
 
@@ -1244,19 +1251,21 @@ class AdAcc[R: AdRef]:
     @overload
     def from_json(
         self, data: AccJson, *, vec: Literal[False]
-    ) -> LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R] | DFAcc[R]: ...
+    ) -> LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R] | DFAcc[R] | AdAcc[R]: ...
     @overload
     def from_json(
         self, data: AccJson, *, vec: None = None
-    ) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R] | DFAcc[R]: ...
+    ) -> (
+        R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R] | DFAcc[R] | AdAcc[R]
+    ): ...
     def from_json(
         self, data: AccJson, *, vec: bool | None = None
-    ) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R] | DFAcc[R]:
+    ) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R] | DFAcc[R] | AdAcc[R]:
         """Create an :class:`AdRef` or a whole container accessor from a JSON sequence.
 
         `vec` works like in :meth:`resolve`:
         if `True`, `data` must refer to a vector (:class:`AdRef`),
-        if `False`, to a whole container (:class:`LayerAcc`/:class:`MultiAcc`/:class:`GraphAcc`/:class:`ItemAcc`/:class:`DFAcc`),
+        if `False`, to a whole container (:class:`LayerAcc`/:class:`MultiAcc`/:class:`GraphAcc`/:class:`ItemAcc`/:class:`DFAcc`/:class:`AdAcc`),
         and if unset, both are accepted.
 
         Schema: `acc-schema-v1.json <../acc-schema-v1.json>`_

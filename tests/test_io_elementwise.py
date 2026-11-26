@@ -275,6 +275,7 @@ def test_io_spec_compressed_scalars(
         A.uns["a"]["b"],
         A.obsm["df"].DF["c"],
         A.uns["n"].AD.uns["m"].AD.obs["x"],
+        A.uns["n"].AD,
     ],
     ids=str,
 )

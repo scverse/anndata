@@ -27,7 +27,7 @@ def _entry_points() -> list[tuple[EntryPoint, str | None]]:
     return [(ep, ep.dist.name if ep.dist else None) for ep in entry_points(group=GROUP)]
 
 
-def _project_of(elem: AdRef | RefAcc) -> str:
+def _project_of(elem: AdRef | RefAcc | AdAcc) -> str:
     """Get the name of the entry point pointing into the top-level package that defines `elem`’s classes."""
     types = {type(elem), *([type(elem.acc)] if isinstance(elem, AdRef) else [])}
     mods = {t.__module__.partition(".")[0] for t in types}
@@ -69,7 +69,9 @@ def _check_name(ep: EntryPoint, dist: str | None) -> EntryPoint:
     return ep
 
 
-def to_json(elem: AdRef | RefAcc) -> tuple[str, list[str | int | AccJson | None]]:
+def to_json(
+    elem: AdRef | RefAcc | AdAcc,
+) -> tuple[str, list[str | int | AccJson | None]]:
     """Serialize `elem` using the :class:`~anndata.acc.AdAcc` of the project defining it.
 
     Raises :exc:`TypeError` if that doesn’t round-trip, so nothing gets silently lost.

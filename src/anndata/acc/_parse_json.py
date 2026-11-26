@@ -2,13 +2,23 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from . import AdRef, DFAcc, GraphAcc, ItemAcc, LayerAcc, MetaAcc, MultiAcc
+from . import (
+    AdAcc,
+    AdRef,
+    DFAcc,
+    GraphAcc,
+    ItemAcc,
+    LayerAcc,
+    MetaAcc,
+    MultiAcc,
+    RefAcc,
+)
 from ._parse_str import _check_vec, _uns_item
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from . import AccJson, AdAcc, Idx2D, RefAcc
+    from . import AccJson, Idx2D
 
 
 __all__ = ["parse_json", "to_json"]
@@ -33,13 +43,15 @@ def _item[R: AdRef](a: AdAcc[R], path: Sequence[object]) -> ItemAcc[R]:
 
 def _cast[R: AdRef](
     target: MultiAcc[R] | ItemAcc[R], cast: AccJson
-) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R] | DFAcc[R]:
+) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R] | DFAcc[R] | AdAcc[R]:
     """Parse the trailing cast name and its payload, e.g. `"DF", "c"`."""
     match cast:
         case ["DF"]:
             return target.DF
         case ["DF", str() | None as col]:
             return target.DF[col]
+        case ["AD"] if isinstance(target, ItemAcc):
+            return target.AD
         case ["AD", [*inner]] if isinstance(target, ItemAcc):
             return _parse_json(target.AD, inner)
     msg = f"Cannot cast {target!r} with {list(cast)!r}"
@@ -48,7 +60,7 @@ def _cast[R: AdRef](
 
 def parse_json[R: AdRef](
     a: AdAcc[R], data: AccJson, *, vec: bool | None = None
-) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R] | DFAcc[R]:
+) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R] | DFAcc[R] | AdAcc[R]:
     parsed = _parse_json(a, data)
     _check_vec(data, vec=vec, actual=isinstance(parsed, AdRef))
     return parsed
@@ -56,7 +68,7 @@ def parse_json[R: AdRef](
 
 def _parse_json[R: AdRef](  # noqa: PLR0911
     a: AdAcc[R], data: AccJson
-) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R] | DFAcc[R]:
+) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R] | DFAcc[R] | AdAcc[R]:
     match data:
         case ["layers", str() | None as l]:
             return a.layers[l]
@@ -89,16 +101,22 @@ def _idx_2d_ser(idx: Idx2D) -> tuple[str | None, str | None]:
     return (i if isinstance(i, str) else None, j if isinstance(j, str) else None)
 
 
-def to_json(ref: AdRef | RefAcc) -> list[str | int | AccJson | None]:
+def to_json(ref: AdRef | RefAcc | AdAcc) -> list[str | int | AccJson | None]:
     local = _local_json(ref)
-    scope = (ref.acc if isinstance(ref, AdRef) else ref).scope
+    match ref:
+        case AdRef(acc=RefAcc(scope=scope)) | RefAcc(scope=scope):
+            pass
+        case AdAcc(scope=RefAcc(scope=scope)):  # same scope as `A.uns["n"]`
+            pass
+        case _:  # bare `A`, which `_local_json` already rejected
+            scope = None
     while scope is not None:  # wrap from the innermost `.AD` outwards
         local = [*_local_json(scope), "AD", local]
         scope = scope.scope
     return local
 
 
-def _local_json(ref: AdRef | RefAcc) -> list[str | int | AccJson | None]:  # noqa: PLR0911
+def _local_json(ref: AdRef | RefAcc | AdAcc) -> list[str | int | AccJson | None]:  # noqa: PLR0911
     """Serialize `ref` relative to the `.AD` cast it’s in, ignoring its scope."""
     match ref:
         case AdRef(LayerAcc() | GraphAcc() as acc, idx):
@@ -117,6 +135,8 @@ def _local_json(ref: AdRef | RefAcc) -> list[str | int | AccJson | None]:  # noq
             return [f"{dim}p", k]
         case DFAcc(frame_acc=MultiAcc() | ItemAcc() as frame):
             return [*_local_json(frame), "DF"]
+        case AdAcc(scope=RefAcc() as scope):
+            return [*_local_json(scope), "AD"]
         case ItemAcc(path=path):
             return ["uns", list(path)]
         case _:

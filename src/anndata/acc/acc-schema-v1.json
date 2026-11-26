@@ -107,7 +107,7 @@
             ]
         },
         "acc": {
-            "title": "Reference accessor for a whole container (LayerAcc/MultiAcc/GraphAcc/ItemAcc/DFAcc)",
+            "title": "Reference accessor for a whole container (LayerAcc/MultiAcc/GraphAcc/ItemAcc/DFAcc/AdAcc)",
             "type": "array",
             "oneOf": [
                 {
@@ -155,6 +155,16 @@
                         { "const": "uns" },
                         { "$ref": "#/$defs/uns-path" },
                         { "const": "DF" }
+                    ]
+                },
+                {
+                    "title": "Whole AnnData object in unstructured annotation (uns …AD)",
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "prefixItems": [
+                        { "const": "uns" },
+                        { "$ref": "#/$defs/uns-path" },
+                        { "const": "AD" }
                     ]
                 },
                 {

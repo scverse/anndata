@@ -32,7 +32,7 @@ if TYPE_CHECKING:
         _WriteInternal,
     )
     from .._write_compat import WriteConfig
-    from ..acc import AdRef, DFAcc, MapAcc, RefAcc
+    from ..acc import AdAcc, AdRef, DFAcc, MapAcc, RefAcc
     from ..typing import RWAble
     from .specs.registry import Writer
 
@@ -167,7 +167,7 @@ def pandas_nullable_dtype(dtype: np.dtype) -> BaseMaskedDtype:
 def write_use(
     f: _GroupStorageType,
     adata: AnnData,
-    use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc],
+    use: AdRef | RefAcc | MapAcc | AdAcc | Sequence[AdRef | RefAcc | MapAcc | AdAcc],
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
     compat: WriteConfig,
@@ -235,13 +235,20 @@ def _check_store(f: _GroupStorageType, adata: AnnData, use: object) -> None:
 
 
 def _descend(
-    f: _GroupStorageType, adata: AnnData, use: AdRef | RefAcc | MapAcc
+    f: _GroupStorageType, adata: AnnData, use: AdRef | RefAcc | MapAcc | AdAcc
 ) -> tuple[_GroupStorageType, AnnData]:
     """Get the anndata group and object `use` refers into."""
     from .. import AnnData
-    from ..acc import AdRef, ItemAcc
+    from ..acc import AdAcc, AdRef, ItemAcc, MapAcc, RefAcc
 
-    if (scope := (use.acc if isinstance(use, AdRef) else use).scope) is None:
+    match use:
+        case AdRef(acc=RefAcc(scope=scope)) | RefAcc(scope=scope) | MapAcc(scope=scope):
+            pass
+        case AdAcc(scope=RefAcc(scope=scope)):  # same scope as `A.uns["n"]`
+            pass
+        case _:  # bare `A`, which `_resolve_use` rejects
+            scope = None
+    if scope is None:
         return f, adata
     f, _ = _descend(f, adata, scope)
     if not isinstance(scope, ItemAcc):  # e.g. a mudata modality
@@ -290,10 +297,11 @@ def _frame_col(
 
 
 def _resolve_use(  # noqa: PLR0911, PLR0912
-    f: _GroupStorageType, adata: AnnData, use: AdRef | RefAcc | MapAcc
+    f: _GroupStorageType, adata: AnnData, use: AdRef | RefAcc | MapAcc | AdAcc
 ) -> tuple[tuple[str, ...], str, RWAble]:
     """Get the parent path (names, not child keys), key, and element to write for `use`."""
     from ..acc import (
+        AdAcc,
         AdRef,
         DFAcc,
         GraphAcc,
@@ -312,6 +320,9 @@ def _resolve_use(  # noqa: PLR0911, PLR0912
         case DFAcc(frame_acc=RefAcc() as frame):  # `.DF`
             parent, key, _ = _resolve_use(f, adata, frame)
             return parent, key, use.get(adata)  # `.get` checks the cast
+        case AdAcc(scope=RefAcc() as item):  # `.AD`
+            parent, key, _ = _resolve_use(f, adata, item)
+            return parent, key, use.container(adata)  # `.container` checks the cast
         case ItemAcc(path=path):
             for i in range(1, len(path)):  # `uns` itself is a fixed attribute
                 _require_group(f, ("uns", *path[:i]), "dict", use)

@@ -1628,7 +1628,7 @@ class AnnData:  # noqa: PLW1641
                 return True
 
         from anndata._io.specs.registry import _REGISTRY
-        from anndata.acc import AdRef, RefAcc
+        from anndata.acc import AdAcc, AdRef, RefAcc
 
         writeable_elems = {
             src_type
@@ -1681,7 +1681,7 @@ class AnnData:  # noqa: PLW1641
                 return accumulate or any(
                     predicate(v, accumulate=accumulate) for v in elem.values()
                 )
-            if isinstance(elem, AdRef | RefAcc):
+            if isinstance(elem, AdRef | RefAcc | AdAcc):
                 # writeable, but only with the `accessor` flag and a known project
                 if accumulate or not compat.accessor:
                     return True
@@ -1778,7 +1778,12 @@ class AnnData:  # noqa: PLW1641
         compression: Literal["gzip", "lzf"] | None = None,
         compression_opts: int | object = None,
         as_dense: Sequence[str] = (),
-        use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
+        use: AdRef
+        | RefAcc
+        | MapAcc
+        | AdAcc
+        | Sequence[AdRef | RefAcc | MapAcc | AdAcc]
+        | None = None,
         compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
     ):
         """\
@@ -1847,7 +1852,7 @@ class AnnData:  # noqa: PLW1641
         use
             Only write the element(s) referenced by this accessor (or list of accessors) into an existing AnnData store,
             e.g. `A.obs["a"]` (a single column, updating the column order), `A.obs`, `A.X`,
-            `A.layers["counts"]`, `A.layers`, `A.obsm["pca"]`, or `A.obsp`.
+            `A.layers["counts"]`, `A.layers`, `A.obsm["pca"]`, `A.obsp`, or a nested AnnData object like `A.uns["n"].AD`.
             Lists such as `[A.X, *A.obs[["a", "b"]]]` are written together after validating all entries.
         compat
             Which anndata version’s write behavior to target, see :class:`~anndata.WriteCompat`.
@@ -1931,7 +1936,12 @@ class AnnData:  # noqa: PLW1641
         chunks: tuple[int, ...] | None = None,
         convert_strings_to_categoricals: bool = True,
         consolidate_metadata: bool = True,
-        use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
+        use: AdRef
+        | RefAcc
+        | MapAcc
+        | AdAcc
+        | Sequence[AdRef | RefAcc | MapAcc | AdAcc]
+        | None = None,
         compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
     ):
         """\
@@ -1950,7 +1960,7 @@ class AnnData:  # noqa: PLW1641
         use
             Only write the element(s) referenced by this accessor (or list of accessors) into an existing AnnData store,
             e.g. `A.obs["a"]` (a single column, updating the column order), `A.obs`, `A.X`,
-            `A.layers["counts"]`, `A.layers`, `A.obsm["pca"]`, or `A.obsp`.
+            `A.layers["counts"]`, `A.layers`, `A.obsm["pca"]`, `A.obsp`, or a nested AnnData object like `A.uns["n"].AD`.
             Lists such as `[A.X, *A.obs[["a", "b"]]]` are written together after validating all entries.
         compat
             Which anndata version’s write behavior to target, see :class:`~anndata.WriteCompat`.

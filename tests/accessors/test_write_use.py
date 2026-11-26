@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
     from zarr.storage import MemoryStore
 
-    from anndata.acc import AdRef, MapAcc, RefAcc
+    from anndata.acc import AdAcc, AdRef, MapAcc, RefAcc
 
 
 def _write(
@@ -48,6 +48,7 @@ def adata() -> ad.AnnData:
         layers={"l": rng.random((5, 3))},
         obsm={"o": rng.random((5, 2))},
         obsp={"p": sparse.random(5, 5, format="csr", rng=rng)},
+        uns={"d": {"k": 1}},
     )
 
 
@@ -163,13 +164,15 @@ def test_write_elem(
             A.obs["_index"], ValueError, r"name of the obs index", id="reserved"
         ),
         pytest.param(A.obsm["o"].DF, TypeError, r"not a data frame", id="wrong-cast"),
+        pytest.param(A.uns["d"].AD, TypeError, r"not an AnnData", id="wrong-ad-cast"),
+        pytest.param(A, TypeError, r"Cannot write A\.", id="root"),
     ],
 )
 def test_write_invalid_ref(
     adata: ad.AnnData,
     diskfmt: Literal["h5ad", "zarr"],
     diskfmt_store: Path | MemoryStore,
-    use: AdRef | RefAcc,
+    use: AdRef | RefAcc | AdAcc,
     exc: type[Exception],
     match: str,
 ) -> None:

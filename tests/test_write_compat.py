@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 
     from zarr.storage import MemoryStore
 
+    from anndata.acc import RefAcc
+
 
 needs_xarray = pytest.mark.skipif(
     not find_spec("xarray"), reason="xarray not installed"
@@ -86,11 +88,14 @@ def test_accessor_subclass_unwriteable() -> None:
     assert adata.unwriteable(compat="0.14")
 
 
+@pytest.mark.parametrize("acc", [A.obs, A], ids=str)
 def test_accessor_without_json_unwriteable(
-    diskfmt_store: Path | MemoryStore, diskfmt: Literal["h5ad", "zarr"]
+    diskfmt_store: Path | MemoryStore,
+    diskfmt: Literal["h5ad", "zarr"],
+    acc: RefAcc | AdAcc,
 ) -> None:
-    """`RefAcc`s reach the accessor writer, but ones without JSON form (`A.obs`) fail."""
-    adata = ad.AnnData(shape=(3, 4), uns={"r": A.obs})
+    """Accessors reach the accessor writer, but ones without JSON form (`A.obs`, `A`) fail."""
+    adata = ad.AnnData(shape=(3, 4), uns={"r": acc})
     assert adata.unwriteable(compat="0.14")
     with pytest.raises(TypeError, match=r"Unsupported accessor"):
         getattr(adata, f"write_{diskfmt}")(diskfmt_store, compat="0.14")

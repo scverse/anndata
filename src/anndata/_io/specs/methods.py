@@ -54,7 +54,7 @@ from anndata.compat import (
 )
 
 from ..._settings import settings
-from ...acc import AdRef, RefAcc
+from ...acc import AdAcc, AdRef, RefAcc
 from ...compat import PANDAS_3, PANDAS_STRING_ARRAY_TYPES
 from ...utils import iter_outer, warn
 from .registry import _REGISTRY, IOSpec, read_elem, read_elem_partial
@@ -1607,7 +1607,7 @@ def write_string(
 def write_accessor(
     f: _GroupStorageType,
     k: str,
-    elem: AdRef | RefAcc,
+    elem: AdRef | RefAcc | AdAcc,
     *,
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
@@ -1637,7 +1637,7 @@ def write_accessor(
 
 # Subclasses dispatch to these via `_iter_patterns`.
 # Includes ones without JSON form like `A.obs`: `to_json` rejects them.
-for store_type, acc_type in product(_STORE_TYPES, (AdRef, RefAcc)):
+for store_type, acc_type in product(_STORE_TYPES, (AdRef, RefAcc, AdAcc)):
     _REGISTRY.register_write(store_type, acc_type, IOSpec("accessor", "0.1.0"))(
         write_accessor
     )
@@ -1648,7 +1648,7 @@ del store_type, acc_type
 @_REGISTRY.register_read(zarr.Array, IOSpec("accessor", "0.1.0"))
 def read_accessor(
     elem: _ArrayStorageType, *, _reader: Reader
-) -> acc.AdRef | acc.RefAcc:
+) -> acc.AdRef | acc.RefAcc | acc.AdAcc:
     from anndata.acc._entry_points import load_acc
 
     read = read_hdf5_string if isinstance(elem, h5py.Dataset) else read_zarr_string

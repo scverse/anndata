@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from .._core.raw import Raw
     from .._types import StorageType
     from .._write_compat import WriteConfig
-    from ..acc import AdRef, MapAcc, RefAcc
+    from ..acc import AdAcc, AdRef, MapAcc, RefAcc
     from ..types import WriteCompatStr
     from ..typing import RWAble
 
@@ -60,7 +60,12 @@ def write_h5ad(  # noqa: PLR0912
     as_dense: Sequence[str] = (),
     convert_strings_to_categoricals: bool = True,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
+    use: AdRef
+    | RefAcc
+    | MapAcc
+    | AdAcc
+    | Sequence[AdRef | RefAcc | MapAcc | AdAcc]
+    | None = None,
     compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
     **kwargs,
 ) -> None:

@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Never
 
-    from anndata.acc import MapAcc, RefAcc
+    from anndata.acc import AdAcc, MapAcc, RefAcc
     from anndata.types import WriteCompatStr
 
 
@@ -374,13 +374,19 @@ def test_write_use_missing(
             id="df-whole",
         ),
         pytest.param(A.uns["df"].DF["c"], [A.uns["df"].DF["c"]], [], id="uns-df-col"),
+        pytest.param(
+            A.uns["nested"].AD,
+            [A.uns["nested"].AD.obs["x"], A.uns["nested"].AD.X],
+            [],
+            id="ad-whole",
+        ),
     ],
 )
 def test_write_use_cast(
     adata: AnnData,
     written: Path,
     compat: WriteCompatStr,
-    use: AdRef | RefAcc,
+    use: AdRef | RefAcc | AdAcc,
     changed: list[AdRef],
     unchanged: list[AdRef],
 ) -> None:
