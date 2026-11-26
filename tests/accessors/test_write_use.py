@@ -272,6 +272,39 @@ def test_write_indexed_df_column(
     assert_equal(read.obs, adata.obs)
 
 
+def test_write_indexed_names_outgrow_attr(
+    diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore
+) -> None:
+    """Names move from attribute to array when `use=` adds one too long for the attribute."""
+    adata = ad.AnnData(
+        np.zeros((2, 3)), obs=pd.DataFrame({"a": [1, 2]}), obsm={"x": np.zeros((2, 2))}
+    )
+    _write(adata, diskfmt_store, diskfmt, compat="0.14")
+
+    long = "y" * 5000
+    adata.obs[long] = [5, 6]
+    adata.obsm[long] = np.ones((2, 2))
+    _write(
+        adata, diskfmt_store, diskfmt, use=[A.obs[long], A.obsm[long]], compat="0.14"
+    )
+
+    f = (
+        zarr.open_group(diskfmt_store)
+        if diskfmt == "zarr"
+        else h5py.File(diskfmt_store)
+    )
+    for path, attr, key in [
+        ("obs", "df:columns", "columns"),
+        ("obsm", "dict:keys", "keys"),
+    ]:
+        g = cast("h5py.Group | zarr.Group", f[path])
+        assert attr not in g.attrs
+        assert isinstance(g[key], h5py.Dataset | zarr.Array)
+    if isinstance(f, h5py.File):
+        f.close()
+    assert_equal(_read(diskfmt_store, diskfmt), adata)
+
+
 def test_write_key_into_non_indexed(
     diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore
 ) -> None:

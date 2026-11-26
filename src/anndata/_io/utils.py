@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
@@ -212,7 +213,7 @@ def write_use(
             compat=compat,
         )
         if i == len(names):
-            write_elem(group, layout.names_key, np.array([*names, key], dtype=object))
+            layout.write_names(group, [*names, key])
             if "df:shape" in group.attrs:
                 n_rows, _ = cast("Sequence[int]", group.attrs["df:shape"])
                 group.attrs["df:shape"] = [n_rows, i + 1]
@@ -419,15 +420,22 @@ class _IndexedLayout:
     encoding_version: str
     names_key: str
     """Child key of the names array."""
+    names_attr: str
+    """Attribute holding the names instead of the names array."""
     prefix: str
     """Child keys are `{prefix}_{i}`."""
 
 
-class IndexedLayout(_IndexedLayout, Enum):
-    """A layout storing child names in an array and naming children by position."""
+NAMES_ATTR_MAX_BYTES = 4096
+"""Larger names arrays don’t go into attributes, which are loaded whenever the group is opened."""
 
-    DATAFRAME = ("dataframe", "0.3.0", "columns", "column")
-    DICT = ("dict", "0.2.0", "keys", "item")
+
+class IndexedLayout(_IndexedLayout, Enum):
+    """A layout storing child names in an attribute or array and naming children by position."""
+
+    DATAFRAME = ("dataframe", "0.3.0", "columns", "df:columns", "column")
+    # no convention defines `dict:keys`, it mirrors the dataframe convention’s `df:columns`
+    DICT = ("dict", "0.2.0", "keys", "dict:keys", "item")
 
     @classmethod
     def of(cls, group: _GroupStorageType) -> IndexedLayout | None:
@@ -443,8 +451,38 @@ class IndexedLayout(_IndexedLayout, Enum):
     def read_names(self, group: _GroupStorageType) -> list[str]:
         from .specs import read_elem
 
-        names = read_elem(group[self.names_key])
+        names = group.attrs.get(self.names_attr)
+        if names is None:
+            names = read_elem(group[self.names_key])
+        elif self.names_key in group:
+            msg = (
+                f"Group {group.name!r} stores names both in attribute "
+                f"{self.names_attr!r} and array {self.names_key!r}"
+            )
+            raise ValueError(msg)
         return [str(n) for n in cast("Iterable[str]", names)]
+
+    def write_names(self, group: _GroupStorageType, names: Sequence[str]) -> None:
+        """Store `names` in an attribute (saving a request) if small enough, else in an array.
+
+        HDF5 always gets the array, as it has no requests to save but a limit on attribute size.
+        """
+        import zarr
+
+        from .specs import write_elem
+
+        names = list(names)
+        if isinstance(group, zarr.Group) and (
+            len(json.dumps(names)) <= NAMES_ATTR_MAX_BYTES
+        ):
+            if self.names_key in group:
+                del group[self.names_key]
+            group.attrs[self.names_attr] = names
+            return
+        if self.names_attr in group.attrs:
+            del group.attrs[self.names_attr]
+        # object dtype makes this a `string-array`, not a `nullable-string-array` group
+        write_elem(group, self.names_key, np.array(names, dtype=object))
 
 
 def write_indexed(
@@ -455,7 +493,7 @@ def write_indexed(
     _writer: Writer,
     dataset_kwargs: Mapping[str, Any],
 ) -> int:
-    """Write `items` as numbered children and their names into an array.
+    """Write `items` as numbered children and their names via :meth:`IndexedLayout.write_names`.
 
     Returns the number of items written.
     """
@@ -465,7 +503,7 @@ def write_indexed(
             group, layout.child_key(i), value, dataset_kwargs=dataset_kwargs
         )
         names.append(name)
-    _writer.write_elem(group, layout.names_key, np.array(names, dtype=object))
+    layout.write_names(group, names)
     return len(names)
 
 

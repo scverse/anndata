@@ -474,7 +474,7 @@ def _warn_unindexed_child(store: _GroupStorageType, k: str) -> None:
         return
     msg = (
         f"Wrote {k!r} into {store.name!r}, which stores its names in "
-        f"{layout.names_key!r}, so readers will ignore it. "
+        f"{layout.names_attr!r} or {layout.names_key!r}, so readers will ignore it. "
         f"Write the whole {layout.encoding_type} instead, "
         "or use `AnnData.write_*(…, use=…)` for elements of an AnnData store."
     )
