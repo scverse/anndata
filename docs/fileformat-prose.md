@@ -87,7 +87,7 @@ and name their children by position instead:
   - as an array of strings in its metadata (the *names attribute*)
 
   but not both.
-  The attribute saves a request when opening the group in a remote store,
+  The attribute saves a request + string decompression when opening the group in a remote store,
   so anndata uses it in `zarr` for names that serialize to at most 4 KiB of JSON
 
 - The element for the *i*th key MUST be the child `{prefix}_{i}`,
