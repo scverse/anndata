@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from typing import Never
 
     from anndata.acc import MapAcc, RefAcc
+    from anndata.types import WriteCompatStr
 
 
 class MetadataOnly:
@@ -271,11 +272,17 @@ def test_dims_item_unsupported() -> None:
         A.uns["a"].dims(None)  # type: ignore[arg-type]
 
 
+@pytest.fixture(params=["0.13", "0.14"])
+def compat(request: pytest.FixtureRequest) -> WriteCompatStr:
+    """Write with and without `indexed_keys`, which stores keys apart from child names."""
+    return request.param
+
+
 @pytest.fixture
-def written(adata: AnnData, tmp_path: Path) -> Path:
+def written(adata: AnnData, tmp_path: Path, compat: WriteCompatStr) -> Path:
     """Write `adata`, then change things in memory, only one of which a test writes."""
     path = tmp_path / "a.h5ad"
-    adata.write_h5ad(path)
+    adata.write_h5ad(path, compat=compat)
     adata[A.uns["foo"]["bar"]["baz"]] = 7
     adata[A.uns["foo"]["bar"]["added"]] = 8
     adata[A.uns["foo"]["qux"]] = 9
@@ -303,11 +310,15 @@ def written(adata: AnnData, tmp_path: Path) -> Path:
     ],
 )
 def test_write_use(
-    adata: AnnData, written: Path, use: ItemAcc, expected_foo: dict
+    adata: AnnData,
+    written: Path,
+    compat: WriteCompatStr,
+    use: ItemAcc,
+    expected_foo: dict,
 ) -> None:
     import anndata as ad
 
-    adata.write_h5ad(written, use=use)
+    adata.write_h5ad(written, use=use, compat=compat)
     assert ad.read_h5ad(written).uns["foo"] == expected_foo
 
 
@@ -323,11 +334,16 @@ def test_write_use(
     ],
 )
 def test_write_use_missing(
-    adata: AnnData, written: Path, use: AdRef | RefAcc, group: str, encoding: str
+    adata: AnnData,
+    written: Path,
+    compat: WriteCompatStr,
+    use: AdRef | RefAcc,
+    group: str,
+    encoding: str,
 ) -> None:
     """Only fixed attributes like `uns` get created, nothing that’s just in memory."""
     with pytest.raises(ValueError, match=rf"no '{encoding}' element at '{group}'"):
-        adata.write_h5ad(written, use=use)
+        adata.write_h5ad(written, use=use, compat=compat)
 
 
 @pytest.mark.parametrize(
@@ -363,6 +379,7 @@ def test_write_use_missing(
 def test_write_use_cast(
     adata: AnnData,
     written: Path,
+    compat: WriteCompatStr,
     use: AdRef | RefAcc,
     changed: list[AdRef],
     unchanged: list[AdRef],
@@ -370,7 +387,7 @@ def test_write_use_cast(
     import anndata as ad
 
     before = ad.read_h5ad(written)
-    adata.write_h5ad(written, use=use)
+    adata.write_h5ad(written, use=use, compat=compat)
     after = ad.read_h5ad(written)
     for ref in changed:
         np.testing.assert_array_equal(after[ref], adata[ref])
@@ -378,12 +395,17 @@ def test_write_use_cast(
         np.testing.assert_array_equal(after[ref], before[ref])
 
 
-def test_write_use_cast_index(adata: AnnData, written: Path) -> None:
+@pytest.mark.parametrize("compat", ["0.13"])  # `_index` is only special in 0.13
+def test_write_use_cast_index(
+    adata: AnnData, written: Path, compat: WriteCompatStr
+) -> None:
     with pytest.raises(ValueError, match=r"name of the varm/df index"):
-        adata.write_h5ad(written, use=A.varm["df"].DF["_index"])
+        adata.write_h5ad(written, use=A.varm["df"].DF["_index"], compat=compat)
 
 
-def test_write_use_cast_names_mismatch(adata: AnnData, written: Path) -> None:
+def test_write_use_cast_names_mismatch(
+    adata: AnnData, written: Path, compat: WriteCompatStr
+) -> None:
     adata.uns["nested"].obs_names = ["d0", "d1"]
     with pytest.raises(ValueError, match=r"obs_names in the store do not match"):
-        adata.write_h5ad(written, use=A.uns["nested"].AD.obs["x"])
+        adata.write_h5ad(written, use=A.uns["nested"].AD.obs["x"], compat=compat)
