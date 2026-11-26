@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 from collections.abc import Mapping
 from dataclasses import dataclass
-from functools import partial, singledispatch, wraps
+from functools import partial, wraps
 from types import MappingProxyType
 from typing import TYPE_CHECKING, cast
 
@@ -14,7 +14,7 @@ from anndata._io.utils import report_read_key_on_error, report_write_key_on_erro
 from anndata._settings import settings
 from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
 from anndata._write_compat import WriteCompat
-from anndata.compat import DaskArray, _read_attr, has_xp
+from anndata.compat import DaskArray, _read_attr, canonical_type, has_xp, singledispatch
 
 from ...utils import warn
 
@@ -96,6 +96,13 @@ class IORegistryError(Exception):
         return cls(msg)
 
 
+def _canonical_src_type(src_type: WriteSrcType) -> WriteSrcType:
+    """Make types from optional dependencies match the stand-ins they are registered as."""
+    if isinstance(src_type, tuple):
+        return tuple(canonical_type(t) for t in src_type)  # type: ignore[return-value]
+    return canonical_type(src_type)
+
+
 def write_spec[W: Callable[..., Any]](spec: IOSpec) -> Callable[[W], W]:
     def decorator(func: W) -> W:
         @wraps(func)
@@ -132,6 +139,8 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
     ) -> Callable[[W], W]:
         spec = proc_spec(spec)
         modifiers = frozenset(modifiers)
+        # e.g. `dask.array.Array` is looked up as its stand-in `anndata.compat.DaskArray`
+        src_type = _canonical_src_type(src_type)
 
         # Record specification for src_type
         if src_type in self.write_specs and (spec != self.write_specs[src_type]):
@@ -163,6 +172,7 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
 
         if dest_type is h5py.File:
             dest_type = h5py.Group
+        src_type = _canonical_src_type(src_type)
         if (dest_type, src_type, modifiers) not in self.write:
             raise IORegistryError._from_write_parts(dest_type, src_type, modifiers)
         internal = self.write[(dest_type, src_type, modifiers)]
@@ -174,7 +184,7 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         src_type: WriteSrcType,
         modifiers: frozenset[str],
     ) -> bool:
-        return (dest_type, src_type, modifiers) in self.write
+        return (dest_type, _canonical_src_type(src_type), modifiers) in self.write
 
     def register_read(
         self,
@@ -235,17 +245,20 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
 
     def get_spec(self, elem: StorageType) -> IOSpec:
         if isinstance(elem, DaskArray):
-            if (typ_meta := (DaskArray, type(elem._meta))) in self.write_specs:
+            if (
+                typ_meta := (DaskArray, canonical_type(type(elem._meta)))
+            ) in self.write_specs:
                 return self.write_specs[typ_meta]
         elif (
             hasattr(elem, "dtype")
-            and (typ_kind := (type(elem), elem.dtype.kind)) in self.write_specs
+            and (typ_kind := (canonical_type(type(elem)), elem.dtype.kind))
+            in self.write_specs
         ):
             return self.write_specs[typ_kind]
         for pattern in _iter_patterns(elem):
             if pattern in self.write_specs:
                 return self.write_specs[pattern]
-        return self.write_specs[type(elem)]  # raises KeyError
+        return self.write_specs[canonical_type(type(elem))]  # raises KeyError
 
 
 _REGISTRY: IORegistry[_ReadInternal, Read] = IORegistry()
@@ -279,14 +292,16 @@ def _iter_patterns(elem: RWAble) -> Generator[WriteSrcType]:
     from anndata.compat import DaskArray
 
     t = type(elem)
+    ct = canonical_type(t)
 
     if isinstance(elem, DaskArray):
-        yield (t, type(elem._meta), elem.dtype.kind)
-        yield (t, type(elem._meta))
+        meta_t = canonical_type(type(elem._meta))
+        yield (ct, meta_t, elem.dtype.kind)
+        yield (ct, meta_t)
     # Array API dtypes don’t have guaranteed attributes
     if isinstance(elem, np.ndarray):
-        yield (t, elem.dtype.kind)
-    yield t
+        yield (ct, elem.dtype.kind)
+    yield ct
     # accessor subclasses (e.g. from other packages) are written by their closest base’s writer
     from anndata.acc import AdRef, RefAcc
 

@@ -7,14 +7,14 @@ import h5py
 import numpy as np
 import pandas as pd
 import zarr
+from xarray.backends import BackendArray as XBackendArray
+from xarray.backends.zarr import ZarrArrayWrapper as XZarrArrayWrapper
 
-from anndata._core.index import _subset_dispatch
-from anndata._core.views import _as_view_dispatch
 from anndata._io.specs.lazy_methods import get_chunksize
 
 from ..._io.utils import pandas_nullable_dtype
 from ..._settings import settings
-from ...compat import H5AsTypeView, XBackendArray, XDataArray, XZarrArrayWrapper
+from ...compat import H5AsTypeView
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -24,9 +24,6 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
     from pandas._libs.missing import NAType
     from pandas.core.dtypes.dtypes import BaseMaskedDtype
-
-    from ..._core.views import ViewArgs
-    from ...typing import _Index1DNorm
 
     if TYPE_CHECKING:  # Double nesting so Sphinx can import the parent block
         from xarray.core.extension_array import PandasExtensionArray
@@ -193,18 +190,6 @@ class MaskedArray[K: (h5py.Dataset | H5AsTypeView, zarr.Array)](XBackendArray):
         except NotImplementedError:
             msg = f"Invalid dtype_str {self._dtype_str}"
             raise RuntimeError(msg) from None
-
-
-@_subset_dispatch.register(XDataArray)
-def _subset_masked(
-    a: XDataArray, subset_idx: tuple[_Index1DNorm] | tuple[_Index1DNorm, _Index1DNorm]
-):
-    return a[subset_idx]
-
-
-@_as_view_dispatch.register(XDataArray)
-def _view_pd_boolean_array(a: XDataArray, view_args: ViewArgs) -> XDataArray:
-    return a
 
 
 @get_chunksize.register(MaskedArray)

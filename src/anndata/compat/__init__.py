@@ -3,10 +3,9 @@ from __future__ import annotations
 from codecs import decode
 from contextlib import nullcontext
 from enum import Enum, auto
-from functools import partial, singledispatch
+from functools import partial
 from importlib import import_module
 from importlib.metadata import version
-from importlib.util import find_spec
 from typing import TYPE_CHECKING, Protocol, cast, overload
 
 import h5py
@@ -19,6 +18,10 @@ from packaging.version import Version
 from anndata.types import SupportsArrayApi, SupportsArrayApiBase
 
 from .._warnings import warn
+from ._lazy import LazyType as LazyType
+from ._lazy import canonical_type as canonical_type
+from ._lazy import lazy_type, singledispatch
+from ._lazy import resolve as resolve
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -157,49 +160,33 @@ else:
 #############################
 
 
-if find_spec("awkward") or TYPE_CHECKING:
+# These are imported on first use, see `._lazy` (https://github.com/scverse/anndata/issues/1122).
+if TYPE_CHECKING:
     import awkward  # noqa: F401
+    import xarray  # noqa: F401
     from awkward import Array as AwkArray
-else:
-
-    class AwkArray:
-        @staticmethod
-        def __repr__() -> str:
-            return "mock awkward.highlevel.Array"
-
-
-if find_spec("zappy") or TYPE_CHECKING:
-    from zappy.base import ZappyArray
-else:
-
-    class ZappyArray:
-        @staticmethod
-        def __repr__() -> str:
-            return "mock zappy.base.ZappyArray"
-
-
-if TYPE_CHECKING or find_spec("dask"):
     from dask.array import Array as DaskArray
-else:
-    DaskArray = type("Array", (), dict(__module__="dask.array"))
-
-
-if TYPE_CHECKING or find_spec("xarray"):
-    import xarray
     from xarray import DataArray as XDataArray
     from xarray import Dataset as XDataset
     from xarray import Variable as XVariable
     from xarray.backends import BackendArray as XBackendArray
     from xarray.backends.zarr import ZarrArrayWrapper as XZarrArrayWrapper
+    from zappy.base import ZappyArray
 else:
-    xarray = None
-    XDataArray = type("DataArray", (), dict(__module__="xarray"))
-    XDataset = type("Dataset", (), dict(__module__="xarray"))
-    XVariable = type("Variable", (), dict(__module__="xarray"))
-    XBackendArray = type("BackendArray", (), dict(__module__="xarray.backends"))
-    XZarrArrayWrapper = type(
-        "ZarrArrayWrapper", (), dict(__module__="xarray.backends.zarr")
-    )
+    AwkArray = lazy_type("awkward", "Array")
+    ZappyArray = lazy_type("zappy.base", "ZappyArray")
+    DaskArray = lazy_type("dask.array", "Array")
+    XDataArray = lazy_type("xarray", "DataArray")
+    XDataset = lazy_type("xarray", "Dataset")
+    XVariable = lazy_type("xarray", "Variable")
+    XBackendArray = lazy_type("xarray.backends", "BackendArray")
+    XZarrArrayWrapper = lazy_type("xarray.backends.zarr", "ZarrArrayWrapper")
+
+    def __getattr__(name: str) -> object:
+        if name in {"awkward", "xarray"}:
+            return import_module(name)
+        msg = f"module {__name__!r} has no attribute {name!r}"
+        raise AttributeError(msg)
 
 
 # https://github.com/scverse/anndata/issues/1749

@@ -5,7 +5,7 @@ import random
 import warnings
 from collections import Counter, defaultdict
 from collections.abc import Mapping
-from functools import partial, singledispatch, wraps
+from functools import partial, wraps
 from importlib.metadata import version
 from importlib.util import find_spec
 from string import ascii_letters
@@ -40,7 +40,9 @@ from anndata.compat import (
     DaskArray,
     XDataArray,
     XDataset,
+    canonical_type,
     has_xp_base,
+    singledispatch,
 )
 from anndata.types import SupportsArrayApiBase
 from anndata.utils import asarray
@@ -416,7 +418,7 @@ def gen_adata(  # noqa: PLR0913
         varm["xdataset"] = XDataset.from_dataframe(
             gen_typed_df(N, var_names, dtypes=var_dtypes)
         )
-    obsm = {k: v for k, v in obsm.items() if type(v) in obsm_types}
+    obsm = {k: v for k, v in obsm.items() if canonical_type(type(v)) in obsm_types}
     obsm = maybe_add_sparse_array(
         mapping=obsm,
         types=obsm_types,
@@ -424,7 +426,7 @@ def gen_adata(  # noqa: PLR0913
         random_state=random_state,
         shape=(M, 100),
     )
-    varm = {k: v for k, v in varm.items() if type(v) in varm_types}
+    varm = {k: v for k, v in varm.items() if canonical_type(type(v)) in varm_types}
     varm = maybe_add_sparse_array(
         mapping=varm,
         types=varm_types,
@@ -444,7 +446,9 @@ def gen_adata(  # noqa: PLR0913
         random_state=random_state,
         shape=(M, N),
     )
-    layers = {k: v for k, v in layers.items() if type(v) in layers_types}
+    layers = {
+        k: v for k, v in layers.items() if canonical_type(type(v)) in layers_types
+    }
     obsp = dict(
         array=xp.asarray(random_state.random((M, M))),
         sparse=sparse.random(M, M, format=sparse_fmt, random_state=random_state),

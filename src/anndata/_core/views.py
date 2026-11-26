@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import weakref
 from contextlib import contextmanager
 from copy import deepcopy
-from functools import partial, reduce, singledispatch
-from importlib.util import find_spec
+from functools import partial, reduce
 from typing import TYPE_CHECKING, Literal, overload
 
 import numpy as np
@@ -22,11 +22,15 @@ from ..compat import (
     CupyCSRMatrix,
     DaskArray,
     IndexManager,
+    XDataArray,
     ZappyArray,
     has_xp,
     has_xp_base,
     known_dim,
+    lazy_type,
     pandas_no_chained_assignment_warning,
+    resolve,
+    singledispatch,
 )
 from ..utils import warn
 from .access import ElementRef
@@ -34,7 +38,7 @@ from .xarray import Dataset2D
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Iterable
-    from typing import ClassVar
+    from typing import ClassVar, Self
 
     from numpy.typing import ArrayLike, NDArray
 
@@ -202,34 +206,58 @@ class ArrayView(_SetItemMixin, np.ndarray):
 # even calling astype on a dask array
 # needs a .compute() call to actually happen.
 # So no construction by view casting like ArrayView
-class DaskArrayView(_SetItemMixin, DaskArray):
-    def __new__(
-        cls,
-        input_array: DaskArray,
-        view_args: ViewArgs | None = None,
-    ):
-        arr = super().__new__(
+def _make_dask_array_view() -> type:
+    from dask.array import Array
+
+    class DaskArrayView(_SetItemMixin, Array):
+        def __new__(
             cls,
-            dask=input_array.dask,
-            name=input_array.name,
-            chunks=input_array.chunks,
-            dtype=input_array.dtype,
-            meta=input_array._meta,
-            shape=input_array.shape,
-        )
-        if view_args is not None:
-            view_args = ElementRef(*view_args)
-        arr._view_args = view_args
+            input_array: DaskArray,
+            view_args: ViewArgs | None = None,
+        ):
+            arr = super().__new__(
+                cls,
+                dask=input_array.dask,
+                name=input_array.name,
+                chunks=input_array.chunks,
+                dtype=input_array.dtype,
+                meta=input_array._meta,
+                shape=input_array.shape,
+            )
+            if view_args is not None:
+                view_args = ElementRef(*view_args)
+            arr._view_args = view_args
 
-        return arr
+            return arr
 
-    def __array_finalize__(self, obj: DaskArray | None):
-        if obj is not None:
-            self._view_args = getattr(obj, "_view_args", None)
+        def __array_finalize__(self, obj: DaskArray | None):
+            if obj is not None:
+                self._view_args = getattr(obj, "_view_args", None)
 
-    def keys(self) -> tuple[str, ...]:
-        # it’s a structured array
-        return self.dtype.names or ()
+        def keys(self) -> tuple[str, ...]:
+            # it’s a structured array
+            return self.dtype.names or ()
+
+    DaskArrayView.__qualname__ = "DaskArrayView"
+    return DaskArrayView
+
+
+if TYPE_CHECKING:
+
+    class DaskArrayView(_SetItemMixin, DaskArray):
+        def __new__(
+            cls, input_array: DaskArray, view_args: ViewArgs | None = None
+        ) -> Self: ...
+        def keys(self) -> tuple[str, ...]: ...
+
+else:
+    DaskArrayView = lazy_type(
+        __name__,
+        "DaskArrayView",
+        guard="dask.array",
+        load=_make_dask_array_view,
+        bases=(DaskArray,),
+    )
 
 
 # Unlike array views, SparseCSRMatrixView and SparseCSCMatrixView
@@ -438,21 +466,21 @@ for _cls, _view_cls in [
 
 
 # Previous code says ZappyArray works as view, but as far as I can tell they’re immutable.
+# `XDataArray`s are the (lazy) columns of `Dataset2D`.
 # `Dataset2D` gets `remove_unused_categories` like `pd.DataFrame`, but ignores it.
-for _cls in [ZappyArray, Dataset2D]:
+for _cls in [ZappyArray, Dataset2D, XDataArray]:
     _as_view_dispatch.register(_cls, lambda obj, view_args, /, **_: obj)
 
 
-if find_spec("awkward") or TYPE_CHECKING:
-    import weakref
+# Registry to store weak references from AwkwardArrayViews to their parent AnnData container
+_registry: weakref.WeakValueDictionary[str, AnnData] = weakref.WeakValueDictionary()
+_PARAM_NAME = "_view_args"
 
-    from ..compat import awkward as ak
 
-    # Registry to store weak references from AwkwardArrayViews to their parent AnnData container
-    _registry: weakref.WeakValueDictionary[str, AnnData] = weakref.WeakValueDictionary()
-    _PARAM_NAME = "_view_args"
+def _make_awkward_array_view() -> type:
+    import awkward as ak
 
-    class AwkwardArrayView(_ViewMixin, AwkArray):
+    class AwkwardArrayView(_ViewMixin, ak.Array):
         @property
         def _view_args(self):
             """Override _view_args to retrieve the values from awkward arrays parameters.
@@ -481,31 +509,49 @@ if find_spec("awkward") or TYPE_CHECKING:
             array = ak.with_parameter(array, "__list__", None)
             return array
 
-    @_as_view_dispatch.register
-    def as_view_awkarray(array: AwkArray, view_args: ViewArgs, /) -> AwkArray:
-        parent, attrname, keys = ElementRef(*view_args)
-        parent_key = f"target-{id(parent)}"
-        _registry[parent_key] = parent
-        # TODO: See https://github.com/scverse/anndata/pull/647#discussion_r963494798_ for more details and
-        # possible strategies to stack behaviors.
-        # A better solution might be based on xarray-style "attrs", once this is implemented
-        # https://github.com/scikit-hep/awkward/issues/1391#issuecomment-1412297114
-        if type(array).__name__ != "Array":
-            msg = (
-                "Cannot create a view of an awkward array with __array__ parameter. "
-                "Please open an issue in the AnnData repo and describe your use-case."
-            )
-            raise NotImplementedError(msg)
-        array = ak.with_parameter(array, _PARAM_NAME, (parent_key, attrname, keys))
-        array = ak.with_parameter(array, "__list__", "AwkwardArrayView")
-        return array
-
+    AwkwardArrayView.__qualname__ = "AwkwardArrayView"
     ak.behavior["AwkwardArrayView"] = AwkwardArrayView
+    return AwkwardArrayView
+
+
+if TYPE_CHECKING:
+
+    class AwkwardArrayView(_ViewMixin, AwkArray):
+        pass
 
 else:
+    AwkwardArrayView = lazy_type(
+        __name__,
+        "AwkwardArrayView",
+        guard="awkward",
+        load=_make_awkward_array_view,
+        bases=(AwkArray,),
+    )
 
-    class AwkwardArrayView:
-        pass
+
+@_as_view_dispatch.register(AwkArray)
+def as_view_awkarray(array: AwkArray, view_args: ViewArgs, /) -> AwkArray:
+    import awkward as ak
+
+    # `ak.behavior` only knows `AwkwardArrayView` once the class is created
+    resolve(AwkwardArrayView)
+
+    parent, attrname, keys = ElementRef(*view_args)
+    parent_key = f"target-{id(parent)}"
+    _registry[parent_key] = parent
+    # TODO: See https://github.com/scverse/anndata/pull/647#discussion_r963494798_ for more details and
+    # possible strategies to stack behaviors.
+    # A better solution might be based on xarray-style "attrs", once this is implemented
+    # https://github.com/scikit-hep/awkward/issues/1391#issuecomment-1412297114
+    if type(array).__name__ != "Array":
+        msg = (
+            "Cannot create a view of an awkward array with __array__ parameter. "
+            "Please open an issue in the AnnData repo and describe your use-case."
+        )
+        raise NotImplementedError(msg)
+    array = ak.with_parameter(array, _PARAM_NAME, (parent_key, attrname, keys))
+    array = ak.with_parameter(array, "__list__", "AwkwardArrayView")
+    return array
 
 
 def _resolve_idxs(

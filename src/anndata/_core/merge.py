@@ -8,7 +8,7 @@ import uuid
 import warnings
 from collections import OrderedDict
 from collections.abc import Mapping, MutableSet
-from functools import partial, reduce, singledispatch
+from functools import partial, reduce
 from itertools import repeat
 from operator import and_, or_, sub
 from typing import TYPE_CHECKING, Literal, assert_never, cast
@@ -32,6 +32,7 @@ from ..compat import (
     DaskArray,
     has_xp_base,
     known_dim,
+    singledispatch,
 )
 from ..utils import Default, asarray, axis_len, warn, warn_once
 from .anndata import AnnData

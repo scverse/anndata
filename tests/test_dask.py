@@ -267,15 +267,15 @@ def test_assign_X(adata):
     import dask.array as da
     import numpy as np
 
-    from anndata.compat import DaskArray
+    from anndata.compat import DaskArray, canonical_type
 
     adata.X = da.ones(adata.X.shape)
     prev_type = type(adata.X)
     adata_copy = adata.copy()
 
     adata.X = -1 * da.ones(adata.X.shape)
-    assert prev_type is DaskArray
-    assert type(adata_copy.X) is DaskArray
+    assert canonical_type(prev_type) is DaskArray
+    assert canonical_type(type(adata_copy.X)) is DaskArray
     assert_equal(adata.X, -1 * np.ones(adata.X.shape))
     assert_equal(adata_copy.X, np.ones(adata.X.shape))
 

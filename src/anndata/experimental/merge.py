@@ -3,7 +3,6 @@ from __future__ import annotations
 import shutil
 from collections.abc import Mapping
 from contextlib import ExitStack, contextmanager
-from functools import singledispatch
 from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -31,6 +30,7 @@ from .._core.merge import (
 )
 from .._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .._io.specs import read_elem, write_elem
+from ..compat import singledispatch
 from . import read_dispatched, read_elem_lazy
 
 if TYPE_CHECKING:
