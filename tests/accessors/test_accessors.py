@@ -64,16 +64,16 @@ PATHS: list[tuple[AdRef, AdRefSer]] = [
     (A.varp["cons"][:, :], ["varp", "cons", None, None]),
     (A.varp["cons"]["gene-46", :], ["varp", "cons", "gene-46", None]),
     (A.varp["cons"][:, "gene-46"], ["varp", "cons", None, "gene-46"]),
-    (A.varm["df"].DF["a"], ["varm", "df", ["DF", "a"]]),
-    (A.uns["df"].DF.index, ["uns", ["df"], ["DF", None]]),
-    (A.uns["n"].AD.obs["x"], ["uns", ["n"], ["AD", ["obs", "x"]]]),
+    (A.varm["df"].DF["a"], ["varm", "df", "DF", "a"]),
+    (A.uns["df"].DF.index, ["uns", ["df"], "DF", None]),
+    (A.uns["n"].AD.obs["x"], ["uns", ["n"], "AD", ["obs", "x"]]),
     (
         A.uns["n"]["o"].AD.obsm["df"].DF["c"],
-        ["uns", ["n", "o"], ["AD", ["obsm", "df", ["DF", "c"]]]],
+        ["uns", ["n", "o"], "AD", ["obsm", "df", "DF", "c"]],
     ),
     (
         A.uns["n"].AD.uns["m"].AD.X[:, "g"],
-        ["uns", ["n"], ["AD", ["uns", ["m"], ["AD", ["layers", None, None, "g"]]]]],
+        ["uns", ["n"], "AD", ["uns", ["m"], "AD", ["layers", None, None, "g"]]],
     ),
 ]
 
@@ -132,11 +132,11 @@ MATRICES: list[tuple[MatrixAcc, AdRefSer]] = [
     (A.varp["cons"], ["varp", "cons"]),
     (A.uns["a"], ["uns", ["a"]]),
     (A.uns["a"]["b"], ["uns", ["a", "b"]]),
-    (A.uns["n"].AD.obsm["p"], ["uns", ["n"], ["AD", ["obsm", "p"]]]),
-    (A.uns["n"].AD.uns["m"], ["uns", ["n"], ["AD", ["uns", ["m"]]]]),
-    (A.obsm["df"].DF, ["obsm", "df", ["DF"]]),
-    (A.uns["df"].DF, ["uns", ["df"], ["DF"]]),
-    (A.uns["n"].AD.varm["df"].DF, ["uns", ["n"], ["AD", ["varm", "df", ["DF"]]]]),
+    (A.uns["n"].AD.obsm["p"], ["uns", ["n"], "AD", ["obsm", "p"]]),
+    (A.uns["n"].AD.uns["m"], ["uns", ["n"], "AD", ["uns", ["m"]]]),
+    (A.obsm["df"].DF, ["obsm", "df", "DF"]),
+    (A.uns["df"].DF, ["uns", ["df"], "DF"]),
+    (A.uns["n"].AD.varm["df"].DF, ["uns", ["n"], "AD", ["varm", "df", "DF"]]),
 ]
 
 
@@ -165,8 +165,8 @@ def test_serialization_matrix(
         pytest.param(["obsm", "umap", 0], False, id="obsm-vec-as-matrix"),
         pytest.param(["varp", "cons"], True, id="varp-matrix-as-vec"),
         pytest.param(["uns", ["a"]], True, id="uns-item-as-vec"),
-        pytest.param(["uns", ["a"], ["DF", "c"]], False, id="uns-df-vec-as-matrix"),
-        pytest.param(["uns", ["a"], ["AD", ["obsm", "p"]]], True, id="ad-acc-as-vec"),
+        pytest.param(["uns", ["a"], "DF", "c"], False, id="uns-df-vec-as-matrix"),
+        pytest.param(["uns", ["a"], "AD", ["obsm", "p"]], True, id="ad-acc-as-vec"),
     ],
 )
 def test_from_json_vec_mismatch(
@@ -191,8 +191,9 @@ def test_to_json_unsupported(acc: MetaAcc) -> None:
         pytest.param(["uns", [0]], id="int-first"),
         pytest.param(["uns", ["a", 0]], id="int-in-path"),
         pytest.param(["uns", ["a", True]], id="bool-in-path"),
-        pytest.param(["uns", ["a"], ["XX", "c"]], id="unknown-cast"),
-        pytest.param(["obsm", "p", ["AD", ["obs", "x"]]], id="ad-cast-on-obsm"),
+        pytest.param(["uns", ["a"], "XX", "c"], id="unknown-cast"),
+        pytest.param(["obsm", "p", "AD", ["obs", "x"]], id="ad-cast-on-obsm"),
+        pytest.param(["uns", ["a"], ["DF", "c"]], id="nested-cast"),
     ],
 )
 def test_from_json_invalid(serialized: AdRefSer) -> None:

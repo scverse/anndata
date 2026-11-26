@@ -49,13 +49,14 @@
                     ]
                 },
                 {
-                    "title": "Column of a data frame in a multi-dimensional annotation (obsm/varm …DF)",
-                    "minItems": 3,
-                    "maxItems": 3,
+                    "title": "Column (or index if null) of a data frame in a multi-dimensional annotation (obsm/varm …DF)",
+                    "minItems": 4,
+                    "maxItems": 4,
                     "prefixItems": [
                         { "enum": ["obsm", "varm"] },
                         { "type": "string" },
-                        { "$ref": "#/$defs/df-cast" }
+                        { "const": "DF" },
+                        { "type": ["string", "null"] }
                     ]
                 },
                 {
@@ -82,31 +83,25 @@
                     ]
                 },
                 {
-                    "title": "Column of a data frame in unstructured annotation (uns …DF)",
-                    "minItems": 3,
-                    "maxItems": 3,
+                    "title": "Column (or index if null) of a data frame in unstructured annotation (uns …DF)",
+                    "minItems": 4,
+                    "maxItems": 4,
                     "prefixItems": [
                         { "const": "uns" },
                         { "$ref": "#/$defs/uns-path" },
-                        { "$ref": "#/$defs/df-cast" }
+                        { "const": "DF" },
+                        { "type": ["string", "null"] }
                     ]
                 },
                 {
                     "title": "Reference into an AnnData object in unstructured annotation (uns …AD)",
-                    "minItems": 3,
-                    "maxItems": 3,
+                    "minItems": 4,
+                    "maxItems": 4,
                     "prefixItems": [
                         { "const": "uns" },
                         { "$ref": "#/$defs/uns-path" },
-                        {
-                            "type": "array",
-                            "minItems": 2,
-                            "maxItems": 2,
-                            "prefixItems": [
-                                { "const": "AD" },
-                                { "$ref": "#/$defs/ref" }
-                            ]
-                        }
+                        { "const": "AD" },
+                        { "$ref": "#/$defs/ref" }
                     ]
                 }
             ]
@@ -149,7 +144,7 @@
                     "prefixItems": [
                         { "enum": ["obsm", "varm"] },
                         { "type": "string" },
-                        { "const": ["DF"] }
+                        { "const": "DF" }
                     ]
                 },
                 {
@@ -159,7 +154,7 @@
                     "prefixItems": [
                         { "const": "uns" },
                         { "$ref": "#/$defs/uns-path" },
-                        { "const": ["DF"] }
+                        { "const": "DF" }
                     ]
                 },
                 {
@@ -173,20 +168,13 @@
                 },
                 {
                     "title": "Container in an AnnData object in unstructured annotation (uns …AD)",
-                    "minItems": 3,
-                    "maxItems": 3,
+                    "minItems": 4,
+                    "maxItems": 4,
                     "prefixItems": [
                         { "const": "uns" },
                         { "$ref": "#/$defs/uns-path" },
-                        {
-                            "type": "array",
-                            "minItems": 2,
-                            "maxItems": 2,
-                            "prefixItems": [
-                                { "const": "AD" },
-                                { "$ref": "#/$defs/acc" }
-                            ]
-                        }
+                        { "const": "AD" },
+                        { "$ref": "#/$defs/acc" }
                     ]
                 }
             ]
@@ -196,13 +184,6 @@
             "type": "array",
             "minItems": 1,
             "items": { "type": "string" }
-        },
-        "df-cast": {
-            "title": "Column (or index if null) of the data frame cast from the preceding item",
-            "type": "array",
-            "minItems": 2,
-            "maxItems": 2,
-            "prefixItems": [{ "const": "DF" }, { "type": ["string", "null"] }]
         }
     },
     "oneOf": [{ "$ref": "#/$defs/ref" }, { "$ref": "#/$defs/acc" }]

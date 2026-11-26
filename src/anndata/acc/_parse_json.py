@@ -34,7 +34,7 @@ def _item[R: AdRef](a: AdAcc[R], path: Sequence[object]) -> ItemAcc[R]:
 def _cast[R: AdRef](
     target: MultiAcc[R] | ItemAcc[R], cast: AccJson
 ) -> R | LayerAcc[R] | MultiAcc[R] | GraphAcc[R] | ItemAcc[R] | DFAcc[R]:
-    """Parse a trailing `[cast, payload]` pair."""
+    """Parse the trailing cast name and its payload, e.g. `"DF", "c"`."""
     match cast:
         case ["DF"]:
             return target.DF
@@ -42,7 +42,7 @@ def _cast[R: AdRef](
             return target.DF[col]
         case ["AD", [*inner]] if isinstance(target, ItemAcc):
             return _parse_json(target.AD, inner)
-    msg = f"Cannot cast {target!r} with {cast!r}"
+    msg = f"Cannot cast {target!r} with {list(cast)!r}"
     raise ValueError(msg)
 
 
@@ -69,16 +69,16 @@ def _parse_json[R: AdRef](  # noqa: PLR0911
             return (a.obsm if dim == "obsm" else a.varm)[col]
         case ["obsm" | "varm" as dim, str(col), int(i)]:
             return (a.obsm if dim == "obsm" else a.varm)[col][i]
-        case ["obsm" | "varm" as dim, str(k), [*cast]]:
-            return _cast((a.obsm if dim == "obsm" else a.varm)[k], cast)
+        case ["obsm" | "varm" as dim, str(k), str(), *_]:  # cast name, e.g. "DF"
+            return _cast((a.obsm if dim == "obsm" else a.varm)[k], data[2:])
         case ["obsp" | "varp" as dim, str(k)]:
             return (a.obsp if dim == "obsp" else a.varp)[k]
         case ["obsp" | "varp" as dim, str(k), *idx] if idx_2d := _as_idx_2d(idx):
             return (a.obsp if dim == "obsp" else a.varp)[k][idx_2d]
         case ["uns", [*path]]:
             return _item(a, path)
-        case ["uns", [*path], [*cast]]:
-            return _cast(_item(a, path), cast)
+        case ["uns", [*path], str(), *_]:  # cast name, e.g. "AD"
+            return _cast(_item(a, path), data[2:])
         case _:
             msg = f"Cannot parse {data!r}"
             raise ValueError(msg)
@@ -93,7 +93,7 @@ def to_json(ref: AdRef | RefAcc) -> list[str | int | AccJson | None]:
     local = _local_json(ref)
     scope = (ref.acc if isinstance(ref, AdRef) else ref).scope
     while scope is not None:  # wrap from the innermost `.AD` outwards
-        local = [*_local_json(scope), ["AD", local]]
+        local = [*_local_json(scope), "AD", local]
         scope = scope.scope
     return local
 
@@ -106,7 +106,7 @@ def _local_json(ref: AdRef | RefAcc) -> list[str | int | AccJson | None]:  # noq
         case AdRef(MetaAcc(dim), idx):
             return [dim, idx]
         case AdRef(DFAcc(frame_acc=MultiAcc() | ItemAcc() as frame), col):
-            return [*_local_json(frame), ["DF", col]]
+            return [*_local_json(frame), "DF", col]
         case AdRef(MultiAcc() as acc, i):
             return [*_local_json(acc), i]
         case LayerAcc(k):
@@ -116,7 +116,7 @@ def _local_json(ref: AdRef | RefAcc) -> list[str | int | AccJson | None]:  # noq
         case GraphAcc(dim, k):
             return [f"{dim}p", k]
         case DFAcc(frame_acc=MultiAcc() | ItemAcc() as frame):
-            return [*_local_json(frame), ["DF"]]
+            return [*_local_json(frame), "DF"]
         case ItemAcc(path=path):
             return ["uns", list(path)]
         case _:

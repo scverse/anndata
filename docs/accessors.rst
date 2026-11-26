@@ -219,10 +219,10 @@ as the same lists without the trailing index:
 A.X
 
 Items in `.uns` store their path as a nested list,
-and casts (`.AD`, `.DF`) add a trailing `[cast, payload]` pair:
+and casts (`.AD`, `.DF`) add the cast name and its payload:
 
 >>> A.to_json(A.uns["n"].AD.obs["x"])
-['uns', ['n'], ['AD', ['obs', 'x']]]
+['uns', ['n'], 'AD', ['obs', 'x']]
 
 Pass `vec=True` or `vec=False` to :meth:`~AdAcc.from_json`
 to accept only :term:`reference`\ s or only :term:`reference accessor`\ s,

@@ -1227,14 +1227,14 @@ class AdAcc[R: AdRef]:
         ['layers', None]
 
         Items in `.uns` have their path in a list,
-        and casts (`.AD`, `.DF`) add a trailing `[cast, payload]` pair:
+        and casts (`.AD`, `.DF`) add the cast name and its payload:
 
         >>> A.to_json(A.uns["a"]["b"])
         ['uns', ['a', 'b']]
         >>> A.to_json(A.obsm["df"].DF["c"])
-        ['obsm', 'df', ['DF', 'c']]
+        ['obsm', 'df', 'DF', 'c']
         >>> A.to_json(A.uns["n"].AD.obs["x"])
-        ['uns', ['n'], ['AD', ['obs', 'x']]]
+        ['uns', ['n'], 'AD', ['obs', 'x']]
         """
         from ._parse_json import to_json
 
