@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, overload
 from . import GraphMapAcc, LayerMapAcc, MetaAcc, MultiMapAcc, UnsMapAcc
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
     from typing import Literal
 
     from . import AdAcc, AdRef, GraphAcc, Idx2D, ItemAcc, LayerAcc, MultiAcc
@@ -136,12 +136,17 @@ def _parse_path_multi[P: AdRef](multi: MultiMapAcc[P], spec: str) -> P:
 
 def _parse_path_uns[P: AdRef](uns: UnsMapAcc[P], spec: str) -> ItemAcc[P]:
     # like `obsm.<k>.<i>`, the path continues after a key, so keys can’t contain periods
-    first, *path = spec.split(".")
-    if not all([first, *path]):
+    if not all(path := spec.split(".")):
         msg = f"Cannot parse uns accessor {spec!r}: should be `k1.k2.….kn`"
         raise ValueError(msg)
+    return _uns_item(uns, path)
+
+
+def _uns_item[P: AdRef](uns: UnsMapAcc[P], path: Sequence[str]) -> ItemAcc[P]:
+    """Descend into `uns` along `path`, validating each key."""
+    first, *rest = path
     item = uns[first]
-    for k in path:
+    for k in rest:
         item = item[k]
     return item
 

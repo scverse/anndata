@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from operator import attrgetter
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -13,8 +14,33 @@ from anndata.acc import A, AdRef, DFAcc, ItemAcc, UnsMapAcc
 
 if TYPE_CHECKING:
     from pathlib import Path
+    from typing import Never
 
     from anndata.acc import MapAcc, RefAcc
+
+
+class MetadataOnly:
+    """Object without `X`/`layers` that’s otherwise AnnData-like, e.g. a MuData object."""
+
+    def __init__(self, adata: AnnData) -> None:
+        self._adata = adata
+
+    def __len__(self) -> int:
+        return len(self._adata)
+
+    # only needed to match `AnnDataLikeMetadataOnly`, accessors don’t call these
+    def __getitem__(self, index: object) -> Never:
+        raise NotImplementedError
+
+    def __setitem__(self, index: object, value: object) -> Never:
+        raise NotImplementedError
+
+
+for _name in [
+    *("shape", "n_obs", "n_vars", "obs", "var", "obs_names", "var_names"),
+    *("obsm", "varm", "obsp", "varp", "uns"),
+]:
+    setattr(MetadataOnly, _name, property(attrgetter(f"_adata.{_name}")))
 
 
 @pytest.fixture
@@ -144,11 +170,16 @@ def test_cast_invalid(adata: AnnData, ref: AdRef, match: str) -> None:
         A.uns["nested"].DF,
         A.uns["foo"].AD,
         A.uns["df"].AD,
+        A.uns["meta"].AD.X,
+        A.uns["meta"].AD.X[:, :],
+        A.uns["meta"].AD.layers,
+        A.uns["meta"].AD.layers["x"],
     ],
     ids=str,
 )
 def test_cast_invalid_not_in(adata: AnnData, acc: AdRef | RefAcc | MapAcc) -> None:
     """Nothing is in an element of the wrong type."""
+    adata.uns["meta"] = MetadataOnly(adata.uns["nested"])
     assert acc not in adata
     if isinstance(acc, AdRef):
         assert not acc.acc.isin(adata, acc.idx)

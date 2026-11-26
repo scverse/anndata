@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast
 
 from . import AdRef, DFAcc, GraphAcc, ItemAcc, LayerAcc, MetaAcc, MultiAcc
-from ._parse_str import _check_vec
+from ._parse_str import _check_vec, _uns_item
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -27,11 +27,8 @@ def _as_idx_2d(data: Sequence[object]) -> Idx2D | None:
 
 
 def _item[R: AdRef](a: AdAcc[R], path: Sequence[object]) -> ItemAcc[R]:
-    first, *rest = cast("Sequence[str]", path)  # `__getitem__` validates the keys
-    item = a.uns[first]
-    for k in rest:
-        item = item[k]
-    return item
+    # `__getitem__` validates the keys
+    return _uns_item(a.uns, cast("Sequence[str]", path))
 
 
 def _cast[R: AdRef](

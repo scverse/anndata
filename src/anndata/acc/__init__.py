@@ -417,7 +417,10 @@ class LayerAcc[R: AdRef[Idx2D, AnnDataLike]](
     def isin(self, adata: AnnDataLike, idx: Idx2D | None = None) -> bool:
         if not super().isin(adata, idx):
             return False
-        adata = self.container(adata)
+        try:
+            adata = self.container(adata)
+        except TypeError:  # nested object has no `X`/`layers`
+            return False
         if adata.X is None if self.k is None else self.k not in adata.layers:
             return False
         for i, dim in zip(idx or (), ("obs", "var"), strict=False):
@@ -482,6 +485,12 @@ class LayerMapAcc[R: AdRef](
             msg = f"{self!r} can only refer into AnnData objects, not {type(inner).__name__}."
             raise TypeError(msg)
         return inner.layers
+
+    def isin(self, data: AnnDataLikeMetadataOnly, /) -> bool:
+        try:
+            return super().isin(data)
+        except TypeError:  # nested object has no `layers`
+            return False
 
 
 @dataclass(frozen=True)
