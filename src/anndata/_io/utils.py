@@ -310,7 +310,8 @@ def _resolve_use(  # noqa: PLR0911, PLR0912
 
     match use:
         case DFAcc(frame_acc=RefAcc() as frame):  # `.DF`
-            return _resolve_use(f, adata, frame)
+            parent, key, _ = _resolve_use(f, adata, frame)
+            return parent, key, use.get(adata)  # `.get` checks the cast
         case ItemAcc(path=path):
             for i in range(1, len(path)):  # `uns` itself is a fixed attribute
                 _require_group(f, ("uns", *path[:i]), "dict", use)

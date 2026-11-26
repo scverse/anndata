@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import abc
 import sys
-from collections.abc import Hashable
+from collections.abc import Hashable, Mapping
 from dataclasses import KW_ONLY, dataclass, field, replace
 from functools import cached_property
 from typing import (
@@ -41,7 +41,6 @@ if TYPE_CHECKING:
     from collections.abc import (
         Callable,
         Collection,
-        Mapping,
         MutableMapping,
         Sequence,
     )
