@@ -21,10 +21,8 @@ from natsort import natsorted
 from pandas.api.types import infer_dtype
 from scverse_misc import Deprecation, deprecated
 
-from anndata._core.access import ElementRef
-from anndata.types import SupportsArrayApiBase
-
 from .. import utils
+from .._core.access import ElementRef
 from .._settings import settings
 from .._warnings import ImplicitModificationWarning
 from .._write_compat import WriteCompat
@@ -41,6 +39,7 @@ from ..compat import (
     pandas_as_str,
 )
 from ..logging import anndata_logger as logger
+from ..types import AnnDataLikeMetadataOnly, SupportsArrayApiBase
 from ..utils import (
     asarray,
     axis_len,
@@ -93,13 +92,15 @@ if TYPE_CHECKING:
     from .._types import ReduceFunc
     from .._write_compat import WriteConfig
     from ..acc import (
+        AdAcc,
         AdRef,
         Array,
         DataFrameLike,
+        DFAcc,
         GraphAcc,
+        ItemAcc,
         LayerAcc,
         MapAcc,
-        MetaAcc,
         MultiAcc,
         RefAcc,
     )
@@ -1114,15 +1115,17 @@ class AnnData:  # noqa: PLW1641
         return _normalize_indices(index, self.obs_names, self.var_names)
 
     @overload
-    def __getitem__(self, index: MetaAcc) -> DataFrameLike: ...
+    def __getitem__(self, index: DFAcc) -> DataFrameLike: ...
+    @overload
+    def __getitem__(self, index: ItemAcc) -> Any: ...  # noqa: ANN401
     @overload
     def __getitem__(self, index: LayerAcc | MultiAcc | GraphAcc) -> AlignedArray: ...
     @overload
     def __getitem__(self, index: AdRef) -> Array: ...
     @overload
-    def __getitem__(self, index: Index) -> AnnData: ...
+    def __getitem__(self, index: Index | AdAcc) -> AnnData: ...
     def __getitem__(
-        self, index: Index | AdRef | RefAcc | MapAcc
+        self, index: Index | AdRef | RefAcc | MapAcc | AdAcc
     ) -> AnnData | DataFrameLike | AlignedArray | Array:
         """Slice AnnData object or retrieve an array using an accessor.
 
@@ -1136,23 +1139,27 @@ class AnnData:  # noqa: PLW1641
             - an :class:`~anndata.acc.AdRef`, returning the referenced 1D or 2D array,
               e.g. `adata[A.obs["cell-type"]]` or `adata[A.layers["counts"][:, "gene-1"]]`;
             - a :term:`reference accessor`, returning the full element (see :meth:`~anndata.acc.RefAcc.get`),
-              e.g. `adata[A.obs]` or `adata[A.obsm["pca"]]`.
+              e.g. `adata[A.obs]` or `adata[A.obsm["pca"]]`;
+            - an :class:`~anndata.acc.AdAcc`, returning the nested AnnData object it is cast from,
+              e.g. `adata[A.uns["nested"].AD]`.
 
             Mapping accessors like `A.obsm` raise an :class:`IndexError`, as they don’t refer to an array.
         """
-        from ..acc import AdRef, MapAcc, RefAcc
+        from ..acc import AdAcc, AdRef, MapAcc, RefAcc
 
         if isinstance(index, AdRef):
             return index.acc.get(self, index.idx)
         elif isinstance(index, RefAcc):
             return index.get(self)
+        elif isinstance(index, AdAcc):
+            return index.container(self)
         elif isinstance(index, MapAcc):
             msg = f"Cannot index with {index} because this is not a path to an array-like structure."
             raise IndexError(msg)
 
         return self._getitem(index)
 
-    def __setitem__(self, index: AdRef | RefAcc, value: object) -> None:
+    def __setitem__(self, index: AdRef | RefAcc | AdAcc, value: object) -> None:
         """Set an array or element using an accessor.
 
         Parameters
@@ -1163,16 +1170,26 @@ class AnnData:  # noqa: PLW1641
             - an :class:`~anndata.acc.AdRef`, assigning into the referenced 1D or 2D array,
               e.g. `adata[A.obs["cell-type"]] = ...` or `adata[A.layers["counts"][:, "gene-1"]] = ...`;
             - a :term:`reference accessor`, replacing the full element (see :meth:`~anndata.acc.RefAcc.set`),
-              e.g. `adata[A.obs] = ...` or `adata[A.obsm["pca"]] = ...`.
+              e.g. `adata[A.obs] = ...` or `adata[A.obsm["pca"]] = ...`;
+            - an :class:`~anndata.acc.AdAcc`, replacing the nested AnnData object it is cast from,
+              e.g. `adata[A.uns["nested"].AD] = ...`.
         value
             The value to assign.
         """
-        from ..acc import NO_IDX, AdRef, MapAcc, RefAcc
+        from ..acc import NO_IDX, AdAcc, AdRef, MapAcc, RefAcc
 
         if isinstance(index, AdRef):
             index.acc.set(self, index.idx, value)
         elif isinstance(index, RefAcc):
             index.set(self, NO_IDX, value)
+        elif isinstance(index, AdAcc):
+            if index.scope is None:
+                msg = f"Cannot replace the object itself via {index!r}."
+                raise TypeError(msg)
+            if not isinstance(value, AnnDataLikeMetadataOnly):
+                msg = f"Cannot set {index!r} to {type(value).__name__}, not an AnnData-like object."
+                raise TypeError(msg)
+            index.scope.set(self, NO_IDX, value)
         elif isinstance(index, MapAcc):
             msg = f"Cannot index with {index} because this is not a path to an array-like structure."
             raise IndexError(msg)
@@ -1611,7 +1628,7 @@ class AnnData:  # noqa: PLW1641
                 return True
 
         from anndata._io.specs.registry import _REGISTRY
-        from anndata.acc import AdRef, RefAcc
+        from anndata.acc import AdAcc, AdRef, RefAcc
 
         writeable_elems = {
             src_type
@@ -1664,7 +1681,7 @@ class AnnData:  # noqa: PLW1641
                 return accumulate or any(
                     predicate(v, accumulate=accumulate) for v in elem.values()
                 )
-            if isinstance(elem, AdRef | RefAcc):
+            if isinstance(elem, AdRef | RefAcc | AdAcc):
                 # writeable, but only with the `accessor` flag and a known project
                 if accumulate or not compat.accessor:
                     return True
@@ -1707,7 +1724,7 @@ class AnnData:  # noqa: PLW1641
         ):
             utils.warn_names_duplicates("var")
 
-    def __contains__(self, key: AdRef | RefAcc | MapAcc) -> bool:
+    def __contains__(self, key: AdRef | RefAcc | MapAcc | AdAcc) -> bool:
         """Check if array is in AnnData via its path as an accessor.
 
         When passed a :class:`~anndata.acc.MapAcc`,
@@ -1720,19 +1737,10 @@ class AnnData:  # noqa: PLW1641
             An accessor pointing to an array that might or might not be in `self`.
 
         """
-        from ..acc import AdRef, GraphMapAcc, LayerMapAcc, MapAcc, MultiMapAcc, RefAcc
+        from ..acc import AdAcc, AdRef, MapAcc, RefAcc
 
         match key:
-            case LayerMapAcc():
-                return bool(self.layers)
-            case MultiMapAcc():
-                return bool(getattr(self, f"{key.dim}m"))
-            case GraphMapAcc():
-                return bool(getattr(self, f"{key.dim}p"))
-            case MapAcc():  # to check MapAccs, we need to know the attribute name
-                msg = f"Unknown MapAcc subclass {type(key)}."
-                raise TypeError(msg)
-            case RefAcc():
+            case AdAcc() | MapAcc() | RefAcc():
                 return key.isin(self)
             case AdRef():
                 return key.acc.isin(self, key.idx)
@@ -1770,7 +1778,12 @@ class AnnData:  # noqa: PLW1641
         compression: Literal["gzip", "lzf"] | None = None,
         compression_opts: int | object = None,
         as_dense: Sequence[str] = (),
-        use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
+        use: AdRef
+        | RefAcc
+        | MapAcc
+        | AdAcc
+        | Sequence[AdRef | RefAcc | MapAcc | AdAcc]
+        | None = None,
         compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
     ):
         """\
@@ -1839,7 +1852,7 @@ class AnnData:  # noqa: PLW1641
         use
             Only write the element(s) referenced by this accessor (or list of accessors) into an existing AnnData store,
             e.g. `A.obs["a"]` (a single column, updating the column order), `A.obs`, `A.X`,
-            `A.layers["counts"]`, `A.layers`, `A.obsm["pca"]`, or `A.obsp`.
+            `A.layers["counts"]`, `A.layers`, `A.obsm["pca"]`, `A.obsp`, or a nested AnnData object like `A.uns["n"].AD`.
             Lists such as `[A.X, *A.obs[["a", "b"]]]` are written together after validating all entries.
         compat
             Which anndata version’s write behavior to target, see :class:`~anndata.WriteCompat`.
@@ -1923,7 +1936,12 @@ class AnnData:  # noqa: PLW1641
         chunks: tuple[int, ...] | None = None,
         convert_strings_to_categoricals: bool = True,
         consolidate_metadata: bool = True,
-        use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
+        use: AdRef
+        | RefAcc
+        | MapAcc
+        | AdAcc
+        | Sequence[AdRef | RefAcc | MapAcc | AdAcc]
+        | None = None,
         compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
     ):
         """\
@@ -1942,7 +1960,7 @@ class AnnData:  # noqa: PLW1641
         use
             Only write the element(s) referenced by this accessor (or list of accessors) into an existing AnnData store,
             e.g. `A.obs["a"]` (a single column, updating the column order), `A.obs`, `A.X`,
-            `A.layers["counts"]`, `A.layers`, `A.obsm["pca"]`, or `A.obsp`.
+            `A.layers["counts"]`, `A.layers`, `A.obsm["pca"]`, `A.obsp`, or a nested AnnData object like `A.uns["n"].AD`.
             Lists such as `[A.X, *A.obs[["a", "b"]]]` are written together after validating all entries.
         compat
             Which anndata version’s write behavior to target, see :class:`~anndata.WriteCompat`.

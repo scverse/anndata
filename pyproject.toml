@@ -46,7 +46,7 @@ dependencies = [
     "packaging>=24.2",
     "pandas>=2.3",
     "scipy>=1.15,!=1.17",
-    "scverse-misc[settings]>=0.1.8",
+    "scverse-misc[settings]>=0.1.9",
     # `typing_extensions.sentinel`, see `anndata.acc`
     "typing-extensions>=4.16; python_version<'3.15'",
     "zarr>=3.1",
@@ -129,7 +129,6 @@ test-min = [
 typing = [
     "cupy-stubs>=1.3.1",
     "docutils-stubs",
-    "mudata",            # `anndata.acc`
     "pandas-stubs",
     "scipy-stubs",
     "types-boltons",
@@ -301,13 +300,19 @@ module = [
     "awkward.*",
     "h5py.*",
     "joblib.*",
-    "mudata.*",
     "numcodecs.*",
     "pyarrow.*",
-    "scanpy.*",
     "sklearn.*",
 ]
 follow_untyped_imports = true
+
+# scanpy’s `type` aliases contain `AdRef[AnnData]`, which mypy checks before resolving descriptors like `AnnData.obsm`,
+# so it wrongly concludes `AnnData` isn’t `AnnDataLikeMetadataOnly`, and that sticks for the whole run.
+# Remove once https://github.com/python/mypy/issues/22549 is fixed.
+[[tool.mypy.overrides]]
+module = [ "scanpy.*" ]
+ignore_missing_imports = true
+follow_imports = "skip"
 
 # Dependencies that ship no type information (absent or `Incomplete` annotations).
 [[tool.mypy.overrides]]

@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
     from zarr.storage import MemoryStore
 
-    from anndata.acc import AdRef, MapAcc, RefAcc
+    from anndata.acc import AdAcc, AdRef, MapAcc, RefAcc
 
 
 def _write(
@@ -48,6 +48,7 @@ def adata() -> ad.AnnData:
         layers={"l": rng.random((5, 3))},
         obsm={"o": rng.random((5, 2))},
         obsp={"p": sparse.random(5, 5, format="csr", rng=rng)},
+        uns={"d": {"k": 1}},
     )
 
 
@@ -153,22 +154,30 @@ def test_write_elem(
 
 
 @pytest.mark.parametrize(
-    ("use", "match"),
+    ("use", "exc", "match"),
     [
-        pytest.param(A.obsm["o"][:, 0], r"only `obs`/`var` columns", id="vector"),
-        pytest.param(A.obs.index, r"only `obs`/`var` columns", id="index"),
-        pytest.param(A.obs["_index"], r"name of the obs index", id="reserved"),
+        pytest.param(
+            A.obsm["o"][:, 0], ValueError, r"only data frame columns", id="vector"
+        ),
+        pytest.param(A.obs.index, ValueError, r"only data frame columns", id="index"),
+        pytest.param(
+            A.obs["_index"], ValueError, r"name of the obs index", id="reserved"
+        ),
+        pytest.param(A.obsm["o"].DF, TypeError, r"not a data frame", id="wrong-cast"),
+        pytest.param(A.uns["d"].AD, TypeError, r"not an AnnData", id="wrong-ad-cast"),
+        pytest.param(A, TypeError, r"Cannot write A\.", id="root"),
     ],
 )
 def test_write_invalid_ref(
     adata: ad.AnnData,
     diskfmt: Literal["h5ad", "zarr"],
     diskfmt_store: Path | MemoryStore,
-    use: AdRef,
+    use: AdRef | RefAcc | AdAcc,
+    exc: type[Exception],
     match: str,
 ) -> None:
     _write(adata, diskfmt_store, diskfmt)
-    with pytest.raises(ValueError, match=match):
+    with pytest.raises(exc, match=match):
         _write(adata, diskfmt_store, diskfmt, use=use)
 
 
@@ -328,6 +337,6 @@ def test_write_list_invalid_writes_nothing(
     _write(adata, diskfmt_store, diskfmt)
     expected = adata.copy()
     adata.X = np.zeros((5, 3))
-    with pytest.raises(ValueError, match=r"only `obs`/`var` columns"):
+    with pytest.raises(ValueError, match=r"only data frame columns"):
         _write(adata, diskfmt_store, diskfmt, use=[A.X, A.obsm["o"][:, 0]])
     assert_equal(_read(diskfmt_store, diskfmt), expected)

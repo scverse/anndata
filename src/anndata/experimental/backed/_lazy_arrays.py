@@ -31,8 +31,6 @@ if TYPE_CHECKING:
     if TYPE_CHECKING:  # Double nesting so Sphinx can import the parent block
         from xarray.core.extension_array import PandasExtensionArray
         from xarray.core.indexing import ExplicitIndexer
-else:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
-    type K = h5py.Array | zarr.Array
 
 
 class ZarrOrHDF5Wrapper[K: h5py.Dataset | H5AsTypeView | zarr.Array](XZarrArrayWrapper):

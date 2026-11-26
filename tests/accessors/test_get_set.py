@@ -287,7 +287,14 @@ def test_set_full_df(adata: AnnData) -> None:
 
 
 @pytest.mark.parametrize(
-    ("index", "exc"), [(A.obsm, IndexError), (0, TypeError)], ids=str
+    ("index", "exc"),
+    [
+        (A.obsm, IndexError),
+        (0, TypeError),
+        (A.varm["df"].DF, TypeError),
+        (A.uns["df"].DF, TypeError),
+    ],
+    ids=str,
 )
 def test_set_unsupported(adata: AnnData, index: object, exc: type[Exception]) -> None:
     with pytest.raises(exc):

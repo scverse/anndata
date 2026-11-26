@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
     from .._types import _GroupStorageType
     from .._write_compat import WriteConfig
-    from ..acc import AdRef, MapAcc, RefAcc
+    from ..acc import AdAcc, AdRef, MapAcc, RefAcc
     from ..types import WriteCompatStr
     from ..typing import RWAble
 
@@ -101,7 +101,12 @@ def write_zarr(
     chunks: tuple[int | None, ...] | None = None,
     convert_strings_to_categoricals: bool = True,
     consolidate_metadata: bool = True,
-    use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
+    use: AdRef
+    | RefAcc
+    | MapAcc
+    | AdAcc
+    | Sequence[AdRef | RefAcc | MapAcc | AdAcc]
+    | None = None,
     compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
     **ds_kwargs,
 ) -> None:
