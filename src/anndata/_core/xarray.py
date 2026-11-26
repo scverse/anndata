@@ -22,6 +22,9 @@ if TYPE_CHECKING:
     from .._types import Dataset2DIlocIndexer
     from ..typing import Index
 
+DS_UNNAMED_INDEX_NAME = "_anndata_unnamed_index"
+"""Dimension name of an unnamed index, which has to be a string in xarray."""
+
 
 def requires_xarray[R, **P](func: Callable[P, R]) -> Callable[P, R]:
     @wraps(func)
@@ -281,7 +284,7 @@ class Dataset2D(Mapping[Hashable, "XDataArray | Dataset2D"]):
         if df.index.name != index_key and index_key is not None:
             df = df.set_index(index_key)
         if df.index.name in {
-            "_index",
+            DS_UNNAMED_INDEX_NAME,
             DS_CONCAT_DUMMY_INDEX_NAME,
             DS_MERGE_DUMMY_INDEX_NAME,
         }:
