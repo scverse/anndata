@@ -121,6 +121,15 @@ def slice_as_int(s: slice, l: int) -> int:
     return out[0]
 
 
+def _memory_format(fmt: Literal["csr", "csc"]) -> type[SparseMatrixType]:
+    """The in-memory type that sparse matrices of format `fmt` are read as."""
+    if is_gpu():
+        return CupyCSRMatrix if fmt == "csr" else CupyCSCMatrix
+    if settings.use_sparse_array_on_read:
+        return ss.csr_array if fmt == "csr" else ss.csc_array
+    return ss.csr_matrix if fmt == "csr" else ss.csc_matrix
+
+
 @dataclass
 class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
     """\
@@ -138,11 +147,7 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
 
     @property
     def memory_format(self) -> type[SparseMatrixType]:
-        if is_gpu():
-            return CupyCSRMatrix if self.format == "csr" else CupyCSCMatrix
-        if settings.use_sparse_array_on_read:
-            return ss.csr_array if self.format == "csr" else ss.csc_array
-        return ss.csr_matrix if self.format == "csr" else ss.csc_matrix
+        return _memory_format(self.format)
 
     def _construct(
         self,
@@ -269,7 +274,9 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
         return CompressedVectors.from_buffers(data, indices, indptr)
 
     def get_compressed_vector(self, idx: int) -> CompressedVectors:
-        s = slice(*_read_dense(self.indptr, slice(idx, idx + 2)))
+        bounds = _read_dense(self.indptr, slice(idx, idx + 2))
+        # Zarr needs host integer offsets even when the matrix is read on GPU.
+        s = slice(*(bounds.get() if isinstance(bounds, CupyArray) else bounds))
         data = _read_dense(self.data, s)
         indices = _read_dense(self.indices, s)
         indptr = [0, len(data)]
@@ -324,10 +331,11 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
         compressed_vectors = self._get_contiguous_compressed_slice(
             slice(major_index.start, major_index.stop)
         )
-        return self._construct(
+        mtx = self._construct(
             compressed_vectors,
             shape=self._gen_maj_min_tuple(major_index_size, self.minor_axis_size),
-        )[self._gen_maj_min_tuple(slice(None), minor_index)]
+        )
+        return self._minor_subset(mtx, minor_index)
 
     @_get.register
     def _get_arrayXslice(
@@ -342,9 +350,17 @@ class BackedSparseMatrix[ArrayT: _ArrayStorageType]:
         if isinstance(major_index, np.ndarray) and major_index.dtype == bool:
             major_index = np.flatnonzero(major_index)
         out_shape = self._gen_maj_min_tuple(len(major_index), self.minor_axis_size)
-        return self._construct(
-            self.get_compressed_vectors(major_index), shape=out_shape
-        )[self._gen_maj_min_tuple(slice(None), minor_index)]
+        mtx = self._construct(self.get_compressed_vectors(major_index), shape=out_shape)
+        return self._minor_subset(mtx, minor_index)
+
+    def _minor_subset(
+        self, mtx: SparseMatrixType, minor_index: slice
+    ) -> SparseMatrixType:
+        # Indexing even a full minor axis copies the freshly read sparse buffers.
+        size = self.minor_axis_size
+        if minor_index.indices(size) == (0, size, 1):
+            return mtx
+        return mtx[self._gen_maj_min_tuple(slice(None), minor_index)]
 
     def subset_by_major_axis_mask(
         self: BackedSparseMatrix, mask: np.ndarray

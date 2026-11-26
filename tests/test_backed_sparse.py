@@ -21,6 +21,7 @@ from anndata.compat import CSArray, CSMatrix, DaskArray
 from anndata.experimental import read_dispatched
 from anndata.tests import helpers as test_helpers
 from anndata.tests.helpers import (
+    DASK_CAN_SPARRAY,
     AccessTrackingStore,
     assert_equal,
     open_store,
@@ -739,3 +740,33 @@ def test_append_overflow_check(group_fn, sparse_class, tmp_path):
 
     # Check for any modification
     assert_equal(backed, orig_mtx)
+
+
+@pytest.mark.parametrize("fmt", ["csr", "csc"])
+@pytest.mark.parametrize("sparse_array", [False, True])
+def test_read_elem_lazy_sparse_meta(diskfmt_store, fmt, *, sparse_array: bool):
+    if sparse_array and not DASK_CAN_SPARRAY:
+        pytest.skip("Dask does not support sparse arrays")
+    mtx = sparse.random(10, 6, density=0.5, format=fmt, random_state=0)
+    g = open_store(diskfmt_store)
+    ad.io.write_elem(g, "X", mtx)
+    with ad.settings.override(use_sparse_array_on_read=sparse_array):
+        lazy = read_elem_lazy(g["X"], chunks=(3, -1) if fmt == "csr" else (-1, 3))
+        assert isinstance(lazy, DaskArray)
+        expected = getattr(sparse, f"{fmt}_{'array' if sparse_array else 'matrix'}")
+        assert type(lazy._meta) is type(lazy.blocks[0, 0].compute()) is expected
+        assert_equal(lazy.compute(), mtx)
+
+
+@pytest.mark.gpu
+def test_read_elem_lazy_sparse_meta_gpu(tmp_path):
+    import cupyx.scipy.sparse as cpx
+
+    mtx = sparse.random(10, 6, density=0.5, format="csr", random_state=0)
+    g = zarr.open_group(tmp_path / "test.zarr", mode="w")
+    ad.io.write_elem(g, "X", mtx)
+    with zarr.config.enable_gpu():
+        lazy = read_elem_lazy(g["X"], chunks=(3, -1))
+        assert isinstance(lazy, DaskArray)
+        assert type(lazy._meta) is type(lazy.blocks[0, 0].compute()) is cpx.csr_matrix
+        assert_equal(lazy.compute().get(), mtx)

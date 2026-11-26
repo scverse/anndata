@@ -9,10 +9,10 @@ import h5py
 import numpy as np
 import pandas as pd
 import zarr
-from scipy import sparse
 
 import anndata as ad
 from anndata._core.file_backing import filename, get_elem_name
+from anndata._core.sparse_dataset import _memory_format
 from anndata._core.xarray import Dataset2D, requires_xarray
 from anndata.compat import DaskArray, XDataset, XVariable, pandas_as_str
 
@@ -171,7 +171,7 @@ def read_sparse_as_dask(
     chunk_layout = (
         (chunks_minor, chunks_major) if is_csc else (chunks_major, chunks_minor)
     )
-    memory_format = sparse.csc_matrix if is_csc else sparse.csr_matrix
+    memory_format = _memory_format("csc" if is_csc else "csr")
     make_chunk = partial(make_dask_chunk, path_or_sparse_dataset, elem_name)
     da_mtx = da.map_blocks(
         make_chunk,

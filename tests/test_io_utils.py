@@ -210,6 +210,8 @@ def test_zarr_context(
         fake_module.__spec__ = importlib.machinery.ModuleSpec("zarrs", loader=None)
 
         monkeypatch.setitem(sys.modules, "zarrs", fake_module)
+    else:
+        monkeypatch.setitem(sys.modules, "zarrs", None)
     outer_ctx = (
         zarr.config.set({
             "codec_pipeline.path": "zarr.core.codec_pipeline.FusedCodecPipeline"
@@ -233,6 +235,26 @@ def test_zarr_context(
             assert "Fused" in zarr.config.get("codec_pipeline.path")
         else:
             assert "Batched" in zarr.config.get("codec_pipeline.path")
+
+
+@pytest.mark.parametrize(
+    "pipeline",
+    [
+        "zarr.core.codec_pipeline.BatchedCodecPipeline",
+        "zarr.core.codec_pipeline.FusedCodecPipeline",
+        "zarr_kvikio.KvikioCodecPipeline",
+    ],
+)
+def test_zarr_context_gpu(pipeline: str):
+    with (
+        zarr.config.enable_gpu(),
+        zarr.config.set({"codec_pipeline.path": pipeline}),
+        pytest.warns(UserWarning, match="uncompressed shards")
+        if pipeline.endswith(".FusedCodecPipeline")
+        else nullcontext(),
+        fast_zarr_context(),
+    ):
+        assert zarr.config.get("codec_pipeline.path") == pipeline
 
 
 @pytest.mark.parametrize("output_format", ["zarr", "h5ad"])

@@ -15,6 +15,7 @@ from scipy import sparse
 from zarr.errors import GroupNotFoundError
 
 from .._core.anndata import AnnData
+from .._core.sparse_dataset import is_gpu
 from .._warnings import OldFormatWarning
 from .._write_compat import WriteCompat
 from ..compat import _clean_uns, _from_fixed_length_strings
@@ -53,6 +54,17 @@ def fast_zarr_context():
     # it is the old BatchedCodecPipeline.
     # This pipeline fully passes ours, zarr's, and zarr's downstream CI. - Ilan
     old_pipeline = zarr.config.get("codec_pipeline.path")
+    if is_gpu():
+        # zarrs requires host buffers: https://github.com/zarrs/zarrs-python/issues/201
+        # https://github.com/zarr-developers/zarr-python/issues/4654
+        if old_pipeline == "zarr.core.codec_pipeline.FusedCodecPipeline":
+            msg = (
+                "FusedCodecPipeline can fail to read uncompressed shards into GPU "
+                "buffers. Select BatchedCodecPipeline to read those shards."
+            )
+            warn(msg, UserWarning)
+        yield
+        return
     use_zarr_fused = "Batched" in old_pipeline and Version(version("zarr")) >= Version(
         "3.3"
     )
