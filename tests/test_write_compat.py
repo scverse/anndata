@@ -252,6 +252,16 @@ def test_dataframe_without_index(names_in: Literal["attr", "array"]) -> None:
     assert list(lazy.index) == ["0", "1", "2"]
 
 
+def test_names_in_attr_and_array() -> None:
+    """Names stored in both places are ambiguous."""
+    g = zarr.open_group(zarr.storage.MemoryStore())
+    ad.io.write_elem(g, "d", {"a": 1}, compat="0.14")
+    assert isinstance(d := g["d"], zarr.Group)
+    ad.io.write_elem(d, "keys", np.array(["a"], dtype=object))
+    with pytest.raises(ValueError, match=r"both in attribute 'dict:keys' and array"):
+        ad.io.read_elem(d)
+
+
 def test_no_indexed_keys_before_0_14(tmp_path: Path) -> None:
     """The default profile still writes keys as child names and still rejects `/`."""
     ad.AnnData(np.zeros((2, 3)), uns={"a:b": 1}).write_h5ad(tmp_path / "t.h5ad")

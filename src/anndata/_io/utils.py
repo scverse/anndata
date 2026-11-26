@@ -454,6 +454,12 @@ class IndexedLayout(_IndexedLayout, Enum):
         names = group.attrs.get(self.names_attr)
         if names is None:
             names = read_elem(group[self.names_key])
+        elif self.names_key in group:
+            msg = (
+                f"Group {group.name!r} stores names both in attribute "
+                f"{self.names_attr!r} and array {self.names_key!r}"
+            )
+            raise ValueError(msg)
         return [str(n) for n in cast("Iterable[str]", names)]
 
     def write_names(self, group: _GroupStorageType, names: Sequence[str]) -> None:
