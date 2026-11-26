@@ -192,7 +192,7 @@ def write_use(
             write_elem(g, parent[0], {}, compat=compat)
         group = g
         for name in parent:  # `_resolve_use` checked that the rest exists
-            group = cast("_GroupStorageType", _child(group, name))
+            group = cast("_GroupStorageType", dict(mapping_items(group, {name}))[name])
         if (layout := IndexedLayout.of(group)) is None:
             write_elem(group, key, elem, dataset_kwargs=dataset_kwargs, compat=compat)
             continue
@@ -254,24 +254,15 @@ def _descend(
     return group, inner
 
 
-def _child(group: _GroupStorageType, name: str) -> _GroupStorageType | None:
-    """Get the child called `name` of an anndata or `dict` encoded group, if it exists."""
-    if (layout := IndexedLayout.of(group)) is None:
-        return cast("_GroupStorageType", group[name]) if name in group else None
-    if name not in (names := layout.read_names(group)):
-        return None
-    return cast("_GroupStorageType", group[layout.child_key(names.index(name))])
-
-
 def _require_group(
     f: _GroupStorageType, path: Sequence[str], encoding: str, use: object
 ) -> _GroupStorageType:
     """Get the group at `path` in `f` if it has `encoding`, as only fixed attributes get created."""
     group = f
     for name in path:
-        if (child := _child(group, name)) is None:
+        if (child := dict(mapping_items(group, {name})).get(name)) is None:
             break
-        group = child
+        group = cast("_GroupStorageType", child)
     else:
         if group.attrs.get("encoding-type") == encoding:
             return group
@@ -597,12 +588,23 @@ def write_indexed(
     return len(names)
 
 
-def mapping_items(group: _GroupStorageType) -> Iterator[tuple[str, StorageType]]:
-    """Iterate over the keys and children of a `dict` encoded group."""
+def mapping_items(
+    group: _GroupStorageType, keys: Collection[str] | None = None
+) -> Iterator[tuple[str, StorageType]]:
+    """Iterate over the keys and children of a `dict` encoded group.
+
+    If `keys` is given, only open the children with these keys that exist.
+    """
     if (layout := IndexedLayout.of(group)) is None:
-        return iter(dict(group).items())
+        if keys is None:
+            return iter(dict(group).items())
+        return ((k, group[k]) for k in keys if k in group)
     names = layout.read_names(group)
-    return ((k, group[layout.child_key(i)]) for i, k in enumerate(names))
+    return (
+        (k, group[layout.child_key(i)])
+        for i, k in enumerate(names)
+        if keys is None or k in keys
+    )
 
 
 class DfChild[N: str | None](NamedTuple):
