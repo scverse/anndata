@@ -12,12 +12,14 @@ if TYPE_CHECKING:
 
     from ._core.xarray import Dataset2D
     from .acc import (
+        AdAcc,
         AdRef,
         Array,
         DataFrameLike,
+        DFAcc,
         GraphAcc,
+        ItemAcc,
         LayerAcc,
-        MetaAcc,
         MultiAcc,
         RefAcc,
     )
@@ -136,7 +138,9 @@ class AnnDataLikeMetadataOnly(Protocol):
     def uns(self) -> MutableMapping[str, Any]: ...
 
     @overload
-    def __getitem__(self, index: MetaAcc) -> DataFrameLike: ...
+    def __getitem__(self, index: DFAcc) -> DataFrameLike: ...
+    @overload
+    def __getitem__(self, index: ItemAcc) -> Any: ...  # noqa: ANN401
     @overload
     def __getitem__(self, index: MultiAcc | GraphAcc) -> AlignedArray: ...
     @overload
@@ -144,9 +148,12 @@ class AnnDataLikeMetadataOnly(Protocol):
     # separate from `Index` so `MuData`’s `str` overload (a modality) matches: mypy matches overloads in order
     @overload
     def __getitem__(self, index: str) -> AnnDataLikeMetadataOnly: ...
+    # separate from Index so `MuData` can return `MuData` for `Index` and `AnnData` for `AdAcc`
+    @overload
+    def __getitem__(self, index: AdAcc) -> AnnDataLikeMetadataOnly: ...
     @overload
     def __getitem__(self, index: Index) -> AnnDataLikeMetadataOnly: ...
-    def __setitem__(self, index: AdRef | RefAcc, value: object) -> None: ...
+    def __setitem__(self, index: AdRef | RefAcc | AdAcc, value: object) -> None: ...
     def __len__(self) -> int: ...
 
 
@@ -161,7 +168,9 @@ class AnnDataLike(AnnDataLikeMetadataOnly, Protocol):
 
     # overloads replace the parent’s as a whole, so repeat them and add `LayerAcc`
     @overload
-    def __getitem__(self, index: MetaAcc) -> DataFrameLike: ...
+    def __getitem__(self, index: DFAcc) -> DataFrameLike: ...
+    @overload
+    def __getitem__(self, index: ItemAcc) -> Any: ...  # noqa: ANN401
     @overload
     def __getitem__(self, index: LayerAcc | MultiAcc | GraphAcc) -> AlignedArray: ...
     @overload
@@ -169,6 +178,9 @@ class AnnDataLike(AnnDataLikeMetadataOnly, Protocol):
     # separate from `Index` so `MuData`’s `str` overload (a modality) matches: mypy matches overloads in order
     @overload
     def __getitem__(self, index: str) -> AnnDataLike: ...
+    # separate from Index so `MuData` can return `MuData` for `Index` and `AnnData` for `AdAcc`
+    @overload
+    def __getitem__(self, index: AdAcc) -> AnnDataLike: ...
     @overload
     def __getitem__(self, index: Index) -> AnnDataLike: ...
 
