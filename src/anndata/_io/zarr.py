@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
     from .._types import _GroupStorageType
     from .._write_compat import WriteConfig
-    from ..acc import AdRef, MapAcc, RefAcc
+    from ..acc import AdAcc, AdRef, MapAcc, RefAcc
     from ..types import WriteCompatStr
     from ..typing import RWAble
 
@@ -101,7 +101,12 @@ def write_zarr(
     chunks: tuple[int | None, ...] | None = None,
     convert_strings_to_categoricals: bool = True,
     consolidate_metadata: bool = True,
-    use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
+    use: AdRef
+    | RefAcc
+    | MapAcc
+    | AdAcc
+    | Sequence[AdRef | RefAcc | MapAcc | AdAcc]
+    | None = None,
     compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
     **ds_kwargs,
 ) -> None:
@@ -128,7 +133,13 @@ def write_zarr(
             # stale consolidated metadata would hide the newly written element
             consolidate_metadata |= is_group_consolidated(zarr.open_group(store))
             f = zarr.open_group(store, mode="r+", use_consolidated=False)
-            write_use(f, adata, use, dataset_kwargs=ds_kwargs, compat=compat)
+            write_use(
+                f,
+                adata,
+                use,
+                dataset_kwargs=ds_kwargs,
+                compat=WriteCompat.or_config(compat),
+            )
         else:
             f = zarr.open_group(store, mode="w")
             f.attrs.setdefault("encoding-type", "anndata")
@@ -215,7 +226,10 @@ def read_zarr(store: StoreLike | zarr.Group) -> AnnData:
 
         # Backwards compat (should figure out which version)
         if "raw.X" in f:
-            raw = AnnData(**_read_legacy_raw(f, adata.raw, read_dataframe, read_elem))
+            legacy_raw = _read_legacy_raw(f, adata.raw, read_dataframe, read_elem)
+            # a modern `adata.raw` would have raised
+            assert isinstance(legacy_raw, dict)
+            raw = AnnData(**legacy_raw)
             raw.obs_names = adata.obs_names
             adata.raw = raw
 
@@ -253,7 +267,9 @@ def read_dataframe_legacy(dataset: zarr.Array) -> pd.DataFrame:
         "Consider rewriting it."
     )
     warn(msg, OldFormatWarning)
-    df = pd.DataFrame(_from_fixed_length_strings(dataset[()]))
+    value = dataset[()]
+    assert isinstance(value, np.ndarray), "legacy dataframes are structured arrays"
+    df = pd.DataFrame(_from_fixed_length_strings(value))
     return df.set_index(df.columns[0])
 
 

@@ -2,15 +2,27 @@ from __future__ import annotations
 
 import warnings
 from importlib.util import find_spec
+from typing import TYPE_CHECKING
 
+import h5py
 import numpy as np
 import pytest
+import zarr
 from scipy.sparse import csr_matrix
 
 from anndata import AnnData, settings
 from anndata._io.specs.registry import read_elem_partial
 from anndata.io import read_elem, write_h5ad, write_zarr
 from anndata.tests.helpers import open_store
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+    from typing import Literal
+
+    from zarr.storage import MemoryStore
+
+    from anndata.typing import AlignedArray
 
 X = np.array([[1.0, 0.0, 3.0], [4.0, 0.0, 6.0], [0.0, 8.0, 0.0]], dtype="float32")
 X_check = np.array([[4.0, 0.0], [0.0, 8.0]], dtype="float32")
@@ -19,7 +31,11 @@ WRITER = dict(h5ad=write_h5ad, zarr=write_zarr)
 
 
 @pytest.mark.parametrize("typ", [np.asarray, csr_matrix])
-def test_read_partial_X(diskfmt_store, typ, diskfmt):
+def test_read_partial_X(
+    diskfmt_store: Path | MemoryStore,
+    typ: Callable[[object], AlignedArray],
+    diskfmt: Literal["h5ad", "zarr"],
+) -> None:
     adata = AnnData(X=typ(X))
 
     WRITER[diskfmt](diskfmt_store, adata)
@@ -36,7 +52,9 @@ def test_read_partial_X(diskfmt_store, typ, diskfmt):
 
 
 @pytest.mark.skipif(not find_spec("scanpy"), reason="Scanpy is not installed")
-def test_read_partial_adata(diskfmt_store, diskfmt):
+def test_read_partial_adata(
+    diskfmt_store: Path | MemoryStore, diskfmt: Literal["h5ad", "zarr"]
+) -> None:
     import scanpy as sc
 
     with warnings.catch_warnings():
@@ -72,18 +90,23 @@ def test_read_partial_adata(diskfmt_store, diskfmt):
     assert np.all(part.keys() == adata_sbs.var.keys())
     assert np.all(part.index == adata_sbs.var.index)
 
+    assert isinstance(storage["obsm"], zarr.Group | h5py.Group)
     for key in storage["obsm"]:
         part = read_elem_partial(storage["obsm"][key], indices=(obs_idx,))
         assert np.all(part == adata_sbs.obsm[key])
 
+    assert isinstance(storage["varm"], zarr.Group | h5py.Group)
     for key in storage["varm"]:
         part = read_elem_partial(storage["varm"][key], indices=(var_idx,))
         np.testing.assert_equal(part, adata_sbs.varm[key])
 
+    assert isinstance(storage["obsp"], zarr.Group | h5py.Group)
     for key in storage["obsp"]:
         part = read_elem_partial(storage["obsp"][key], indices=(obs_idx, obs_idx))
         part = part.toarray()
         assert np.all(part == adata_sbs.obsp[key])
 
     # check uns just in case
-    np.testing.assert_equal(read_elem(storage["uns"]).keys(), adata.uns.keys())
+    assert isinstance(storage["uns"], zarr.Group | h5py.Group)
+    assert isinstance(uns := read_elem(storage["uns"]), dict)
+    np.testing.assert_equal(uns.keys(), adata.uns.keys())

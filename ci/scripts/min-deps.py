@@ -14,7 +14,7 @@ from collections import deque
 from contextlib import ExitStack
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 from packaging.requirements import Requirement
 from packaging.version import Version
@@ -22,7 +22,17 @@ from packaging.version import Version
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Sequence
     from collections.abc import Set as AbstractSet
-    from typing import Any, Self
+    from typing import Self
+
+
+Project = TypedDict(  # functional syntax because of the hyphenated key
+    "Project",
+    {
+        "name": str,
+        "dependencies": list[str],
+        "optional-dependencies": dict[str, list[str]],
+    },
+)
 
 
 def min_dep(req: Requirement) -> Requirement:
@@ -58,22 +68,21 @@ def min_dep(req: Requirement) -> Requirement:
 
 
 def extract_min_deps(
-    dependencies: Iterable[Requirement], *, pyproject
+    dependencies: Iterable[Requirement], *, project: Project
 ) -> Generator[Requirement]:
     dependencies = deque(dependencies)  # We'll be mutating this
-    project_name = pyproject["project"]["name"]
 
     deps: dict[str, Requirement] = {}
     while len(dependencies) > 0:
         req = dependencies.pop()
 
         # If we are referring to other optional dependency lists, resolve them
-        if req.name == project_name:
+        if req.name == project["name"]:
             assert req.extras, (
                 f"Project included itself as dependency, without specifying extras: {req}"
             )
             for extra in req.extras:
-                extra_deps = pyproject["project"]["optional-dependencies"][extra]
+                extra_deps = project["optional-dependencies"][extra]
                 dependencies += map(Requirement, extra_deps)
         else:
             if req.name in deps:
@@ -141,8 +150,8 @@ class Args(argparse.Namespace):
         return parser
 
     @cached_property
-    def pyproject(self) -> dict[str, Any]:
-        return tomllib.loads(self._path.read_text())
+    def project(self) -> Project:
+        return tomllib.loads(self._path.read_text())["project"]
 
     @cached_property
     def extras(self) -> AbstractSet[str]:
@@ -152,19 +161,19 @@ class Args(argparse.Namespace):
             return dict.fromkeys(self._extras).keys()
         if not self._all_extras:
             return set()
-        return self.pyproject["project"]["optional-dependencies"].keys()
+        return self.project["optional-dependencies"].keys()
 
 
 def main(argv: Sequence[str] | None = None) -> None:
     args = Args.parse(argv)
 
-    project_name = args.pyproject["project"]["name"]
+    project_name = args.project["name"]
     deps = [
-        *map(Requirement, args.pyproject["project"]["dependencies"]),
+        *map(Requirement, args.project["dependencies"]),
         *(Requirement(f"{project_name}[{extra}]") for extra in args.extras),
     ]
 
-    min_deps = extract_min_deps(deps, pyproject=args.pyproject)
+    min_deps = extract_min_deps(deps, project=args.project)
 
     sep = "\n" if args.output else " "
     with ExitStack() as stack:

@@ -54,7 +54,7 @@ class Raw:
         self,
         adata: AnnData,
         X: AlignedArray | None = None,
-        var: pd.DataFrame | Dataset2D | Mapping[str, Sequence] | None = None,
+        var: pd.DataFrame | Dataset2D | Mapping[str, Sequence[object]] | None = None,
         varm: Mapping[str, AlignedArray] | None = None,
     ) -> None:
         if X is not None and X.shape[0] != adata.n_obs:
@@ -260,7 +260,7 @@ class Raw:
             return np.ravel(a)
         if isinstance(a, SupportsArrayApiBase):
             # the array API standard has no `ravel`, and we stay in the namespace
-            return a.__array_namespace__().reshape(a, (a.size,))
+            return a.__array_namespace__().reshape(a, (-1,))  # type: ignore[arg-type]  # https://github.com/data-apis/array-api-compat/issues/485
         return np.ravel(asarray(a))
 
 

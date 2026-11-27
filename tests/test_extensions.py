@@ -163,7 +163,7 @@ def test_missing_annotation() -> None:
 
         @ad.register_anndata_namespace("missing_annotation")
         class MissingAnnotationNamespace:
-            def __init__(self, adata) -> None:
+            def __init__(self, adata) -> None:  # noqa: ANN001  # missing on purpose
                 self.adata = adata
 
 

@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from .._core.raw import Raw
     from .._types import StorageType
     from .._write_compat import WriteConfig
-    from ..acc import AdRef, MapAcc, RefAcc
+    from ..acc import AdAcc, AdRef, MapAcc, RefAcc
     from ..types import WriteCompatStr
     from ..typing import RWAble
 
@@ -60,7 +60,12 @@ def write_h5ad(  # noqa: PLR0912
     as_dense: Sequence[str] = (),
     convert_strings_to_categoricals: bool = True,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
+    use: AdRef
+    | RefAcc
+    | MapAcc
+    | AdAcc
+    | Sequence[AdRef | RefAcc | MapAcc | AdAcc]
+    | None = None,
     compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
     **kwargs,
 ) -> None:
@@ -101,7 +106,7 @@ def write_h5ad(  # noqa: PLR0912
         f.attrs.setdefault("encoding-type", "anndata")
         f.attrs.setdefault("encoding-version", "0.1.0")
         for k, elem in iter_outer(adata):
-            _check_has_no_slash_key(k, elem)
+            _check_has_no_slash_key(k, elem, compat=compat)
 
             if k == "raw":
                 if adata.raw is not None:
@@ -349,7 +354,7 @@ def _read_raw(
     rdasp: Callable[[h5py.Dataset], CSMatrix] | None = None,
     *,
     attrs: Collection[str] = ("X", "var", "varm"),
-) -> dict:
+) -> dict[str, Any]:  # any: Raw will go
     raw: dict[str, RWAble] = {}
     if "X" in attrs and "raw/X" in f:
         if "raw/X" in as_sparse:

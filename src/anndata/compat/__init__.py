@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from codecs import decode
-from collections.abc import Mapping
 from contextlib import nullcontext
 from enum import Enum, auto
 from functools import partial, singledispatch
@@ -22,12 +21,15 @@ from anndata.types import SupportsArrayApi, SupportsArrayApiBase
 from .._warnings import warn
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from contextlib import AbstractContextManager
     from typing import Any, Self, TypeAlias, TypeGuard, TypeIs
 
     import zarr
+    from numpy.typing import NDArray
 
     from .._core.anndata import AnnData
+    from ..typing import AlignedArray, InMemoryArray
 
     type SparseArray[ST: np.number | np.bool] = (
         sps.bsr_array[ST]
@@ -119,13 +121,13 @@ class IndexManager:
             if existing_xp is xp:
                 return existing
             try:
-                return xp.from_dlpack(existing)
+                return xp.from_dlpack(existing)  # type: ignore[return-value]  # https://github.com/data-apis/array-api-compat/issues/485
             except BufferError:
                 # Some old Array API implementations don’t support DLPack 1.0 (e.g. DLPACK_FLAG_BITMASK_READ_ONLY)
                 # E.g. https://github.com/jax-ml/jax/issues/40789
                 # See “Notes” at the end of https://data-apis.org/array-api/latest/API_specification/generated/array_api.array.__dlpack__.html
-                return xp.asarray(existing)
-        self.add_array(xp.from_dlpack(src_arr, copy=True))
+                return xp.asarray(existing)  # type: ignore[arg-type, return-value]  # https://github.com/data-apis/array-api-compat/issues/485
+        self.add_array(xp.from_dlpack(src_arr, copy=True))  # type: ignore[arg-type]  # https://github.com/data-apis/array-api-compat/issues/485
         return self._manager[device]
 
 
@@ -367,7 +369,7 @@ def _dtype_fields(
     return fields
 
 
-def _from_fixed_length_strings(value):
+def _from_fixed_length_strings(value: NDArray[np.void]) -> NDArray[np.void]:
     """\
     Convert from fixed length strings to unicode.
 
@@ -493,7 +495,7 @@ def _clean_uns(adata: AnnData) -> None:
         del adata.uns[cats_name]
 
 
-def _move_adj_mtx(d) -> None:
+def _move_adj_mtx(d: dict[str, Any]) -> None:  # any: old compat API
     """Read-time fix for moving adjacency matrices from uns to obsp."""
     n = d.get("uns", {}).get("neighbors", {})
     obsp = d.setdefault("obsp", {})
@@ -512,16 +514,6 @@ def _move_adj_mtx(d) -> None:
             obsp[k] = n.pop(k)
 
 
-def _find_sparse_matrices(d: Mapping, n: int, keys: tuple, paths: list):
-    """Find paths to sparse matrices with shape (n, n)."""
-    for k, v in d.items():
-        if isinstance(v, Mapping):
-            _find_sparse_matrices(v, n, (*keys, k), paths)
-        elif isinstance(v, CSMatrix | CSArray) and v.shape == (n, n):
-            paths.append((*keys, k))
-    return paths
-
-
 def _transpose_by_block(dask_array: DaskArray) -> DaskArray:
     import dask.array as da
 
@@ -537,16 +529,19 @@ def _transpose_by_block(dask_array: DaskArray) -> DaskArray:
     return da.block(block_layout.T.tolist())
 
 
-def _safe_transpose(x):
+def _safe_transpose(x: AlignedArray) -> InMemoryArray | XDataArray:
     """Safely transpose x
 
     This is a workaround for: https://github.com/scipy/scipy/issues/19161
     """
+    from ..typing import _is_in_memory
 
     if isinstance(x, DaskArray) and sps.issparse(x._meta):
         return _transpose_by_block(x)
-    else:
+    if _is_in_memory(x) or isinstance(x, XDataArray):
         return x.T
+    msg = f"Cannot transpose {type(x).__name__}, load it into memory first."
+    raise TypeError(msg)
 
 
 def has_xp_base(x: object) -> TypeGuard[SupportsArrayApiBase]:
@@ -555,6 +550,14 @@ def has_xp_base(x: object) -> TypeGuard[SupportsArrayApiBase]:
 
 def has_xp(x: object) -> TypeGuard[SupportsArrayApi]:
     return isinstance(x, SupportsArrayApi)
+
+
+def known_dim(n: int | None) -> int:
+    """Narrow an array API dimension size, which is `None` if unknown (e.g. for lazy arrays)."""
+    if n is None:
+        msg = "Array has a dimension of unknown size, compute it first."
+        raise ValueError(msg)
+    return n
 
 
 def is_scipy_sparse(obj: object) -> TypeIs[SparseArray[Any] | SparseMatrix[Any]]:

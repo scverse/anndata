@@ -4,13 +4,13 @@ This repo contains some work in progress benchmarks for [AnnData](https://github
 
 ## Setup
 
-I definitely recommend reading through the asv docs. Currently, this assumes the benchmark suite can reach the `anndata` repo via the path `../anndata`. Otherwise, all you'll need to do is create a [machine file](https://asv.readthedocs.io/en/stable/commands.html#asv-machine) for your system and make sure `anndata`s dependencies are installable via `conda`.
+I definitely recommend reading through the asv docs. Currently, this assumes the benchmark suite can reach the `anndata` repo via the path `../anndata`. Otherwise, all you’ll need to do is create a [machine file](https://asv.readthedocs.io/en/stable/commands.html#asv-machine) for your system and make sure `anndata`s dependencies are installable via `conda`.
 
 ### Data
 
 Data will need to be retrieved for these benchmarks. This can be downloaded using the script fetch_datasets.py.
 
-Note that the `h5ad` format has changed since it's inception. While the `anndata` package maintains backwards compatibility, older versions of `anndata` will not be able to read files written by more recent versions. To get around this for the benchmarks, datasets have to be able to be read by all versions which can require a setup function that creates the anndata object.
+Note that the `h5ad` format has changed since it’s inception. While the `anndata` package maintains backwards compatibility, older versions of `anndata` will not be able to read files written by more recent versions. To get around this for the benchmarks, datasets have to be able to be read by all versions which can require a setup function that creates the anndata object.
 
 ## Usage
 
@@ -24,7 +24,7 @@ You can filter out the benchmarks which are run with the `-b {pattern}` flag.
 
 ### Accessing the benchmarks
 
-You can see what benchmarks you've already run using `asv show`. If you don't specify a commit, it will search for the available commits. If you specify a commit it'll show you those results. For example:
+You can see what benchmarks you’ve already run using `asv show`. If you don’t specify a commit, it will search for the available commits. If you specify a commit it’ll show you those results. For example:
 
 ```bash
 $ asv show -b "views"
@@ -73,4 +73,4 @@ All benchmarks:
 
 ### View in the browser:
 
-You can view the benchmarks in the browser with `asv publish` followed by `asv preview`. If you want to include benchmarks of a local branch, I think you'll have to add that branch to the `"branches"` list in `asv.conf.json`.
+You can view the benchmarks in the browser with `asv publish` followed by `asv preview`. If you want to include benchmarks of a local branch, I think you’ll have to add that branch to the `"branches"` list in `asv.conf.json`.

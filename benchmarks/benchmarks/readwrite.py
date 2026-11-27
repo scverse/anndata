@@ -42,7 +42,7 @@ PBMC_3K_URL = "https://falexwolf.de/data/pbmc3k_raw.h5ad"
 class H5ADInMemorySizeSuite:
     filepath = "pbmc_in_mem.h5ad"
 
-    def setup_cache(self):
+    def setup_cache(self) -> None:
         # Need to specify path because the working directory is special for asv
         pooch.retrieve(
             url=PBMC_3K_URL, known_hash=None, path=Path.cwd(), fname=self.filepath
@@ -64,7 +64,7 @@ class H5ADInMemorySizeSuite:
 class H5ADReadSuite:
     filepath = "pbmc_read.h5ad"
 
-    def setup_cache(self):
+    def setup_cache(self) -> None:
         # Need to specify path because the working directory is special for asv
         pooch.retrieve(
             url=PBMC_3K_URL, known_hash=None, path=Path.cwd(), fname=self.filepath

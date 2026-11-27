@@ -7,6 +7,7 @@ from __future__ import annotations
 from collections import OrderedDict, defaultdict
 from collections.abc import Mapping, MutableMapping, Sequence
 from copy import copy, deepcopy
+from dataclasses import dataclass
 from functools import singledispatchmethod
 from pathlib import Path
 from textwrap import dedent
@@ -20,10 +21,8 @@ from natsort import natsorted
 from pandas.api.types import infer_dtype
 from scverse_misc import Deprecation, deprecated
 
-from anndata._core.access import ElementRef
-from anndata.types import SupportsArrayApiBase
-
 from .. import utils
+from .._core.access import ElementRef
 from .._settings import settings
 from .._warnings import ImplicitModificationWarning
 from .._write_compat import WriteCompat
@@ -38,9 +37,9 @@ from ..compat import (
     has_xp,
     old_positionals,
     pandas_as_str,
-    pandas_no_chained_assignment_warning,
 )
 from ..logging import anndata_logger as logger
+from ..types import AnnDataLikeMetadataOnly, SupportsArrayApiBase
 from ..utils import (
     asarray,
     axis_len,
@@ -72,7 +71,12 @@ from .index import (
 from .raw import Raw
 from .sparse_dataset import BaseCompressedSparseDataset
 from .storage import _non_2d_message, coerce_array
-from .views import DictView, _resolve_idxs, as_view
+from .views import (
+    DictView,
+    _resolve_idxs,
+    as_view,
+    remove_unused_categories,
+)
 from .xarray import Dataset2D
 
 if TYPE_CHECKING:
@@ -88,13 +92,15 @@ if TYPE_CHECKING:
     from .._types import ReduceFunc
     from .._write_compat import WriteConfig
     from ..acc import (
+        AdAcc,
         AdRef,
         Array,
         DataFrameLike,
+        DFAcc,
         GraphAcc,
+        ItemAcc,
         LayerAcc,
         MapAcc,
-        MetaAcc,
         MultiAcc,
         RefAcc,
     )
@@ -102,7 +108,7 @@ if TYPE_CHECKING:
     from ..typing import AlignedArray, Index, Index1D, Storable, _Index, _Index1DNorm
     from .aligned_df import IntoAlignedDf
     from .aligned_mapping import AxisArraysView, LayersView, PairwiseArraysView
-    from .index import SubsetIdx
+    from .index import NumpyIdx1D, SubsetIdx
     from .sparse_dataset import BackedSparseMatrix
 
     type IntoAlignedMapping = Mapping[str, AlignedArray] | NDArray[np.void] | None
@@ -362,16 +368,19 @@ class AnnData:  # noqa: PLW1641
 
         # views on attributes of adata_ref
         # pandas cannot be indexed with an `IndexManager` or an array-API array
-        var_sub = adata_ref.var.iloc[_as_numpy_idx(self._vidx)]
-        obs_sub = adata_ref.obs.iloc[_as_numpy_idx(self._oidx)]
+        vidx_np, oidx_np = _as_numpy_idx(self._vidx), _as_numpy_idx(self._oidx)
+        var_sub = adata_ref.var.iloc[vidx_np]
+        obs_sub = adata_ref.obs.iloc[oidx_np]
+        _IndexCache(adata_ref.var.index).pass_on_unique(var_sub.index, vidx_np)
+        _IndexCache(adata_ref.obs.index).pass_on_unique(obs_sub.index, oidx_np)
         # fix categories
         uns = copy(adata_ref._uns)
         if settings.remove_unused_categories:
             self._remove_unused_categories(adata_ref.obs, obs_sub, uns)
             self._remove_unused_categories(adata_ref.var, var_sub, uns)
-        # set attributes
-        self._obs = as_view(obs_sub, view_args=(self, "obs"))
-        self._var = as_view(var_sub, view_args=(self, "var"))
+        # set attributes; categories are fixed already, so skip `as_view_df` doing it again
+        self._obs = as_view(obs_sub, (self, "obs"), remove_unused_categories=False)
+        self._var = as_view(var_sub, (self, "var"), remove_unused_categories=False)
         self._uns = uns
 
         # set raw, easy, as it’s immutable anyways...
@@ -869,7 +878,7 @@ class AnnData:  # noqa: PLW1641
         self._set_dim_df(value, "obs")
 
     @obs.deleter
-    def obs(self):
+    def obs(self) -> None:
         self.obs = pd.DataFrame({}, index=self.obs_names)
 
     @property
@@ -892,7 +901,7 @@ class AnnData:  # noqa: PLW1641
         self._set_dim_df(value, "var")
 
     @var.deleter
-    def var(self):
+    def var(self) -> None:
         self.var = pd.DataFrame({}, index=self.var_names)
 
     @property
@@ -925,7 +934,7 @@ class AnnData:  # noqa: PLW1641
         self._uns = value
 
     @uns.deleter
-    def uns(self):
+    def uns(self) -> None:
         self.uns = OrderedDict()
 
     obsm: AlignedMappingProperty[AxisArrays, AxisArraysView, str] = (
@@ -1106,15 +1115,17 @@ class AnnData:  # noqa: PLW1641
         return _normalize_indices(index, self.obs_names, self.var_names)
 
     @overload
-    def __getitem__(self, index: MetaAcc) -> DataFrameLike: ...
+    def __getitem__(self, index: DFAcc) -> DataFrameLike: ...
+    @overload
+    def __getitem__(self, index: ItemAcc) -> object: ...
     @overload
     def __getitem__(self, index: LayerAcc | MultiAcc | GraphAcc) -> AlignedArray: ...
     @overload
     def __getitem__(self, index: AdRef) -> Array: ...
     @overload
-    def __getitem__(self, index: Index) -> AnnData: ...
+    def __getitem__(self, index: Index | AdAcc) -> AnnData: ...
     def __getitem__(
-        self, index: Index | AdRef | RefAcc | MapAcc
+        self, index: Index | AdRef | RefAcc | MapAcc | AdAcc
     ) -> AnnData | DataFrameLike | AlignedArray | Array:
         """Slice AnnData object or retrieve an array using an accessor.
 
@@ -1128,23 +1139,27 @@ class AnnData:  # noqa: PLW1641
             - an :class:`~anndata.acc.AdRef`, returning the referenced 1D or 2D array,
               e.g. `adata[A.obs["cell-type"]]` or `adata[A.layers["counts"][:, "gene-1"]]`;
             - a :term:`reference accessor`, returning the full element (see :meth:`~anndata.acc.RefAcc.get`),
-              e.g. `adata[A.obs]` or `adata[A.obsm["pca"]]`.
+              e.g. `adata[A.obs]` or `adata[A.obsm["pca"]]`;
+            - an :class:`~anndata.acc.AdAcc`, returning the nested AnnData object it is cast from,
+              e.g. `adata[A.uns["nested"].AD]`.
 
             Mapping accessors like `A.obsm` raise an :class:`IndexError`, as they don’t refer to an array.
         """
-        from ..acc import AdRef, MapAcc, RefAcc
+        from ..acc import AdAcc, AdRef, MapAcc, RefAcc
 
         if isinstance(index, AdRef):
             return index.acc.get(self, index.idx)
         elif isinstance(index, RefAcc):
             return index.get(self)
+        elif isinstance(index, AdAcc):
+            return index.container(self)
         elif isinstance(index, MapAcc):
             msg = f"Cannot index with {index} because this is not a path to an array-like structure."
             raise IndexError(msg)
 
         return self._getitem(index)
 
-    def __setitem__(self, index: AdRef | RefAcc, value: object) -> None:
+    def __setitem__(self, index: AdRef | RefAcc | AdAcc, value: object) -> None:
         """Set an array or element using an accessor.
 
         Parameters
@@ -1155,16 +1170,26 @@ class AnnData:  # noqa: PLW1641
             - an :class:`~anndata.acc.AdRef`, assigning into the referenced 1D or 2D array,
               e.g. `adata[A.obs["cell-type"]] = ...` or `adata[A.layers["counts"][:, "gene-1"]] = ...`;
             - a :term:`reference accessor`, replacing the full element (see :meth:`~anndata.acc.RefAcc.set`),
-              e.g. `adata[A.obs] = ...` or `adata[A.obsm["pca"]] = ...`.
+              e.g. `adata[A.obs] = ...` or `adata[A.obsm["pca"]] = ...`;
+            - an :class:`~anndata.acc.AdAcc`, replacing the nested AnnData object it is cast from,
+              e.g. `adata[A.uns["nested"].AD] = ...`.
         value
             The value to assign.
         """
-        from ..acc import NO_IDX, AdRef, MapAcc, RefAcc
+        from ..acc import NO_IDX, AdAcc, AdRef, MapAcc, RefAcc
 
         if isinstance(index, AdRef):
             index.acc.set(self, index.idx, value)
         elif isinstance(index, RefAcc):
             index.set(self, NO_IDX, value)
+        elif isinstance(index, AdAcc):
+            if index.scope is None:
+                msg = f"Cannot replace the object itself via {index!r}."
+                raise TypeError(msg)
+            if not isinstance(value, AnnDataLikeMetadataOnly):
+                msg = f"Cannot set {index!r} to {type(value).__name__}, not an AnnData-like object."
+                raise TypeError(msg)
+            index.scope.set(self, NO_IDX, value)
         elif isinstance(index, MapAcc):
             msg = f"Cannot index with {index} because this is not a path to an array-like structure."
             raise IndexError(msg)
@@ -1186,8 +1211,7 @@ class AnnData:  # noqa: PLW1641
             if not isinstance(df_full[k].dtype, pd.CategoricalDtype):
                 continue
             all_categories = df_full[k].cat.categories
-            with pandas_no_chained_assignment_warning():
-                df_sub[k] = df_sub[k].cat.remove_unused_categories()
+            remove_unused_categories(df_sub, k)
             # also correct the colors...
             color_key = f"{k}_colors"
             if color_key not in uns:
@@ -1604,7 +1628,7 @@ class AnnData:  # noqa: PLW1641
                 return True
 
         from anndata._io.specs.registry import _REGISTRY
-        from anndata.acc import AdRef, RefAcc
+        from anndata.acc import AdAcc, AdRef, RefAcc
 
         writeable_elems = {
             src_type
@@ -1657,7 +1681,7 @@ class AnnData:  # noqa: PLW1641
                 return accumulate or any(
                     predicate(v, accumulate=accumulate) for v in elem.values()
                 )
-            if isinstance(elem, AdRef | RefAcc):
+            if isinstance(elem, AdRef | RefAcc | AdAcc):
                 # writeable, but only with the `accessor` flag and a known project
                 if accumulate or not compat.accessor:
                     return True
@@ -1691,16 +1715,16 @@ class AnnData:  # noqa: PLW1641
     def _check_uniqueness(self) -> None:
         if (
             settings.restrict_index_types
-            and self.obs.index[self.obs.index.notna()].has_duplicates
+            and _IndexCache(self.obs.index).has_duplicates()
         ):
             utils.warn_names_duplicates("obs")
         if (
             settings.restrict_index_types
-            and self.var.index[self.var.index.notna()].has_duplicates
+            and _IndexCache(self.var.index).has_duplicates()
         ):
             utils.warn_names_duplicates("var")
 
-    def __contains__(self, key: AdRef | RefAcc | MapAcc) -> bool:
+    def __contains__(self, key: AdRef | RefAcc | MapAcc | AdAcc) -> bool:
         """Check if array is in AnnData via its path as an accessor.
 
         When passed a :class:`~anndata.acc.MapAcc`,
@@ -1713,19 +1737,10 @@ class AnnData:  # noqa: PLW1641
             An accessor pointing to an array that might or might not be in `self`.
 
         """
-        from ..acc import AdRef, GraphMapAcc, LayerMapAcc, MapAcc, MultiMapAcc, RefAcc
+        from ..acc import AdAcc, AdRef, MapAcc, RefAcc
 
         match key:
-            case LayerMapAcc():
-                return bool(self.layers)
-            case MultiMapAcc():
-                return bool(getattr(self, f"{key.dim}m"))
-            case GraphMapAcc():
-                return bool(getattr(self, f"{key.dim}p"))
-            case MapAcc():  # to check MapAccs, we need to know the attribute name
-                msg = f"Unknown MapAcc subclass {type(key)}."
-                raise TypeError(msg)
-            case RefAcc():
+            case AdAcc() | MapAcc() | RefAcc():
                 return key.isin(self)
             case AdRef():
                 return key.acc.isin(self, key.idx)
@@ -1763,7 +1778,12 @@ class AnnData:  # noqa: PLW1641
         compression: Literal["gzip", "lzf"] | None = None,
         compression_opts: int | object = None,
         as_dense: Sequence[str] = (),
-        use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
+        use: AdRef
+        | RefAcc
+        | MapAcc
+        | AdAcc
+        | Sequence[AdRef | RefAcc | MapAcc | AdAcc]
+        | None = None,
         compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
     ):
         """\
@@ -1832,7 +1852,7 @@ class AnnData:  # noqa: PLW1641
         use
             Only write the element(s) referenced by this accessor (or list of accessors) into an existing AnnData store,
             e.g. `A.obs["a"]` (a single column, updating the column order), `A.obs`, `A.X`,
-            `A.layers["counts"]`, `A.layers`, `A.obsm["pca"]`, or `A.obsp`.
+            `A.layers["counts"]`, `A.layers`, `A.obsm["pca"]`, `A.obsp`, or a nested AnnData object like `A.uns["n"].AD`.
             Lists such as `[A.X, *A.obs[["a", "b"]]]` are written together after validating all entries.
         compat
             Which anndata version’s write behavior to target, see :class:`~anndata.WriteCompat`.
@@ -1916,7 +1936,12 @@ class AnnData:  # noqa: PLW1641
         chunks: tuple[int, ...] | None = None,
         convert_strings_to_categoricals: bool = True,
         consolidate_metadata: bool = True,
-        use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc] | None = None,
+        use: AdRef
+        | RefAcc
+        | MapAcc
+        | AdAcc
+        | Sequence[AdRef | RefAcc | MapAcc | AdAcc]
+        | None = None,
         compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
     ):
         """\
@@ -1935,7 +1960,7 @@ class AnnData:  # noqa: PLW1641
         use
             Only write the element(s) referenced by this accessor (or list of accessors) into an existing AnnData store,
             e.g. `A.obs["a"]` (a single column, updating the column order), `A.obs`, `A.X`,
-            `A.layers["counts"]`, `A.layers`, `A.obsm["pca"]`, or `A.obsp`.
+            `A.layers["counts"]`, `A.layers`, `A.obsm["pca"]`, `A.obsp`, or a nested AnnData object like `A.uns["n"].AD`.
             Lists such as `[A.X, *A.obs[["a", "b"]]]` are written together after validating all entries.
         compat
             Which anndata version’s write behavior to target, see :class:`~anndata.WriteCompat`.
@@ -2144,3 +2169,36 @@ def _infer_shape(
 def _subset_anndata(a: AnnData, subset_idx: SubsetIdx) -> AnnData:
     """`AnnData` normalises its own indices, so pass them through untouched."""
     return a._getitem(subset_idx)
+
+
+@dataclass(frozen=True, slots=True)
+class _IndexCache:
+    """Access to the private cache of a :class:`pandas.Index` (shared with its copies)."""
+
+    index: pd.Index
+
+    @property
+    def cache(self) -> dict[str, object]:
+        return vars(self.index)["_cache"]
+
+    def has_duplicates(self) -> bool:
+        if self.index.hasnans:
+            return self.index[self.index.notna()].has_duplicates
+        # keep only the answer on the index (shared with its copies), not pandas' lookup table,
+        # which costs ~90 bytes per name and slows down slicing: check a throw-away view,
+        # unless the index already has a table (slicing it would build another one)
+        cache = self.cache
+        if "is_unique" not in cache:
+            idx = self.index if "_engine" in cache else self.index[:]
+            cache["is_unique"] = idx.is_unique
+        return not cache["is_unique"]
+
+    def pass_on_unique(self, sub: pd.Index, idx: NumpyIdx1D) -> None:
+        """Mark `sub = index[idx]` as unique if `index` is known to be and `idx` can’t repeat a name.
+
+        Copies of a view then don’t have to check its names for duplicates again.
+        """
+        if (isinstance(idx, slice) or idx.dtype == bool) and self.cache.get(
+            "is_unique"
+        ):
+            _IndexCache(sub).cache["is_unique"] = True

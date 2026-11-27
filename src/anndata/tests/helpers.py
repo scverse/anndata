@@ -654,7 +654,7 @@ def assert_equal_array_api(
         # really force it on b
         b = xp.asarray(asarray(b))
         if exact:
-            assert xp.all(a == b)
+            assert xp.all(a == b)  # type: ignore[arg-type]  # https://github.com/data-apis/array-api-compat/issues/485
         else:
             # `allclose` isn’t part of the array API standard, so compare on the host.
             # `equal_nan` is necessary for padding with NaN
@@ -799,7 +799,11 @@ def assert_equal_awkarray(
 
 @assert_equal.register(Mapping)
 def assert_equal_mapping(
-    a: Mapping, b: object, *, exact: bool = False, elem_name: str | None = None
+    a: Mapping[str, object],
+    b: object,
+    *,
+    exact: bool = False,
+    elem_name: str | None = None,
 ):
     assert isinstance(b, Mapping)
     assert set(a) == set(b), f"{format_msg(elem_name)} {a.keys()} != {b.keys()}"
@@ -996,7 +1000,7 @@ def _(a):
 
 @singledispatch
 def _as_sparse_dask(
-    a: NDArray | CSArray | CSMatrix | DaskArray,
+    a: NDArray[np.generic] | CSArray | CSMatrix | DaskArray,
     *,
     typ: type[CSArray | CSMatrix | CupyCSMatrix],
     chunks: tuple[int, ...] | None = None,
@@ -1007,7 +1011,7 @@ def _as_sparse_dask(
 
 @_as_sparse_dask.register(CSArray | CSMatrix | np.ndarray)
 def _(
-    a: CSArray | CSMatrix | NDArray,
+    a: CSArray | CSMatrix | NDArray[np.generic],
     *,
     typ: type[CSArray | CSMatrix | CupyCSMatrix],
     chunks: tuple[int, ...] | None = None,
@@ -1034,7 +1038,9 @@ def _(
 
 
 def _as_sparse_dask_inner(
-    a: NDArray | CSArray | CSMatrix, *, typ: type[CSArray | CSMatrix | CupyCSMatrix]
+    a: NDArray[np.generic] | CSArray | CSMatrix,
+    *,
+    typ: type[CSArray | CSMatrix | CupyCSMatrix],
 ) -> CSArray | CSMatrix | CupyCSMatrix:
     """Convert into a a sparse container that dask supports (or complain)."""
     if issubclass(typ, CSArray) and not DASK_CAN_SPARRAY:  # convert sparray to spmatrix
@@ -1272,7 +1278,7 @@ class AccessTrackingStore(WrapperStore[Store]):
     """
 
     _access_count: Counter[str]
-    _accessed: defaultdict[str, set]
+    _accessed: defaultdict[str, set[str]]
     _accessed_keys: defaultdict[str, list[str]]
 
     def __init__(self, store: Store) -> None:

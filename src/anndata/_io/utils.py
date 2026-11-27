@@ -1,21 +1,22 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
+from enum import Enum
 from functools import WRAPPER_ASSIGNMENTS, cache, wraps
 from itertools import pairwise
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Literal, NamedTuple, cast
 
 import numpy as np
 import pandas as pd
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
-from .._write_compat import WriteCompat
-from ..acc import A
 from ..utils import warn
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Collection, Iterable, Iterator
     from typing import Any, Literal
 
     import h5py
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
     from pandas.core.dtypes.dtypes import BaseMaskedDtype
 
     from .. import AnnData
+    from .._core.raw import Raw
     from .._types import (
         StorageType,
         _ArrayStorageType,
@@ -30,8 +32,7 @@ if TYPE_CHECKING:
         _WriteInternal,
     )
     from .._write_compat import WriteConfig
-    from ..acc import AdAcc, AdRef, MapAcc, RefAcc
-    from ..types import WriteCompatStr
+    from ..acc import AdAcc, AdRef, DFAcc, MapAcc, RefAcc
     from ..typing import RWAble
     from .specs.registry import Writer
 
@@ -44,7 +45,7 @@ if TYPE_CHECKING:
 
 
 # Could be numba’d if it returned tuples instead of slices
-def idx_chunks_along_axis(shape: tuple, axis: int, chunk_size: int):
+def idx_chunks_along_axis(shape: tuple[int, ...], axis: int, chunk_size: int):
     """\
     Gives indexer tuples chunked along an axis.
 
@@ -166,119 +167,203 @@ def pandas_nullable_dtype(dtype: np.dtype) -> BaseMaskedDtype:
 def write_use(
     f: _GroupStorageType,
     adata: AnnData,
-    use: AdRef | RefAcc | MapAcc | Sequence[AdRef | RefAcc | MapAcc],
+    use: AdRef | RefAcc | MapAcc | AdAcc | Sequence[AdRef | RefAcc | MapAcc | AdAcc],
     *,
-    validate_store_attributes: Mapping[str, str] = MappingProxyType({
-        "encoding-type": "anndata",
-        "encoding-version": "0.1.0",
-    }),
-    A: AdAcc = A,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
+    compat: WriteConfig,
 ) -> None:
-    """Write only the parts of `adata` referenced by `use` into the existing anndata group `f`.
-
-    Parameters
-    ----------
-    f
-        An on-disk storage.
-    adata
-        The :class:`~anndata.AnnData` object.
-    use
-        Accessors for the parts that should be written to disk.
-    validate_store_attributes
-        Attributes that a valid on-disk store must have. These will be verified prior to writing and writing
-        will abort if the on-disk attributes do not match the ones passed here. This is mostly useful for
-        libraries implementing custom on-disk formats on top of anndata, end users should use the default.
-    A
-        A :class:`~anndata.acc.AdAcc` instance to use for accessing additional attributes of `adata` during
-        validation. This is mosstly useful for libraries building on top of anndata, end users should use
-        the default.
-    dataset_kwargs
-        Keyword arguments to pass to the stores dataset creation function.
-        E.g. for zarr this would be `chunks`, `compressor`.
-    compat
-        Which anndata version’s write behavior to target, see :class:`~anndata.WriteCompat`.
-    """
-    from .specs import read_elem, write_elem
-
-    for attrname, attrval_expected in validate_store_attributes.items():
-        if (attrval := f.attrs.get(attrname)) != attrval_expected:
-            msg = f"Store validation failed: Expected attribute {attrname!r} to have value {attrval_expected!r}, got {attrval!r}."
-            raise ValueError(msg)
-
-    uses = use if isinstance(use, Sequence) else [use]
-    for dim in ("obs", "var"):
-        group = cast("_GroupStorageType", f[dim])
-        on_disk = read_elem(
-            cast("StorageType", group[cast("str", group.attrs["_index"])])
-        )
-        if not pd.Index(cast("np.ndarray", on_disk)).equals(
-            adata[getattr(A, dim)].index
-        ):
-            msg = f"Cannot write {use}: {dim}_names in the store do not match the AnnData object."
-            raise ValueError(msg)
+    """Write only the parts of `adata` referenced by `use` into the existing anndata group `f`."""
+    from .specs import write_elem
 
     # resolve everything first so an invalid accessor fails before anything is written
-    for parent, key, elem in [_resolve_use(f, adata, u) for u in uses]:
-        if parent is not None and parent not in f:
-            write_elem(f, parent, {})
+    uses = use if isinstance(use, Sequence) else [use]
+    _check_store(f, adata, use)
+    targets = [(u, *_descend(f, adata, u)) for u in uses]
+    for _, g, inner in targets:
+        if g is not f:
+            _check_store(g, inner, use)
+    # `g` is the nested group, but `u` resolves its own scope, so pass it the root `adata`
+    for g, parent, key, elem in [
+        (g, *_resolve_use(g, adata, u)) for u, g, _ in targets
+    ]:
+        if (
+            parent and parent[0] not in g
+        ):  # fixed attributes like `layers` may be missing
+            write_elem(g, parent[0], {}, compat=compat)
+        group = g
+        for name in parent:  # `_resolve_use` checked that the rest exists
+            group = cast("_GroupStorageType", dict(mapping_items(group, {name}))[name])
+        if (layout := IndexedLayout.of(group)) is None:
+            write_elem(group, key, elem, dataset_kwargs=dataset_kwargs, compat=compat)
+            continue
+        # the group stores names in an array, so add `key` there if it’s new
+        names = layout.read_names(group)
+        # skip the index, whose name might equal a column’s (e.g. `""`)
+        i_idx = group.attrs.get("df:index")
+        i = next(
+            (j for j, n in enumerate(names) if n == key and j != i_idx), len(names)
+        )
         write_elem(
-            f if parent is None else cast("_GroupStorageType", f[parent]),
-            key,
+            group,
+            layout.child_key(i),
             elem,
             dataset_kwargs=dataset_kwargs,
             compat=compat,
         )
+        if i == len(names):
+            layout.write_names(group, [*names, key])
+            if "df:shape" in group.attrs:
+                n_rows, _ = cast("Sequence[int]", group.attrs["df:shape"])
+                group.attrs["df:shape"] = [n_rows, i + 1]
 
 
-def _resolve_use(  # noqa: PLR0911
-    f: _GroupStorageType, adata: AnnData, use: AdRef | RefAcc | MapAcc
-) -> tuple[str | None, str, RWAble]:
-    """Get the parent group, key, and element to write for `use`."""
+def _check_store(f: _GroupStorageType, adata: AnnData, use: object) -> None:
+    """Check that `f` is an anndata group with the same names as `adata`."""
+    if (
+        f.attrs.get("encoding-type"),
+        f.attrs.get("encoding-version"),
+    ) != ("anndata", "0.1.0"):
+        msg = "Cannot write a subelement of an AnnData object to a store that is not an AnnData store."
+        raise ValueError(msg)
+    for dim in ("obs", "var"):
+        on_disk = read_df_index(cast("_GroupStorageType", f[dim]))
+        if isinstance(on_disk, pd.RangeIndex):  # AnnData turns these into strings
+            on_disk = on_disk.astype(str)
+        if not on_disk.equals(getattr(adata, f"{dim}_names")):
+            msg = f"Cannot write {use}: {dim}_names in the store do not match the AnnData object."
+            raise ValueError(msg)
+
+
+def _descend(
+    f: _GroupStorageType, adata: AnnData, use: AdRef | RefAcc | MapAcc | AdAcc
+) -> tuple[_GroupStorageType, AnnData]:
+    """Get the anndata group and object `use` refers into."""
+    from .. import AnnData
+    from ..acc import AdAcc, AdRef, ItemAcc, MapAcc, RefAcc
+
+    match use:
+        case AdRef(acc=RefAcc(scope=scope)) | RefAcc(scope=scope) | MapAcc(scope=scope):
+            pass
+        case AdAcc(scope=RefAcc(scope=scope)):  # same scope as `A.uns["n"]`
+            pass
+        case _:  # bare `A`, which `_resolve_use` rejects
+            scope = None
+    if scope is None:
+        return f, adata
+    f, _ = _descend(f, adata, scope)
+    if not isinstance(scope, ItemAcc):  # e.g. a mudata modality
+        msg = f"Cannot write {use}: {scope!r} has no known location in the store."
+        raise ValueError(msg)
+    group = _require_group(f, ("uns", *scope.path), "anndata", use)
+    if not isinstance(inner := scope.get(adata), AnnData):
+        msg = f"Cannot write {use}: {scope!r} is a {type(inner).__name__}, not an AnnData object."
+        raise ValueError(msg)
+    return group, inner
+
+
+def _require_group(
+    f: _GroupStorageType, path: Sequence[str], encoding: str, use: object
+) -> _GroupStorageType:
+    """Get the group at `path` in `f` if it has `encoding`, as only fixed attributes get created."""
+    group = f
+    for name in path:
+        if (child := dict(mapping_items(group, {name})).get(name)) is None:
+            break
+        group = cast("_GroupStorageType", child)
+    else:
+        if group.attrs.get("encoding-type") == encoding:
+            return group
+    msg = f"Cannot write {use}: there is no {encoding!r} element at {'/'.join(path)!r} in the store. Write it first."
+    raise ValueError(msg)
+
+
+def _frame_col(
+    group: _GroupStorageType,
+    path: tuple[str, ...],
+    adata: AnnData,
+    acc: DFAcc,
+    col: str,
+) -> tuple[tuple[str, ...], str, RWAble]:
+    """Get the parent path, key, and element to write column `col` of the frame `group` at `path`."""
+    idx = df_children(group).index
+    # in the 0.2.0 layout, `_index` is the child key of an unnamed index
+    if (idx is not None and col == idx.name) or (
+        col == "_index" and IndexedLayout.of(group) is None
+    ):
+        msg = f"Cannot write column {col!r}: it is the name of the {'/'.join(path)} index."
+        raise ValueError(msg)
+    # `._values` is what `write_dataframe` writes for each column
+    return path, col, acc.frame(adata)[col]._values
+
+
+def _resolve_use(  # noqa: PLR0911, PLR0912
+    f: _GroupStorageType, adata: AnnData, use: AdRef | RefAcc | MapAcc | AdAcc
+) -> tuple[tuple[str, ...], str, RWAble]:
+    """Get the parent path (names, not child keys), key, and element to write for `use`."""
     from ..acc import (
+        AdAcc,
         AdRef,
+        DFAcc,
         GraphAcc,
         GraphMapAcc,
+        ItemAcc,
         LayerAcc,
         LayerMapAcc,
         MetaAcc,
         MultiAcc,
         MultiMapAcc,
+        RefAcc,
+        UnsMapAcc,
     )
 
     match use:
+        case DFAcc(frame_acc=RefAcc() as frame):  # `.DF`
+            parent, key, _ = _resolve_use(f, adata, frame)
+            return parent, key, use.get(adata)  # `.get` checks the cast
+        case AdAcc(scope=RefAcc() as item):  # `.AD`
+            parent, key, _ = _resolve_use(f, adata, item)
+            return parent, key, use.container(adata)  # `.container` checks the cast
+        case ItemAcc(path=path):
+            for i in range(1, len(path)):  # `uns` itself is a fixed attribute
+                _require_group(f, ("uns", *path[:i]), "dict", use)
+            return ("uns", *path[:-1]), path[-1], use.get(adata)
+        case UnsMapAcc():
+            return (), "uns", dict(use.get(adata))
         case AdRef(acc=MetaAcc(dim=dim) as acc, idx=str() as col):
-            if col in {"_index", cast("_GroupStorageType", f[dim]).attrs["_index"]}:
-                msg = f"Cannot write column {col!r}: it is the name of the {dim} index."
-                raise ValueError(msg)
-            # `._values` is what `write_dataframe` writes for each column
-            return dim, col, acc.get(adata)[col]._values
+            return _frame_col(
+                cast("_GroupStorageType", f[dim]), (dim,), adata, acc, col
+            )
+        case AdRef(acc=DFAcc(frame_acc=RefAcc() as frame) as acc, idx=str() as col):
+            # `.DF`: write into the frame where it is in the store
+            frame_parent, frame_key, _ = _resolve_use(f, adata, frame)
+            path = (*frame_parent, frame_key)
+            group = _require_group(f, path, "dataframe", use)
+            return _frame_col(group, path, adata, acc, col)
         case AdRef():
-            msg = f"Cannot write {use}: only `obs`/`var` columns can be written as single vectors."
+            msg = f"Cannot write {use}: only data frame columns can be written as single vectors."
             raise ValueError(msg)
         case LayerAcc(k=k):
             return (
-                None if k is None else "layers",
+                () if k is None else ("layers",),
                 "X" if k is None else k,
                 use.get(adata),
             )
         case MetaAcc(dim=dim):
-            return None, dim, use.get(adata)
+            return (), dim, use.get(adata)
         case MultiAcc(dim=dim, k=k):
-            return f"{dim}m", k, use.get(adata)
+            return (f"{dim}m",), k, use.get(adata)
         case GraphAcc(dim=dim, k=k):
-            return f"{dim}p", k, use.get(adata)
+            return (f"{dim}p",), k, use.get(adata)
         case LayerMapAcc():  # `adata.layers` contains `X` as `None`
             return (
-                None,
+                (),
                 "layers",
                 {k: v for k, v in use.get(adata).items() if k is not None},
             )
         case MultiMapAcc(dim=dim):
-            return None, f"{dim}m", dict(use.get(adata))
+            return (), f"{dim}m", dict(use.get(adata))
         case GraphMapAcc(dim=dim):
-            return None, f"{dim}p", dict(use.get(adata))
+            return (), f"{dim}p", dict(use.get(adata))
         case _:
             msg = f"Cannot write {use!r}."
             raise TypeError(msg)
@@ -409,14 +494,174 @@ def report_write_key_on_error(func):
     return func_wrapper
 
 
-def _check_has_no_slash_key(attr: str, elem: object) -> None:
+def _check_has_no_slash_key(attr: str, elem: object, *, compat: WriteConfig) -> None:
     """Only attempt to write slash keys where people rely on it for backwards compatibility."""
+
     if attr in {"obs", "var", "uns", "raw"}:
-        return  # separate check for `settings.disallow_forward_slash_in_h5ad` is done in `write_elem`
+        return  # `write_elem` checks these against `settings.disallow_forward_slash_in_h5ad`
+    if compat.indexed_keys:
+        return  # keys are stored in an array, not as child names
     assert isinstance(elem, Mapping)
     if any("/" in k for k in elem if k not in {"/", None}):
         msg = f"Forward slashes are not allowed in keys in {attr}"
         raise ValueError(msg)
+
+
+@dataclass(frozen=True)
+class _IndexedLayout:
+    encoding_type: str
+    encoding_version: str
+    names_key: str
+    """Child key of the names array."""
+    names_attr: str
+    """Attribute holding the names instead of the names array."""
+    prefix: str
+    """Child keys are `{prefix}_{i}`."""
+
+
+NAMES_ATTR_MAX_BYTES = 4096
+"""Larger names arrays don’t go into attributes, which are loaded whenever the group is opened."""
+
+
+class IndexedLayout(_IndexedLayout, Enum):
+    """A layout storing child names in an attribute or array and naming children by position."""
+
+    DATAFRAME = ("dataframe", "0.3.0", "columns", "df:columns", "column")
+    # no convention defines `dict:keys`, it mirrors the dataframe convention’s `df:columns`
+    DICT = ("dict", "0.2.0", "keys", "dict:keys", "item")
+
+    @classmethod
+    def of(cls, group: _GroupStorageType) -> IndexedLayout | None:
+        """Get the layout `group` uses, if any."""
+        spec = (group.attrs.get("encoding-type"), group.attrs.get("encoding-version"))
+        return next(
+            (l for l in cls if (l.encoding_type, l.encoding_version) == spec), None
+        )
+
+    def child_key(self, i: int) -> str:
+        return f"{self.prefix}_{i}"
+
+    def read_names(self, group: _GroupStorageType) -> list[str]:
+        from .specs import read_elem
+
+        names = group.attrs.get(self.names_attr)
+        if names is None:
+            names = read_elem(group[self.names_key])
+        elif self.names_key in group:
+            msg = (
+                f"Group {group.name!r} stores names both in attribute "
+                f"{self.names_attr!r} and array {self.names_key!r}"
+            )
+            raise ValueError(msg)
+        return [str(n) for n in cast("Iterable[str]", names)]
+
+    def write_names(self, group: _GroupStorageType, names: Sequence[str]) -> None:
+        """Store `names` in an attribute (saving a request) if small enough, else in an array.
+
+        HDF5 always gets the array, as it has no requests to save but a limit on attribute size.
+        """
+        import zarr
+
+        from .specs import write_elem
+
+        names = list(names)
+        if isinstance(group, zarr.Group) and (
+            len(json.dumps(names)) <= NAMES_ATTR_MAX_BYTES
+        ):
+            if self.names_key in group:
+                del group[self.names_key]
+            group.attrs[self.names_attr] = names
+            return
+        if self.names_attr in group.attrs:
+            del group.attrs[self.names_attr]
+        # object dtype makes this a `string-array`, not a `nullable-string-array` group
+        write_elem(group, self.names_key, np.array(names, dtype=object))
+
+
+def write_indexed(
+    group: _GroupStorageType,
+    layout: IndexedLayout,
+    items: Iterable[tuple[str, RWAble]],
+    *,
+    _writer: Writer,
+    dataset_kwargs: Mapping[str, Any],
+) -> int:
+    """Write `items` as numbered children and their names via :meth:`IndexedLayout.write_names`.
+
+    Returns the number of items written.
+    """
+    names: list[str] = []
+    for i, (name, value) in enumerate(items):
+        _writer.write_elem(
+            group, layout.child_key(i), value, dataset_kwargs=dataset_kwargs
+        )
+        names.append(name)
+    layout.write_names(group, names)
+    return len(names)
+
+
+def mapping_items(
+    group: _GroupStorageType, keys: Collection[str] | None = None
+) -> Iterator[tuple[str, StorageType]]:
+    """Iterate over the keys and children of a `dict` encoded group.
+
+    If `keys` is given, only open the children with these keys that exist.
+    """
+    if (layout := IndexedLayout.of(group)) is None:
+        if keys is None:
+            return iter(dict(group).items())
+        return ((k, group[k]) for k in group if k in keys)  # store order, like below
+    names = layout.read_names(group)
+    return (
+        (k, group[layout.child_key(i)])
+        for i, k in enumerate(names)
+        if keys is None or k in keys
+    )
+
+
+class DfChild[N: str | None](NamedTuple):
+    """A dataframe’s index or column."""
+
+    name: N
+    """Its name, which is `None` for an unnamed index."""
+    key: str
+    """The key of the child holding its data."""
+
+
+@dataclass(frozen=True)
+class DfChildren:
+    index: DfChild[str | None] | None
+    """The index, which is optional from v0.3.0 on."""
+    columns: list[DfChild[str]]
+
+
+def df_children(group: _GroupStorageType) -> DfChildren:
+    """Get the index and columns of a `dataframe` encoded group."""
+    from ..compat import _read_attr
+
+    if (layout := IndexedLayout.of(group)) is None:
+        idx = cast("str", _read_attr(group.attrs, "_index"))
+        col_order = cast("Iterable[str]", _read_attr(group.attrs, "column-order"))
+        return DfChildren(
+            DfChild(None if idx == "_index" else idx, idx),
+            [DfChild(c, c) for c in col_order],
+        )
+    names = layout.read_names(group)
+    cols = [DfChild(n, layout.child_key(i)) for i, n in enumerate(names)]
+    if (i_idx := group.attrs.get("df:index")) is None:
+        return DfChildren(None, cols)
+    idx_name, idx_key = cols.pop(int(cast("int", i_idx)))
+    return DfChildren(DfChild(idx_name or None, idx_key), cols)
+
+
+def read_df_index(group: _GroupStorageType) -> pd.Index:
+    """Read a `dataframe` encoded group’s index, or a `RangeIndex` if it has none."""
+    from .specs import read_elem
+
+    if (idx := df_children(group).index) is None:
+        n_rows, _ = cast("Sequence[int]", group.attrs["df:shape"])
+        return pd.RangeIndex(int(n_rows))
+    return pd.Index(cast("np.ndarray", read_elem(cast("StorageType", group[idx.key]))))
 
 
 # -------------------------------------------------------------------------------
@@ -424,14 +669,14 @@ def _check_has_no_slash_key(attr: str, elem: object) -> None:
 # -------------------------------------------------------------------------------
 
 
-def _read_legacy_raw(
+def _read_legacy_raw[M: (dict[str, Any], Raw)](
     f: zarr.Group | h5py.Group,
-    modern_raw,  # TODO: type
+    modern_raw: M | None,
     read_df: Callable,
     read_attr: Callable,
     *,
-    attrs=("X", "var", "varm"),
-) -> dict:
+    attrs: Collection[str] = ("X", "var", "varm"),
+) -> M | dict[str, Any]:
     """\
     Backwards compat for reading legacy raw.
     Makes sure that no modern raw group coexists with legacy raw.* groups.

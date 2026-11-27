@@ -20,14 +20,14 @@ if TYPE_CHECKING:
 
     from zarr.storage import MemoryStore
 
-    from anndata.acc import AdRef, MapAcc, RefAcc
+    from anndata.acc import AdAcc, AdRef, MapAcc, RefAcc
 
 
 def _write(
     adata: ad.AnnData,
     store: Path | MemoryStore,
     diskfmt: Literal["h5ad", "zarr"],
-    **kwargs,
+    **kwargs: object,
 ) -> None:
     getattr(adata, f"write_{diskfmt}")(store, **kwargs)
 
@@ -48,6 +48,7 @@ def adata() -> ad.AnnData:
         layers={"l": rng.random((5, 3))},
         obsm={"o": rng.random((5, 2))},
         obsp={"p": sparse.random(5, 5, format="csr", rng=rng)},
+        uns={"d": {"k": 1}},
     )
 
 
@@ -153,22 +154,30 @@ def test_write_elem(
 
 
 @pytest.mark.parametrize(
-    ("use", "match"),
+    ("use", "exc", "match"),
     [
-        pytest.param(A.obsm["o"][:, 0], r"only `obs`/`var` columns", id="vector"),
-        pytest.param(A.obs.index, r"only `obs`/`var` columns", id="index"),
-        pytest.param(A.obs["_index"], r"name of the obs index", id="reserved"),
+        pytest.param(
+            A.obsm["o"][:, 0], ValueError, r"only data frame columns", id="vector"
+        ),
+        pytest.param(A.obs.index, ValueError, r"only data frame columns", id="index"),
+        pytest.param(
+            A.obs["_index"], ValueError, r"name of the obs index", id="reserved"
+        ),
+        pytest.param(A.obsm["o"].DF, TypeError, r"not a data frame", id="wrong-cast"),
+        pytest.param(A.uns["d"].AD, TypeError, r"not an AnnData", id="wrong-ad-cast"),
+        pytest.param(A, TypeError, r"Cannot write A\.", id="root"),
     ],
 )
 def test_write_invalid_ref(
     adata: ad.AnnData,
     diskfmt: Literal["h5ad", "zarr"],
     diskfmt_store: Path | MemoryStore,
-    use: AdRef,
+    use: AdRef | RefAcc | AdAcc,
+    exc: type[Exception],
     match: str,
 ) -> None:
     _write(adata, diskfmt_store, diskfmt)
-    with pytest.raises(ValueError, match=match):
+    with pytest.raises(exc, match=match):
         _write(adata, diskfmt_store, diskfmt, use=use)
 
 
@@ -227,6 +236,99 @@ def test_write_list(
     assert_equal(_read(diskfmt_store, diskfmt), adata)
 
 
+@pytest.mark.parametrize("key", ["x", "a/b", "item_0"])
+@pytest.mark.parametrize(
+    "use", [lambda k: A.obsm[k], lambda _: A.obsm], ids=["single-key", "mapping"]
+)
+def test_write_indexed_mapping(
+    diskfmt: Literal["h5ad", "zarr"],
+    diskfmt_store: Path | MemoryStore,
+    key: str,
+    use: Callable[[str], RefAcc | MapAcc],
+) -> None:
+    """`use=` adds keys to a mapping that stores them in an array."""
+    adata = ad.AnnData(np.zeros((2, 3)), obsm={"x": np.zeros((2, 2))})
+    _write(adata, diskfmt_store, diskfmt, compat="0.14")
+
+    adata.obsm[key] = np.ones((2, 2))
+    _write(adata, diskfmt_store, diskfmt, use=use(key), compat="0.14")
+    read = _read(diskfmt_store, diskfmt)
+
+    assert set(read.obsm) == {"x", key}
+    np.testing.assert_array_equal(read.obsm[key], np.ones((2, 2)))
+
+
+@pytest.mark.parametrize(
+    "col",
+    [
+        pytest.param("a", id="existing"),
+        pytest.param("new/col", id="new"),
+        # an unnamed index is stored as `""` too
+        pytest.param("", id="empty"),
+    ],
+)
+def test_write_indexed_df_column(
+    diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore, col: str
+) -> None:
+    """`use=` adds a column to a dataframe that stores its names in an array."""
+    adata = ad.AnnData(np.zeros((2, 3)), obs=pd.DataFrame({"a": [1, 2]}))
+    _write(adata, diskfmt_store, diskfmt, compat="0.14")
+
+    adata.obs[col] = [5, 6]
+    _write(adata, diskfmt_store, diskfmt, use=A.obs[col], compat="0.14")
+    read = _read(diskfmt_store, diskfmt)
+
+    assert_equal(read.obs, adata.obs)
+
+
+def test_write_indexed_names_outgrow_attr(
+    diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore
+) -> None:
+    """Names move from attribute to array when `use=` adds one too long for the attribute."""
+    adata = ad.AnnData(
+        np.zeros((2, 3)), obs=pd.DataFrame({"a": [1, 2]}), obsm={"x": np.zeros((2, 2))}
+    )
+    _write(adata, diskfmt_store, diskfmt, compat="0.14")
+
+    long = "y" * 5000
+    adata.obs[long] = [5, 6]
+    adata.obsm[long] = np.ones((2, 2))
+    _write(
+        adata, diskfmt_store, diskfmt, use=[A.obs[long], A.obsm[long]], compat="0.14"
+    )
+
+    f = (
+        zarr.open_group(diskfmt_store)
+        if diskfmt == "zarr"
+        else h5py.File(diskfmt_store)
+    )
+    for path, attr, key in [
+        ("obs", "df:columns", "columns"),
+        ("obsm", "dict:keys", "keys"),
+    ]:
+        g = cast("h5py.Group | zarr.Group", f[path])
+        assert attr not in g.attrs
+        assert isinstance(g[key], h5py.Dataset | zarr.Array)
+    if isinstance(f, h5py.File):
+        f.close()
+    assert_equal(_read(diskfmt_store, diskfmt), adata)
+
+
+def test_write_key_into_non_indexed(
+    diskfmt: Literal["h5ad", "zarr"], diskfmt_store: Path | MemoryStore
+) -> None:
+    """A mapping written without `compat="0.14"` can only be fixed by rewriting it."""
+    adata = ad.AnnData(np.zeros((2, 3)), obsm={"x": np.zeros((2, 2))})
+    _write(adata, diskfmt_store, diskfmt)
+    adata.obsm["a/b"] = np.ones((2, 2))
+    with pytest.raises(ValueError, match=r'whole mapping.*compat="0.14"'):
+        _write(adata, diskfmt_store, diskfmt, use=A.obsm["a/b"], compat="0.14")
+
+    # the suggested workaround works
+    _write(adata, diskfmt_store, diskfmt, use=A.obsm, compat="0.14")
+    assert_equal(_read(diskfmt_store, diskfmt), adata)
+
+
 def test_write_list_invalid_writes_nothing(
     adata: ad.AnnData,
     diskfmt: Literal["h5ad", "zarr"],
@@ -235,6 +337,6 @@ def test_write_list_invalid_writes_nothing(
     _write(adata, diskfmt_store, diskfmt)
     expected = adata.copy()
     adata.X = np.zeros((5, 3))
-    with pytest.raises(ValueError, match=r"only `obs`/`var` columns"):
+    with pytest.raises(ValueError, match=r"only data frame columns"):
         _write(adata, diskfmt_store, diskfmt, use=[A.X, A.obsm["o"][:, 0]])
     assert_equal(_read(diskfmt_store, diskfmt), expected)

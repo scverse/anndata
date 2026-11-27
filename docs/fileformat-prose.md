@@ -18,9 +18,7 @@ The structures are largely equivalent, though there are a few minor differences 
 
  <!-- I’ve started using h5py since I couldn’t figure out a nice way to print attributes from bash. -->
 
-
 `````{tab-set}
-
 ````{tab-item} HDF5
 :sync: hdf5
 
@@ -30,7 +28,6 @@ The structures are largely equivalent, though there are a few minor differences 
 >>> list(store.keys())
 ['X', 'layers', 'obs', 'obsm', 'obsp', 'uns', 'var', 'varm', 'varp']
 ```
-
 ````
 
 ````{tab-item} Zarr
@@ -42,9 +39,7 @@ The structures are largely equivalent, though there are a few minor differences 
 >>> list(store.keys())
 ['X', 'layers', 'obs', 'obsm', 'obsp', 'uns', 'var', 'varm', 'varp']
 ```
-
 ````
-
 `````
 
 <!-- ```bash
@@ -68,7 +63,7 @@ For example, we can see that this file represents an `AnnData` object from its m
 {'encoding-type': 'anndata', 'encoding-version': '0.1.0'}
 ```
 
-Using this information, we're able to dispatch onto readers for the different element types that you'd find in an anndata.
+Using this information, we’re able to dispatch onto readers for the different element types that you’d find in an anndata.
 
 (element)=
 ### Element Specification
@@ -76,6 +71,37 @@ Using this information, we're able to dispatch onto readers for the different el
 - An element can be any object within the storage hierarchy (typically an array or group) with associated metadata
 - An element MUST have a string-valued field `"encoding-type"` in its metadata
 - An element MUST have a string-valued field `"encoding-version"` in its metadata that can be evaluated to a version
+
+(indexed-keys)=
+### Indexed keys
+
+`/` separates groups in both `HDF5` and `zarr`,
+and a `zarr` store commonly maps each key to a real file,
+so a key like `a/b`, `a:b`, `CON`, or a very long one cannot be used as a child name.
+When using newer [mapping](#mapping-indexed) or [dataframe](#dataframe-indexed) specifications[^0.14],
+keys are stored in a {ref}`string array <string-array>` or an attribute
+and name their children by position instead:
+
+- The group MUST contain the keys in order (the *names*), either
+  - as a string array child (the *names array*), or
+  - as an array of strings in its metadata (the *names attribute*)
+
+  but not both.
+  The attribute saves a request + string decompression when opening the group in a remote store,
+  so anndata uses it in `zarr` for names that serialize to at most 4 KiB of JSON
+
+- The element for the *i*th key MUST be the child `{prefix}_{i}`,
+  where `{i}` is *i* in base 10 without sign or leading zeros,
+  and the children MUST be numbered consecutively from `{prefix}_0` with no gaps
+
+- Which names array, names attribute, and prefix to use is part of each encoding’s own specification –
+  see {ref}`dataframes <dataframe-indexed>` and {ref}`mappings <mapping-indexed>`
+
+This is the layout of the [zarr dataframe convention][df-conv],
+so any string works as a key, and child names never hit a file system’s limits.
+
+[df-conv]: https://github.com/scverse/zarr-convention-dataframe
+[^0.14]: Available in the python package as of the `"0.14"` {doc}`write compatibility profile <write-compat>`
 
 (anndata)=
 ### AnnData specification (v0.1.0)
@@ -99,7 +125,6 @@ as they have native equivalents in H5py {doc}`h5py:high/dataset` and {class}`zar
 We can see an example of this with dimensionality reductions stored in the `obsm` group:
 
 `````{tab-set}
-
 ````{tab-item} HDF5
 :sync: hdf5
 
@@ -107,7 +132,6 @@ We can see an example of this with dimensionality reductions stored in the `obsm
 >>> store["obsm/X_pca"]
 <HDF5 dataset "X_pca": shape (164114, 50), type "<f4">
 ```
-
 ````
 
 ````{tab-item} Zarr
@@ -117,9 +141,7 @@ We can see an example of this with dimensionality reductions stored in the `obsm
 >>> store["obsm/X_pca"]
 <zarr.core.Array '/obsm/X_pca' (164114, 50) float32 read-only>
 ```
-
 ````
-
 `````
 
 ```python
@@ -143,7 +165,7 @@ X_umap                   Dataset {38410, 2}
 ## Sparse arrays
 
 Sparse arrays don’t have a native representations in HDF5 or Zarr,
-so we've defined our own based on their in-memory structure.
+so we’ve defined our own based on their in-memory structure.
 Currently two sparse data formats are supported by `AnnData` objects, CSC and CSR
 (corresponding to {class}`scipy.sparse.csc_matrix` and {class}`scipy.sparse.csr_matrix` respectively).
 These formats represent a two-dimensional sparse array with
@@ -155,7 +177,7 @@ but are [easy to find].
 ```
 
 We represent a sparse array as a `Group` on-disk,
-where the kind and shape of the sparse array is defined in the `Group`'s attributes:
+where the kind and shape of the sparse array is defined in the `Group`’s attributes:
 
 ```python
 >>> dict(store["X"].attrs)
@@ -167,7 +189,6 @@ where the kind and shape of the sparse array is defined in the `Group`'s attribu
 The group contains three arrays:
 
 `````{tab-set}
-
 ````{tab-item} HDF5
 :sync: hdf5
 
@@ -177,7 +198,6 @@ data <HDF5 dataset "data": shape (495079432,), type "<f4">
 indices <HDF5 dataset "indices": shape (495079432,), type "<i4">
 indptr <HDF5 dataset "indptr": shape (164115,), type "<i4">
 ```
-
 ````
 
 ````{tab-item} Zarr
@@ -189,9 +209,7 @@ data <zarr.core.Array '/X/data' (495079432,) float32 read-only>
 indices <zarr.core.Array '/X/indices' (495079432,) int32 read-only>
 indptr <zarr.core.Array '/X/indptr' (164115,) int32 read-only>
 ```
-
 ````
-
 `````
 
 (csr_matrix)=
@@ -231,7 +249,6 @@ These attributes identify the index of the dataframe, as well as the original or
 Each column in this dataframe is encoded as its own array.
 
 `````{tab-set}
-
 ````{tab-item} HDF5
 :sync: hdf5
 
@@ -244,7 +261,6 @@ feature_biotype/codes <HDF5 dataset "codes": shape (40145,), type "|i1">
 feature_is_filtered <HDF5 dataset "feature_is_filtered": shape (40145,), type "|b1">
 ...
 ```
-
 ````
 
 ````{tab-item} Zarr
@@ -259,9 +275,7 @@ feature_biotype/codes <zarr.core.Array '/var/feature_biotype/codes' (40145,) int
 feature_is_filtered <zarr.core.Array '/var/feature_is_filtered' (40145,) bool read-only>
 ...
 ```
-
 ````
-
 `````
 
 ```python
@@ -282,7 +296,23 @@ feature_is_filtered <zarr.core.Array '/var/feature_is_filtered' (40145,) bool re
   - MUST contain `"column-order"` an array of strings denoting the order of column entries
 - The group MUST contain an array for the index
 - Each entry in the group MUST correspond to an array with equivalent first dimensions
-- Each entry SHOULD share chunk sizes (in the HDF5 or zarr container)
+
+(dataframe-indexed)=
+### Dataframe Specification (v0.3.0)
+
+The index and columns are stored as {ref}`indexed keys <indexed-keys>`
+following closely, but not declaring, the [zarr dataframe convention][df-conv],
+with the names array `"columns"`, the names attribute `"df:columns"`, and the prefix `"column"`.
+
+- A dataframe MUST be stored as a group
+- The group's metadata:
+  - MUST contain encoding metadata `"encoding-type": "dataframe"`, `"encoding-version": "0.3.0"`
+  - MUST contain `"df:shape"`, the number of rows and the number of columns *including* the index
+  - MAY contain `"df:index"`, the position of the index in `"columns"`.
+    When there is an index, anndata writes it at position `0`
+- The group MUST contain either the string array `"columns"` or the metadata field `"df:columns"`, holding the index name (if any) and the column names
+- An unnamed index MUST be named `""` (the empty string)
+- `"column_{i}"` MUST hold the data for `columns[i]`, each a logical array with equivalent first (and only) dimensions
 
 (mappings)=
 ## Mappings
@@ -294,7 +324,6 @@ including the standard `obsm`, `varm`, `layers`, and `uns`.
 Notably, this definition is used recursively within `uns`:
 
 `````{tab-set}
-
 ````{tab-item} HDF5
 :sync: hdf5
 
@@ -306,7 +335,6 @@ pca/variance <HDF5 dataset "variance": shape (50,), type "<f8">
 pca/variance_ratio <HDF5 dataset "variance_ratio": shape (50,), type "<f8">
 [...]
 ```
-
 ````
 
 ````{tab-item} Zarr
@@ -320,9 +348,7 @@ pca/variance <zarr.core.Array '/uns/pca/variance' (50,) float64 read-only>
 pca/variance_ratio <zarr.core.Array '/uns/pca/variance_ratio' (50,) float64 read-only>
 [...]
 ```
-
 ````
-
 `````
 
 (dict)=
@@ -332,13 +358,25 @@ pca/variance_ratio <zarr.core.Array '/uns/pca/variance_ratio' (50,) float64 read
 - Each mapping MUST be its own group
 - The group's metadata MUST contain the encoding metadata `"encoding-type": "dict"`, `"encoding-version": "0.1.0"`
 
+(mapping-indexed)=
+### Mapping specifications (v0.2.0)
+
+The keys are stored as {ref}`indexed keys <indexed-keys>`,
+with the names array `"keys"` and the prefix `"item"`.
+
+- Each mapping MUST be its own group
+- The group's metadata MUST contain the encoding metadata `"encoding-type": "dict"`, `"encoding-version": "0.2.0"`
+- The group MUST contain either the string array `"keys"` or the metadata field `"dict:keys"`
+  (named by analogy with the dataframe convention’s `"df:columns"`, no convention defines it)
+- `"item_{i}"` MUST hold the element for `keys[i]`
+
 (acc-encoding)=
 ## Accessors
 
 {mod}`anndata.acc` accessors –
 references to a vector or container within an `AnnData`, such as `A.obsm["pca"][0]` –
 are stored as their {meth}`~anndata.acc.AdAcc.to_json` form –
-a list of strings, integers and nulls
+a list of strings, integers, nulls, and nested lists of these
 described by [`acc-schema-v1.json`](acc-schema-v1.json){.external} –
 serialized to a JSON string.
 
@@ -371,7 +409,6 @@ Zero dimensional arrays are used for scalar values (i.e. single values like stri
 These should only occur inside of `uns`, and are commonly saved parameters:
 
 `````{tab-set}
-
 ````{tab-item} HDF5
 :sync: hdf5
 
@@ -382,7 +419,6 @@ metric <HDF5 dataset "metric": shape (), type "|O">
 n_neighbors <HDF5 dataset "n_neighbors": shape (), type "<i8">
 random_state <HDF5 dataset "random_state": shape (), type "<i8">
 ```
-
 ````
 
 ````{tab-item} Zarr
@@ -395,9 +431,7 @@ metric <zarr.core.Array '/uns/neighbors/params/metric' () <U9 read-only>
 n_neighbors <zarr.core.Array '/uns/neighbors/params/n_neighbors' () int64 read-only>
 random_state <zarr.core.Array '/uns/neighbors/params/random_state' () int64 read-only>
 ```
-
 ````
-
 `````
 
 ```python
@@ -436,7 +470,6 @@ To represent a missing value, a code of `-1` is used.
 We store these two arrays separately.
 
 `````{tab-set}
-
 ````{tab-item} HDF5
 :sync: hdf5
 
@@ -445,7 +478,6 @@ We store these two arrays separately.
 categories <HDF5 dataset "categories": shape (7,), type "|O">
 codes <HDF5 dataset "codes": shape (164114,), type "|i1">
 ```
-
 ````
 
 ````{tab-item} Zarr
@@ -456,9 +488,7 @@ codes <HDF5 dataset "codes": shape (164114,), type "|i1">
 categories <zarr.core.Array '/obs/development_stage/categories' (7,) object read-only>
 codes <zarr.core.Array '/obs/development_stage/codes' (164114,) int8 read-only>
 ```
-
 ````
-
 `````
 
 (categorical)=
@@ -474,11 +504,10 @@ codes <zarr.core.Array '/obs/development_stage/codes' (164114,) int8 read-only>
 (string-arrays)=
 ## String arrays
 
-Arrays of strings are handled differently than numeric arrays since numpy doesn't really have a good way of representing arrays of unicode strings.
+Arrays of strings are handled differently than numeric arrays since numpy doesn’t really have a good way of representing arrays of unicode strings.
 `anndata` assumes strings are text-like data, so it uses a variable length encoding.
 
 `````{tab-set}
-
 ````{tab-item} HDF5
 :sync: hdf5
 
@@ -486,7 +515,6 @@ Arrays of strings are handled differently than numeric arrays since numpy doesn'
 >>> store["var"][store["var"].attrs["_index"]]
 <HDF5 dataset "ensembl_id": shape (40145,), type "|O">
 ```
-
 ````
 
 ````{tab-item} Zarr
@@ -496,9 +524,7 @@ Arrays of strings are handled differently than numeric arrays since numpy doesn'
 >>> store["var"][store["var"].attrs["_index"]]
 <zarr.core.Array '/var/ensembl_id' (40145,) object read-only>
 ```
-
 ````
-
 `````
 
 ```python
@@ -522,7 +548,6 @@ We represent these on disk similar to `numpy` masked arrays, `julia` nullable ar
 That is, we store an indicator array (or mask) of null values alongside the array of all values.
 
 `````{tab-set}
-
 ````{tab-item} HDF5
 :sync: hdf5
 
@@ -542,7 +567,6 @@ nullable_integer <HDF5 group "/nullable_integer" (2 members)>
 nullable_integer/mask <HDF5 dataset "mask": shape (4,), type "|b1">
 nullable_integer/values <HDF5 dataset "values": shape (4,), type "<i8">
 ```
-
 ````
 
 ````{tab-item} Zarr
@@ -564,9 +588,7 @@ nullable_integer <zarr.hierarchy.Group '/nullable_integer'>
 nullable_integer/mask <zarr.core.Array '/nullable_integer/mask' (4,) bool>
 nullable_integer/values <zarr.core.Array '/nullable_integer/values' (4,) int64>
 ```
-
 ````
-
 `````
 
 ```python
@@ -632,7 +654,7 @@ ignoring the `"na-value"` attribute (since `character` arrays can not be made to
 **Experimental**
 
 Support for ragged arrays via awkward array is considered experimental under the 0.9.0 release series.
-Please direct feedback on it's implementation to [https://github.com/scverse/anndata](https://github.com/scverse/anndata).
+Please direct feedback on it’s implementation to <https://github.com/scverse/anndata>.
 ```
 
 Ragged arrays are supported in `anndata` through the [Awkward
@@ -642,7 +664,6 @@ break down the awkward array into it’s constituent arrays using
 then writing these arrays using `anndata`’s methods.
 
 `````{tab-set}
-
 ````{tab-item} HDF5
 :sync: hdf5
 
@@ -665,7 +686,6 @@ node7-mask <HDF5 dataset "node7-mask": shape (5019,), type "|u1">
 node8-offsets <HDF5 dataset "node8-offsets": shape (40146,), type "<i8">
 node9-mask <HDF5 dataset "node9-mask": shape (250541,), type "|i1">
 ```
-
 ````
 
 ````{tab-item} Zarr
@@ -690,12 +710,8 @@ node7-mask <zarr.core.Array '/varm/transcript/node7-mask' (5019,) uint8 read-onl
 node8-offsets <zarr.core.Array '/varm/transcript/node8-offsets' (40146,) int64 read-only>
 node9-mask <zarr.core.Array '/varm/transcript/node9-mask' (250541,) int8 read-only>
 ```
-
 ````
-
 `````
-
-
 
 The length of the array is saved to it’s own `"length"` attribute,
 while metadata for the array structure is serialized and saved to the
@@ -759,7 +775,6 @@ type: {
     ensembl_id: ?string
 }
 ```
-
 
 [easy to find]: https://en.wikipedia.org/wiki/Sparse_matrix#Compressed_sparse_row_(CSR,_CRS_or_Yale_format)
 [hdf5]: https://en.wikipedia.org/wiki/Hierarchical_Data_Format

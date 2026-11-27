@@ -30,7 +30,8 @@ jobs:
   # If neither is set, this job fails, `test` is skipped, and the whole workflow fails.
   check:
     name: "Triage: Check if GPU tests are allowed to run"
-    if: ${{ !(github.event.pull_request.user.login == 'pre-commit-ci[bot]' || contains(github.event.pull_request.labels.*.name, 'skip-gpu-ci')) }}
+    # dependabot adds labels `opened`, so skip by author
+    if: ${{ !(github.event.pull_request.user.login == 'dependabot[bot]' || contains(github.event.pull_request.labels.*.name, 'skip-gpu-ci')) }}
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -66,7 +67,7 @@ jobs:
         run: nvidia-smi
 
       - name: Install UV
-        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           enable-cache: true
 

@@ -25,6 +25,8 @@ from .utils import is_float
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Iterator, Mapping, MutableMapping
 
+    from numpy.typing import DTypeLike, NDArray
+
 
 @old_positionals("first_column_names", "dtype")
 def read_csv(
@@ -58,7 +60,7 @@ def read_csv(
 
 
 def read_excel(
-    filename: PathLike[str] | str, sheet: str | int, dtype: str = "float32"
+    filename: PathLike[str] | str, sheet: str | int, dtype: DTypeLike = "float32"
 ) -> AnnData:
     """\
     Read `.xlsx` (Excel) file.
@@ -72,12 +74,14 @@ def read_excel(
         File name to read from.
     sheet
         Name of sheet in Excel file.
+    dtype
+        Numpy data type.
     """
     # rely on pandas for reading an excel file
     from pandas import read_excel
 
     df = read_excel(fspath(filename), sheet)
-    X = df.to_numpy()[:, 1:]
+    X = df.iloc[:, 1:].to_numpy(dtype=dtype)
     row = dict(
         row_names=pandas_as_str(df.iloc[:, 0])
         if settings.restrict_index_types
@@ -91,7 +95,9 @@ def read_excel(
     return AnnData(X, row, col)
 
 
-def read_umi_tools(filename: PathLike[str] | str, dtype=None) -> AnnData:
+def read_umi_tools(
+    filename: PathLike[str] | str, dtype: DTypeLike | None = None
+) -> AnnData:
     """\
     Read a gzipped condensed count matrix from umi_tools.
 
@@ -106,7 +112,7 @@ def read_umi_tools(filename: PathLike[str] | str, dtype=None) -> AnnData:
 
     X = sparse.csr_matrix(
         (table["count"], (table["cell"].cat.codes, table["gene"].cat.codes)),
-        dtype=dtype,
+        dtype=None if dtype is None else np.dtype(dtype),
     )
     obs = pd.DataFrame(index=pd.Index(table["cell"].cat.categories, name="cell"))
     var = pd.DataFrame(index=pd.Index(table["gene"].cat.categories, name="gene"))
@@ -149,7 +155,9 @@ def read_hdf(filename: PathLike[str] | str, key: str) -> AnnData:
 
 
 def _fmt_loom_axis_attrs(
-    input: MutableMapping, idx_name: str, dimm_mapping: Mapping[str, Iterable[str]]
+    input: MutableMapping[str, NDArray[np.generic]],
+    idx_name: str,
+    dimm_mapping: Mapping[str, Iterable[str]],
 ) -> tuple[pd.DataFrame, Mapping[str, np.ndarray]]:
     axis_df = pd.DataFrame()
     axis_mapping = {}
@@ -200,7 +208,7 @@ def read_loom(  # noqa: PLR0912, PLR0913
     dtype: str = "float32",
     obsm_mapping: Mapping[str, Iterable[str]] = MappingProxyType({}),
     varm_mapping: Mapping[str, Iterable[str]] = MappingProxyType({}),
-    **kwargs,
+    **kwargs: object,
 ) -> AnnData:
     """\
     Read `.loom`-formatted hdf5 file.

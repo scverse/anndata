@@ -266,7 +266,17 @@ def test_io_spec_compressed_scalars(
 
 @pytest.mark.parametrize(
     "ref",
-    [A.obsm["pca"][0], A.obsm["pca"], A.X[:, "gene-5"], A.obs["ct"], A.obs.index],
+    [
+        A.obsm["pca"][0],
+        A.obsm["pca"],
+        A.X[:, "gene-5"],
+        A.obs["ct"],
+        A.obs.index,
+        A.uns["a"]["b"],
+        A.obsm["df"].DF["c"],
+        A.uns["n"].AD.uns["m"].AD.obs["x"],
+        A.uns["n"].AD,
+    ],
     ids=str,
 )
 def test_accessor_roundtrip(store: _GroupStorageType, ref: object) -> None:
@@ -275,6 +285,18 @@ def test_accessor_roundtrip(store: _GroupStorageType, ref: object) -> None:
     assert _read_attr(store["ref"].attrs, "encoding-type") == "accessor"
     assert _read_attr(store["ref"].attrs, "accessor-project") == "anndata"
     assert read_elem(store["ref"]) == ref
+
+
+@pytest.mark.parametrize(
+    "elem", [pd.DataFrame({"a": [1, 2]}), {"x": np.zeros(2)}], ids=["df", "dict"]
+)
+def test_write_child_into_indexed_warns(
+    store: _GroupStorageType, elem: pd.DataFrame | dict[str, np.ndarray]
+) -> None:
+    """Writing a child directly bypasses the names array, so readers ignore it."""
+    write_elem(store, "elem", elem, compat="0.14")
+    with pytest.warns(ad.WriteWarning, match=r"readers will ignore it"):
+        write_elem(cast("_GroupStorageType", store["elem"]), "new", np.ones(2))
 
 
 @dataclass(frozen=True)
@@ -850,7 +872,7 @@ def test_categorical_order_type(store):
     assert read_elem(store["unordered"]).ordered is False
 
 
-def test_override_specification():
+def test_override_specification() -> None:
     """Test that trying to overwrite an existing encoding raises an error."""
     from copy import deepcopy
 
@@ -1096,7 +1118,7 @@ def test_h5_unchunked(
 
 
 @pytest.mark.zarr_io
-def test_write_auto_sharded():
+def test_write_auto_sharded() -> None:
     store = MemoryStore()
     adata = gen_adata((100, 10), **GEN_ADATA_NO_XARRAY_ARGS)
     with ad.settings.override(auto_shard_zarr_v3=True):
@@ -1110,7 +1132,7 @@ def test_write_auto_sharded():
     Version(version("zarr")) < Version("3.1.4"),
     reason="autosharding with chosen size was not available",
 )
-def test_write_auto_sharded_size():
+def test_write_auto_sharded_size() -> None:
     z = zarr.open_group(MemoryStore())
     ad.io.write_elem(z, "two_shards", np.arange(101), dataset_kwargs={"chunks": (7,)})
     two_shards = z["two_shards"]
@@ -1122,7 +1144,7 @@ def test_write_auto_sharded_size():
 
 
 @pytest.mark.zarr_io
-def test_write_shards_by_default():
+def test_write_shards_by_default() -> None:
     store = MemoryStore()
     adata = gen_adata((100, 10), **GEN_ADATA_NO_XARRAY_ARGS)
     ad.settings.reset("auto_shard_zarr_v3")
@@ -1135,7 +1157,7 @@ def test_write_shards_by_default():
     Version(version("zarr")) < Version("3.1.4"),
     reason="autosharding with chosen size was not available",
 )
-def test_write_auto_sharded_size_sparse():
+def test_write_auto_sharded_size_sparse() -> None:
     z = zarr.open_group(MemoryStore())
     mat = sparse.random(
         1000, 1000, density=0.5, format="csr", random_state=np.random.default_rng(42)

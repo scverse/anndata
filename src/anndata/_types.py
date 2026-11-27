@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from typing import Any, TypeAlias
 
     from anndata._core.xarray import Dataset2D
-    from anndata.typing import Storable
+    from anndata.typing import Index, Storable
 
     from ._io.specs.registry import (
         IOSpec,
@@ -27,10 +27,6 @@ if TYPE_CHECKING:
         Writer,
     )
     from .compat import XDataset
-
-else:  # https://github.com/tox-dev/sphinx-autodoc-typehints/issues/580
-    type S = StorageType
-    type RWAble = typing.RWAble
 
 
 __all__ = [
@@ -58,7 +54,7 @@ type StorageType = _ArrayStorageType | _GroupStorageType
 
 @set_module("anndata.experimental")
 class Dataset2DIlocIndexer(Protocol):
-    def __getitem__(self, idx: object, /) -> Dataset2D: ...
+    def __getitem__(self, idx: Index, /) -> Dataset2D: ...
 
 
 class _ReadInternal[S: StorageType, RWAble: typing.RWAble](Protocol):

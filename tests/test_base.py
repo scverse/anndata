@@ -28,6 +28,7 @@ from anndata.tests.helpers import (
     get_multiindex_columns_df,
     jnp,
 )
+from anndata.types import AnnDataLike, AnnDataLikeMetadataOnly
 from anndata.utils import asarray
 
 if TYPE_CHECKING:
@@ -166,7 +167,7 @@ def test_creation_error(src, src_arg, dim_msg, dim, dim_arg, msg: str | None):
         AnnData(**{src: src_arg, dim: dim_arg(dim)})
 
 
-def test_invalid_X():
+def test_invalid_X() -> None:
     with pytest.raises(
         ValueError,
         match=r"X needs to be of one of <class 'numpy.ndarray'>.*not <class 'str'>\.",
@@ -174,7 +175,7 @@ def test_invalid_X():
         AnnData("string is not a valid X")
 
 
-def test_create_with_dfs():
+def test_create_with_dfs() -> None:
     X = np.ones((6, 3))
     obs = pd.DataFrame(dict(cat_anno=pd.Categorical(["a", "a", "a", "a", "b", "a"])))
     obs_copy = obs.copy()
@@ -227,20 +228,20 @@ def test_create_from_df_with_obs_and_var():
         AnnData(df, var=var.reset_index())
 
 
-def test_matching_int_index():
+def test_matching_int_index() -> None:
     adata = AnnData(
         pd.DataFrame(dict(a=[0.0, 0.5]), index=[0, 1]), obs=pd.DataFrame(index=[0, 1])
     )
     pd.testing.assert_index_equal(adata.obs_names, pd.Index(["0", "1"]))
 
 
-def test_from_df_and_dict():
+def test_from_df_and_dict() -> None:
     df = pd.DataFrame(dict(a=[0.1, 0.2, 0.3], b=[1.1, 1.2, 1.3]))
     adata = AnnData(df, dict(species=pd.Categorical(["a", "b", "a"])))
     assert adata.obs["species"].tolist() == ["a", "b", "a"]
 
 
-def test_df_warnings():
+def test_df_warnings() -> None:
     df = pd.DataFrame(dict(A=[1, 2, 3], B=[1.0, 2.0, 3.0]), index=["a", "b", "c"])
     with pytest.warns(UserWarning, match=r"X.*dtype float64"):
         adata = AnnData(df)
@@ -307,7 +308,7 @@ def test_convert_matrix(attr, when):
     assert not isinstance(arr, np.matrix), f"{arr} is still a matrix"
 
 
-def test_attr_deletion():
+def test_attr_deletion() -> None:
     full = gen_adata((30, 30))
     # Empty has just X, obs_names, var_names
     empty = AnnData(None, obs=full.obs[[]], var=full.var[[]])
@@ -317,7 +318,7 @@ def test_attr_deletion():
     assert_equal(full, empty, exact=True)
 
 
-def test_names():
+def test_names() -> None:
     adata = AnnData(
         np.array([[1, 2, 3], [4, 5, 6]]),
         dict(obs_names=["A", "B"]),
@@ -408,7 +409,7 @@ def test_setting_dim_index(dim, obs_xdataset, var_xdataset):
     getattr(curr, mapping_attr)["df2"] = fake_m
 
 
-def test_indices_dtypes():
+def test_indices_dtypes() -> None:
     adata = AnnData(
         np.array([[1, 2, 3], [4, 5, 6]]),
         dict(obs_names=["A", "B"]),
@@ -500,7 +501,7 @@ def test_boolean_slicing():
     assert adata[:, vars_selector][0:2, :].X.tolist() == [[1, 2], [4, 5]]
 
 
-def test_oob_boolean_slicing():
+def test_oob_boolean_slicing() -> None:
     len1, len2 = np.random.choice(100, 2, replace=False)
     with pytest.raises(IndexError) as e:
         AnnData(np.empty((len1, 100)))[np.random.randint(0, 2, len2, dtype=bool), :]
@@ -579,7 +580,7 @@ def test_slicing_pd(cls: Callable[[pd.Series], Index1D]):
     assert adata[:, cls(df1["b"]) == "2"].X.tolist() == [[2], [4], [6]]  # type: ignore[union-attr]
 
 
-def test_strings_to_categoricals():
+def test_strings_to_categoricals() -> None:
     adata = AnnData(
         np.array([[1, 2], [3, 4], [5, 6], [7, 8]]), dict(k=["a", "a", "b", "b"])
     )
@@ -587,7 +588,7 @@ def test_strings_to_categoricals():
     assert adata.obs["k"].cat.categories.tolist() == ["a", "b"]
 
 
-def test_slicing_remove_unused_categories():
+def test_slicing_remove_unused_categories() -> None:
     adata = AnnData(
         np.array([[1, 2], [3, 4], [5, 6], [7, 8]]), dict(k=["a", "a", "b", "b"])
     )
@@ -595,7 +596,7 @@ def test_slicing_remove_unused_categories():
     assert adata[2:4].obs["k"].cat.categories.tolist() == ["b"]
 
 
-def test_slicing_dont_remove_unused_categories():
+def test_slicing_dont_remove_unused_categories() -> None:
     with settings.override(remove_unused_categories=False):
         adata = AnnData(
             np.array([[1, 2], [3, 4], [5, 6], [7, 8]]), dict(k=["a", "a", "b", "b"])
@@ -604,7 +605,7 @@ def test_slicing_dont_remove_unused_categories():
         assert adata[2:4].obs["k"].cat.categories.tolist() == ["a", "b"]
 
 
-def test_no_uniqueness_check_gives_repeat_indices():
+def test_no_uniqueness_check_gives_repeat_indices() -> None:
     with settings.override(check_uniqueness=False):
         obs_names = ["0", "0", "1", "1"]
         with warnings.catch_warnings():
@@ -616,7 +617,7 @@ def test_no_uniqueness_check_gives_repeat_indices():
     assert adata.obs_names.tolist() == obs_names
 
 
-def test_get_subset_annotation():
+def test_get_subset_annotation() -> None:
     adata = AnnData(
         np.array([[1, 2, 3], [4, 5, 6]]),
         dict(S=["A", "B"]),
@@ -627,7 +628,7 @@ def test_get_subset_annotation():
     assert adata[0, 0].var["F"].tolist() == ["a"]
 
 
-def test_append_col():
+def test_append_col() -> None:
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]))
 
     adata.obs["new"] = [1, 2]
@@ -649,7 +650,7 @@ def test_delete_col():
     assert adata.obs["o2"].tolist() == [3, 4]
 
 
-def test_set_obs():
+def test_set_obs() -> None:
     adata = AnnData(np.array([[1, 2, 3], [4, 5, 6]]))
 
     adata.obs = pd.DataFrame(dict(a=[3, 4]))
@@ -667,14 +668,14 @@ def test_multicol():
     assert adata.obsm["c"].tolist() == [[0.0, 1.0], [2, 3]]
 
 
-def test_n_obs():
+def test_n_obs() -> None:
     adata = AnnData(np.array([[1, 2], [3, 4], [5, 6]]))
     assert adata.n_obs == 3
     adata1 = adata[:2]
     assert adata1.n_obs == 2
 
 
-def test_equality_comparisons():
+def test_equality_comparisons() -> None:
     adata1 = AnnData(np.array([[1, 2], [3, 4], [5, 6]]))
     adata2 = AnnData(np.array([[1, 2], [3, 4], [5, 6]]))
     with pytest.raises(NotImplementedError):
@@ -689,7 +690,7 @@ def test_equality_comparisons():
         adata1 != 1  # noqa: B015
 
 
-def test_rename_categories():
+def test_rename_categories() -> None:
     X = np.ones((6, 3))
     obs = pd.DataFrame(dict(cat_anno=pd.Categorical(["a", "a", "a", "a", "b", "a"])))
     adata = AnnData(X=X, obs=obs)
@@ -709,7 +710,7 @@ def test_rename_categories():
     assert list(adata.uns["tool"]["cat_array"].dtype.names) == new_categories
 
 
-def test_pickle():
+def test_pickle() -> None:
     import pickle
 
     adata = AnnData()
@@ -717,7 +718,7 @@ def test_pickle():
     assert adata2.obsm.parent is adata2
 
 
-def test_to_df_dense():
+def test_to_df_dense() -> None:
     X_df = adata_dense.to_df()
     layer_df = adata_dense.to_df(layer="test")
 
@@ -820,7 +821,7 @@ def test_to_df_sparse():
     assert df.to_numpy().tolist() == X.tolist()
 
 
-def test_to_df_no_X():
+def test_to_df_no_X() -> None:
     adata = AnnData(
         obs=pd.DataFrame(index=[f"cell-{i:02}" for i in range(20)]),
         var=pd.DataFrame(index=[f"gene-{i:02}" for i in range(30)]),
@@ -848,7 +849,7 @@ def test_to_df_no_X():
     pd.testing.assert_frame_equal(view_actual, view_expected)
 
 
-def test_copy():
+def test_copy() -> None:
     adata_copy = adata_sparse.copy()
 
     def assert_eq_not_id(a, b):
@@ -875,7 +876,7 @@ def test_copy():
             assert_eq_not_id(map_sprs[key], map_copy[key])
 
 
-def test_to_memory_no_copy():
+def test_to_memory_no_copy() -> None:
     adata = gen_adata((3, 5), **GEN_ADATA_NO_XARRAY_ARGS)
     mem = adata.to_memory()
 
@@ -935,3 +936,11 @@ def test_transpose_errors_with_backed_arrays(
     if storage == "h5ad":
         assert isinstance(f, h5py.File)
         f.close()
+
+
+def test_protocol_compatibility(adata: AnnData) -> None:
+    # annotated assignments are checked by mypy, the asserts at runtime
+    a: AnnDataLike = adata
+    assert isinstance(a, AnnDataLike)
+    m: AnnDataLikeMetadataOnly = adata
+    assert isinstance(m, AnnDataLikeMetadataOnly)

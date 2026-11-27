@@ -24,7 +24,7 @@ def test_write_error(
     tmp_path: Path,
     fmt: Literal["zarr", "h5ad", "csvs"],
     key: Literal["obs", "var", "obsm", "varm"],
-):
+) -> None:
     path = tmp_path / "adata.h5ad"
     X = np.random.random((4, 4))
     adata = AnnData(X=X)
