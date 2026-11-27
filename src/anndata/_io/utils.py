@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
+from .._write_compat import WriteCompat
 from ..utils import warn
 
 if TYPE_CHECKING:
@@ -170,18 +171,46 @@ def write_use(
     use: AdRef | RefAcc | MapAcc | AdAcc | Sequence[AdRef | RefAcc | MapAcc | AdAcc],
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    compat: WriteConfig,
+    compat: WriteConfig = WriteCompat.DEFAULT,
+    validate_store_attributes: Mapping[type, Mapping[str, str]] = MappingProxyType({}),
+    validate_toplevel: bool = True,
 ) -> None:
-    """Write only the parts of `adata` referenced by `use` into the existing anndata group `f`."""
+    """Write only the parts of `adata` referenced by `use` into the existing anndata group `f`.
+
+    Parameters
+    ----------
+    f
+        An on-disk storage.
+    adata
+        The :class:`~anndata.AnnData` object.
+    use
+        Accessors for the parts that should be written to disk.
+    dataset_kwargs
+        Keyword arguments to pass to the stores dataset creation function.
+        E.g. for zarr this would be `chunks`, `compressor`.
+    compat
+        Which anndata version’s write behavior to target, see :class:`~anndata.WriteCompat`.
+    validate_store_attributes
+        Attributes that a valid on-disk store must have. These will be verified prior to writing and writing
+        will abort if the on-disk attributes do not match the ones passed here. This is mostly useful for
+        libraries implementing custom on-disk formats on top of anndata, end users should use the default.
+
+        For each type, a dictionary of attributes is specified, e.g. `{AnnData: {"encoding-type": "anndata"}}`.
+    validate_toplevel
+        Whether to validate the attributes of the top-level store. If the calling function has already performed
+        validation, this can be set to `False`.
+
+    """
     from .specs import write_elem
 
     # resolve everything first so an invalid accessor fails before anything is written
     uses = use if isinstance(use, Sequence) else [use]
-    _check_store(f, adata, use)
+    if validate_toplevel:
+        _check_store(f, adata, use, validate_store_attributes)
     targets = [(u, *_descend(f, adata, u)) for u in uses]
     for _, g, inner in targets:
         if g is not f:
-            _check_store(g, inner, use)
+            _check_store(g, inner, use, validate_store_attributes)
     # `g` is the nested group, but `u` resolves its own scope, so pass it the root `adata`
     for g, parent, key, elem in [
         (g, *_resolve_use(g, adata, u)) for u, g, _ in targets
@@ -217,14 +246,26 @@ def write_use(
                 group.attrs["df:shape"] = [n_rows, i + 1]
 
 
-def _check_store(f: _GroupStorageType, adata: AnnData, use: object) -> None:
+def _check_store(
+    f: _GroupStorageType,
+    adata: AnnData,
+    use: object,
+    validate_store_attributes: Mapping[type, Mapping[str, str]],
+) -> None:
     """Check that `f` is an anndata group with the same names as `adata`."""
-    if (
-        f.attrs.get("encoding-type"),
-        f.attrs.get("encoding-version"),
-    ) != ("anndata", "0.1.0"):
-        msg = "Cannot write a subelement of an AnnData object to a store that is not an AnnData store."
-        raise ValueError(msg)
+    attrs = next(
+        (
+            attrs
+            for data_type in type(adata).mro()
+            if (attrs := validate_store_attributes.get(data_type)) is not None
+        ),
+        {"encoding-type": "anndata", "encoding-version": "0.1.0"},
+    )
+    for attrname, attrval_expected in attrs.items():
+        if (attrval := f.attrs.get(attrname)) != attrval_expected:
+            msg = f"Store validation failed: Expected attribute {attrname!r} of group {f.name!r} to have value {attrval_expected!r}, got {attrval!r}."
+            raise ValueError(msg)
+
     for dim in ("obs", "var"):
         on_disk = read_df_index(cast("_GroupStorageType", f[dim]))
         if isinstance(on_disk, pd.RangeIndex):  # AnnData turns these into strings
