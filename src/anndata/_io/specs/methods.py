@@ -40,6 +40,7 @@ from anndata._io.utils import (
 )
 from anndata._types import StorageType
 from anndata._warnings import OldFormatWarning
+from anndata._write_compat import WriteFeatures
 from anndata.compat import (
     AwkArray,
     CupyArray,
@@ -510,10 +511,10 @@ def write_mapping(
 
 
 @_REGISTRY.register_write(
-    h5py.Group, dict, IndexedLayout.DICT.spec, when={"indexed_keys"}
+    h5py.Group, dict, IndexedLayout.DICT.spec, when=WriteFeatures.INDEXED_KEYS
 )
 @_REGISTRY.register_write(
-    zarr.Group, dict, IndexedLayout.DICT.spec, when={"indexed_keys"}
+    zarr.Group, dict, IndexedLayout.DICT.spec, when=WriteFeatures.INDEXED_KEYS
 )
 @suppress_autoshard_warning
 def write_mapping_indexed(
@@ -1235,7 +1236,10 @@ for store_type, df_type in product(_STORE_TYPES, (views.DataFrameView, pd.DataFr
         write_dataframe
     )
     _REGISTRY.register_write(
-        store_type, df_type, IndexedLayout.DATAFRAME.spec, when={"indexed_keys"}
+        store_type,
+        df_type,
+        IndexedLayout.DATAFRAME.spec,
+        when=WriteFeatures.INDEXED_KEYS,
     )(write_dataframe_indexed)
 del store_type, df_type
 
@@ -1673,7 +1677,7 @@ def write_accessor(
 # Includes ones without JSON form like `A.obs`: `to_json` rejects them.
 for store_type, acc_type in product(_STORE_TYPES, (AdRef, RefAcc, AdAcc)):
     _REGISTRY.register_write(
-        store_type, acc_type, IOSpec("accessor", "0.1.0"), when={"accessor"}
+        store_type, acc_type, IOSpec("accessor", "0.1.0"), when=WriteFeatures.ACCESSOR
     )(write_accessor)
 del store_type, acc_type
 

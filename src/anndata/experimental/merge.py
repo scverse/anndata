@@ -32,7 +32,7 @@ from .._core.merge import (
 from .._core.sparse_dataset import BaseCompressedSparseDataset, sparse_dataset
 from .._io.specs import read_elem, write_elem
 from .._io.utils import IndexedLayout, mapping_items, read_df_index
-from .._write_compat import WriteConfig
+from .._write_compat import WriteCompat, WriteFeatures
 from . import read_dispatched, read_elem_lazy
 
 if TYPE_CHECKING:
@@ -196,10 +196,12 @@ def read_as_backed(group: StorageType):
     return read_dispatched(group, callback=callback)
 
 
-def _keep_indexed(groups: Collection[zarr.Group | h5py.Group]) -> WriteConfig:
+def _keep_indexed(groups: Collection[zarr.Group | h5py.Group]) -> WriteFeatures:
     """Store the output’s keys/column names in an array if any input did, as they might need it."""
-    indexed = any(IndexedLayout.of(g) is not None for g in groups)
-    return WriteConfig(indexed_keys=indexed)
+    default = WriteCompat.DEFAULT.features
+    if any(IndexedLayout.of(g) is not None for g in groups):
+        return default | WriteFeatures.INDEXED_KEYS
+    return default & ~WriteFeatures.INDEXED_KEYS
 
 
 def _df_index(group: zarr.Group | h5py.Group, key: str) -> pd.Index:
@@ -303,12 +305,12 @@ def _write_concat_mappings(  # noqa: PLR0913, PLR0917
     reindexers: Sequence[AnyReindexer] | None = None,
     fill_value: Scalar | None = None,
     *,
-    compat: WriteConfig,
+    compat: WriteFeatures,
 ):
     """
     Write a list of mappings to a zarr/h5 group.
     """
-    layout = IndexedLayout.DICT if compat.indexed_keys else None
+    layout = IndexedLayout.DICT if WriteFeatures.INDEXED_KEYS in compat else None
     mapping_group = output_group.create_group(output_path)
     mapping_group.attrs.update({
         "encoding-type": "dict",

@@ -25,7 +25,7 @@ from .. import utils
 from .._core.access import ElementRef
 from .._settings import settings
 from .._warnings import ImplicitModificationWarning
-from .._write_compat import WriteCompat
+from .._write_compat import WriteCompat, WriteFeatures
 from ..compat import (
     AwkArray,
     CSArray,
@@ -90,7 +90,6 @@ if TYPE_CHECKING:
     from anndata.typing import RWAble
 
     from .._types import ReduceFunc
-    from .._write_compat import WriteConfig
     from ..acc import (
         AdAcc,
         AdRef,
@@ -1601,7 +1600,7 @@ class AnnData:  # noqa: PLW1641
         self,
         *,
         store_type: Literal["h5", "zarr"] | None = None,
-        compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
+        compat: WriteCompat | WriteCompatStr | WriteFeatures = WriteCompat.DEFAULT,
     ) -> bool:
         """Whether or not an `AnnData` object can be written to disk for a given store type.
 
@@ -1620,7 +1619,7 @@ class AnnData:  # noqa: PLW1641
             this new type's evaluation as a boolean will not change from the current behavior i.e.,
             `bool(adata.unwriteable())` will always evaluate the same.
         """
-        compat = WriteCompat.or_config(compat)
+        compat = WriteFeatures(compat)
         if _non_2d_message(self.X, name="X") is not None:
             return True
         for value in self.layers.values():
@@ -1784,7 +1783,7 @@ class AnnData:  # noqa: PLW1641
         | AdAcc
         | Sequence[AdRef | RefAcc | MapAcc | AdAcc]
         | None = None,
-        compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
+        compat: WriteCompat | WriteCompatStr | WriteFeatures = WriteCompat.DEFAULT,
     ):
         """\
         Write `.h5ad`-formatted hdf5 file.
@@ -1942,7 +1941,7 @@ class AnnData:  # noqa: PLW1641
         | AdAcc
         | Sequence[AdRef | RefAcc | MapAcc | AdAcc]
         | None = None,
-        compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
+        compat: WriteCompat | WriteCompatStr | WriteFeatures = WriteCompat.DEFAULT,
     ):
         """\
         Write a hierarchical Zarr array store.

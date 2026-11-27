@@ -15,7 +15,7 @@ if TYPE_CHECKING:
         WriteCallback,
         _GroupStorageType,
     )
-    from anndata._write_compat import WriteConfig
+    from anndata._write_compat import WriteFeatures
     from anndata.types import WriteCompatStr
     from anndata.typing import RWAble
 
@@ -50,7 +50,7 @@ def write_dispatched(
     callback: WriteCallback,
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
+    compat: WriteCompat | WriteCompatStr | WriteFeatures = WriteCompat.DEFAULT,
 ) -> None:
     """
     Write elem to store, recursively calling callback at each sub-element.

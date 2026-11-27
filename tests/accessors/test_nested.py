@@ -274,7 +274,7 @@ def test_dims_item_unsupported() -> None:
 
 @pytest.fixture(params=["0.13", "0.14"])
 def compat(request: pytest.FixtureRequest) -> WriteCompatStr:
-    """Write with and without `indexed_keys`, which stores keys apart from child names."""
+    """Write with and without `WriteFeatures.INDEXED_KEYS`, which stores keys apart from child names."""
     return request.param
 
 

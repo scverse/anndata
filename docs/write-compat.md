@@ -44,11 +44,15 @@ can read all files written with profile `"X.Y"`.
 
 ## Picking individual features
 
-Each profile is a {class}`~anndata.WriteConfig` with one boolean flag per feature.
-To pick features individually, pass a {class}`~anndata.WriteConfig` as `compat`:
+Each profile enables a set of {class}`~anndata.WriteFeatures` flags, see {attr}`WriteCompat.features <anndata.WriteCompat.features>`.
+To pick features individually, pass a combination of {class}`~anndata.WriteFeatures` flags as `compat`:
 
 ```python
-adata.write_h5ad("new.h5ad", compat=ad.WriteConfig(accessor=True))
+from anndata import WriteCompat, WriteFeatures
+
+adata.write_h5ad(
+    "new.h5ad", compat=WriteCompat.DEFAULT.features | WriteFeatures.ACCESSOR
+)
 ```
 
 ## Checking before writing
