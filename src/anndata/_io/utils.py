@@ -261,9 +261,9 @@ def _check_store(
         ),
         {"encoding-type": "anndata", "encoding-version": "0.1.0"},
     )
-    for attrname, attrval in attrs.items():
-        if f.attrs.get(attrname) != attrval:
-            msg = f"Cannot write a subelement of a {type(adata)} object to a store that is not a {type(adata)} store."
+    for attrname, attrval_expected in attrs.items():
+        if (attrval := f.attrs.get(attrname)) != attrval_expected:
+            msg = f"Store validation failed: Expected attribute {attrname!r} of group {f.name!r} to have value {attrval_expected!r}, got {attrval!r}."
             raise ValueError(msg)
 
     for dim in ("obs", "var"):
