@@ -183,7 +183,8 @@ class MapAcc[
 ](abc.ABC):
     r"""Accessor for mapping containers."""
 
-    ref_acc_cls: type[R]
+    if TYPE_CHECKING:
+        ref_acc_cls: type[R]
     scope: ScopeAcc | None = None
     """Accessor for the element whose `.AD` cast the mapping is in, see :attr:`anndata.acc.RefAcc.scope`."""
 
