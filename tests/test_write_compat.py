@@ -18,12 +18,15 @@ from anndata.acc import A, AdAcc, AdRef
 from anndata.experimental.backed import Dataset2D
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
-    from typing import Literal
+    from typing import Any, Literal
 
     from zarr.storage import MemoryStore
 
     from anndata.acc import RefAcc
+    from anndata.experimental import IOSpec, StorageType, Write
+    from anndata.typing import RWAble
 
 
 needs_xarray = pytest.mark.skipif(
@@ -370,10 +373,19 @@ def test_callback_iospec_matches_written(
     g = zarr.open_group(zarr.storage.MemoryStore())
     seen: dict[str, str] = {}
 
-    def callback(func, store, k, elem, *, dataset_kwargs, iospec):
+    def callback(
+        func: Write,
+        store: StorageType,
+        k: str,
+        elem: RWAble,
+        *,
+        dataset_kwargs: Mapping[str, Any],
+        iospec: IOSpec,
+    ) -> None:
         func(store, k, elem, dataset_kwargs=dataset_kwargs)
         if iospec.encoding_type in versions:
             seen[iospec.encoding_type] = iospec.encoding_version
+            assert isinstance(store, zarr.Group)
             assert store[k].attrs["encoding-version"] == iospec.encoding_version
 
     elem = {"df": pd.DataFrame({"a": [1, 2]})}
