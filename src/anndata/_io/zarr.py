@@ -16,7 +16,7 @@ from zarr.errors import GroupNotFoundError
 
 from .._core.anndata import AnnData
 from .._warnings import OldFormatWarning
-from .._write_compat import WriteCompat
+from .._write_compat import WriteCompat, WriteFeatures
 from ..compat import _clean_uns, _from_fixed_length_strings
 from ..experimental import read_dispatched, write_dispatched
 from ..utils import warn
@@ -35,7 +35,6 @@ if TYPE_CHECKING:
     from zarr.storage import StoreLike
 
     from .._types import _GroupStorageType
-    from .._write_compat import WriteConfig
     from ..acc import AdAcc, AdRef, MapAcc, RefAcc
     from ..types import WriteCompatStr
     from ..typing import RWAble
@@ -107,7 +106,7 @@ def write_zarr(
     | AdAcc
     | Sequence[AdRef | RefAcc | MapAcc | AdAcc]
     | None = None,
-    compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
+    compat: WriteCompat | WriteCompatStr | WriteFeatures = WriteCompat.DEFAULT,
     **ds_kwargs,
 ) -> None:
     """See :meth:`~anndata.AnnData.write_zarr`."""
@@ -138,7 +137,7 @@ def write_zarr(
                 adata,
                 use,
                 dataset_kwargs=ds_kwargs,
-                compat=WriteCompat.or_config(compat),
+                compat=WriteFeatures(compat),
             )
         else:
             f = zarr.open_group(store, mode="w")

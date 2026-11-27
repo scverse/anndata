@@ -1,69 +1,24 @@
 from __future__ import annotations
 
-import operator
-from dataclasses import dataclass, field, fields
-from enum import Enum
-from types import MethodType
+from enum import Enum, Flag, auto
 from typing import TYPE_CHECKING
 
-from packaging.version import Version
-
 if TYPE_CHECKING:
-    from collections.abc import Callable
-    from typing import Self
-
     from .types import WriteCompatStr
 
 
-def _min_version(version: str) -> Callable[[], bool]:
-    """Make a flag’s default factory: enabled in profiles from `version` on.
-
-    Called without arguments, it checks :attr:`WriteCompat.DEFAULT`.
-    """
-
-    def enabled(profile: str | None = None) -> bool:
-        if profile is None:
-            profile = WriteCompat.DEFAULT._value_
-        return Version(profile) >= Version(version)
-
-    return enabled
-
-
-class _CompareFeatures:
-    """Comparison method applying the `operator` of the same name to both configs’ features."""
-
-    def __set_name__(self, owner: type, name: str) -> None:
-        self.op: Callable[[frozenset[str], frozenset[str]], bool] = getattr(
-            operator, name
-        )
-
-    def __get__(
-        self, obj: WriteConfig | None, owner: type | None = None
-    ) -> Callable[..., bool]:
-        return self if obj is None else MethodType(self, obj)
-
-    def __call__(self, obj: WriteConfig, other: object) -> bool:
-        if not isinstance(other, WriteConfig):
-            return NotImplemented
-        return self.op(obj.features, other.features)
-
-
-@dataclass(kw_only=True, eq=False)
-class WriteConfig:
+class WriteFeatures(Flag):
     """Fine-grained write behavior: one flag per on-disk feature.
 
-    Pass this to a write function’s `compat` argument to pick features individually.
-    Flags you leave out are taken from :attr:`WriteCompat.DEFAULT`.
-    :class:`WriteCompat` profiles are preset instances of this.
-
-    Configs compare by their sets of enabled features,
-    e.g. `a < b` means `b` enables every feature `a` does, and more.
+    Pass a combination of these to a write function’s `compat` argument to pick features individually.
+    Flags you leave out are disabled, so to add one to a profile, combine it with the profile’s
+    :attr:`~WriteCompat.features`, e.g. `WriteCompat.DEFAULT.features | WriteFeatures.ACCESSOR`.
     """
 
-    accessor: bool = field(default_factory=_min_version("0.14"))
+    ACCESSOR = auto()
     """Write :mod:`anndata.acc` accessors using the `accessor` encoding (anndata ≥0.14)."""
 
-    indexed_keys: bool = field(default_factory=_min_version("0.14"))
+    INDEXED_KEYS = auto()
     """Store mapping keys and dataframe column names in an array instead of as child names (anndata ≥0.14).
 
     This allows any string as key, e.g. `a/b`, `a:b`, or `NUL` in :attr:`~anndata.AnnData.uns`,
@@ -72,22 +27,21 @@ class WriteConfig:
     .. _zarr dataframe convention: https://github.com/scverse/zarr-convention-dataframe
     """
 
-    @property
-    def features(self) -> frozenset[str]:
-        """Names of all active flags. Use :func:`dataclasses.fields` to iterate over all flags instead."""
-        return frozenset(f.name for f in fields(self) if getattr(self, f.name))
+    if TYPE_CHECKING:  # https://github.com/python/mypy/issues/16712
 
-    def __hash__(self) -> int:
-        return hash(self.features)
+        def __init__(
+            self, value: WriteFeatures | WriteCompat | WriteCompatStr | int, /
+        ) -> None: ...
 
-    __eq__ = _CompareFeatures()
-    __lt__ = _CompareFeatures()
-    __le__ = _CompareFeatures()
-    __gt__ = _CompareFeatures()
-    __ge__ = _CompareFeatures()
+    @classmethod
+    def _missing_(cls, value: object) -> WriteFeatures:
+        """Make `WriteFeatures(compat)` accept profiles too, normalizing a write function’s `compat`."""
+        if isinstance(value, WriteCompat | str):
+            return WriteCompat(value).features
+        return super()._missing_(value)
 
 
-class WriteCompat(WriteConfig, Enum):
+class WriteCompat(Enum):
     """Which anndata version’s write behavior to target.
 
     Each member is the oldest anndata version whose I/O behavior we promise to be
@@ -113,28 +67,16 @@ class WriteCompat(WriteConfig, Enum):
 
     _value_: str
 
-    if TYPE_CHECKING:  # https://github.com/python/mypy/issues/16712
-
-        def __init__(self, version: WriteCompat | WriteCompatStr, /) -> None: ...
-
-    else:
-
-        def __new__(cls, version: str) -> Self:
-            self = object.__new__(cls)
-            self._value_ = version
-            return self
-
-        def __init__(self, version: str) -> None:
-            # explicit `version`, since `DEFAULT` doesn’t exist yet
-            for f in fields(WriteConfig):
-                setattr(self, f.name, f.default_factory(version))
-
-    @classmethod
-    def or_config(cls, obj: WriteCompatStr | WriteConfig) -> WriteConfig:
-        return cls(obj) if isinstance(obj, str) else obj
+    @property
+    def features(self) -> WriteFeatures:
+        """The features this profile enables."""
+        return _PROFILE_FEATURES[self]
 
     def __str__(self) -> str:
         return self._value_
 
-    def __repr__(self) -> str:  # Enum’s would use the dataclass repr for `_value_`
-        return f"<{type(self).__name__}.{self._name_}: {self._value_!r}>"
+
+_PROFILE_FEATURES = {
+    WriteCompat.V0_13: WriteFeatures(0),
+    WriteCompat.V0_14: WriteFeatures.ACCESSOR | WriteFeatures.INDEXED_KEYS,
+}

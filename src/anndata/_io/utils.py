@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from .._core.sparse_dataset import BaseCompressedSparseDataset
+from .._write_compat import WriteFeatures
 from ..utils import warn
 
 if TYPE_CHECKING:
@@ -31,7 +32,6 @@ if TYPE_CHECKING:
         _GroupStorageType,
         _WriteInternal,
     )
-    from .._write_compat import WriteConfig
     from ..acc import AdAcc, AdRef, DFAcc, MapAcc, RefAcc
     from ..typing import RWAble
     from .specs.registry import IOSpec, Writer
@@ -170,7 +170,7 @@ def write_use(
     use: AdRef | RefAcc | MapAcc | AdAcc | Sequence[AdRef | RefAcc | MapAcc | AdAcc],
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    compat: WriteConfig,
+    compat: WriteFeatures,
 ) -> None:
     """Write only the parts of `adata` referenced by `use` into the existing anndata group `f`."""
     from .specs import write_elem
@@ -494,12 +494,12 @@ def report_write_key_on_error(func):
     return func_wrapper
 
 
-def _check_has_no_slash_key(attr: str, elem: object, *, compat: WriteConfig) -> None:
+def _check_has_no_slash_key(attr: str, elem: object, *, compat: WriteFeatures) -> None:
     """Only attempt to write slash keys where people rely on it for backwards compatibility."""
 
     if attr in {"obs", "var", "uns", "raw"}:
         return  # `write_elem` checks these against `settings.disallow_forward_slash_in_h5ad`
-    if compat.indexed_keys:
+    if WriteFeatures.INDEXED_KEYS in compat:
         return  # keys are stored in an array, not as child names
     assert isinstance(elem, Mapping)
     if any("/" in k for k in elem if k not in {"/", None}):

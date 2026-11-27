@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Mapping
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from functools import partial, singledispatch, wraps
 from types import MappingProxyType
 from typing import TYPE_CHECKING, cast
@@ -18,7 +18,7 @@ from anndata._io.utils import (
 from anndata._settings import settings
 from anndata._types import Read, ReadLazy, _ReadInternal, _ReadLazyInternal
 from anndata._warnings import WriteWarning
-from anndata._write_compat import WriteCompat
+from anndata._write_compat import WriteCompat, WriteFeatures
 from anndata.compat import DaskArray, _read_attr, has_xp
 
 from ...utils import warn
@@ -35,7 +35,6 @@ if TYPE_CHECKING:
         _GroupStorageType,
         _WriteInternal,
     )
-    from anndata._write_compat import WriteConfig
     from anndata.experimental.backed._lazy_arrays import CategoricalArray, MaskedArray
     from anndata.types import WriteCompatStr
     from anndata.typing import RWAble
@@ -82,17 +81,15 @@ class IORegistryError(Exception):
         dest_type: type,
         typ: WriteSrcType,
         *,
-        whens: Iterable[frozenset[str]] = (),
+        whens: Iterable[WriteFeatures] = (),
     ) -> IORegistryError:
         msg = f"No method registered for writing {typ} into {dest_type}"
         if whens := list(whens):
-            reqs = " or ".join(
-                " and ".join(f"`{flag}`" for flag in sorted(w)) for w in whens
-            )
+            reqs = " or ".join(" and ".join(f"`{flag}`" for flag in w) for w in whens)
             msg += f" with the current `compat`: needs flag(s) {reqs}"
             # `WriteCompat` iterates oldest first
             if profile := next(
-                (p for p in WriteCompat if any(w <= p.features for w in whens)), None
+                (p for p in WriteCompat if any(w in p.features for w in whens)), None
             ):
                 msg += f'. Pass `compat="{profile}"` to the write function'
         return cls(msg)
@@ -128,12 +125,12 @@ def write_spec[W: Callable[..., Any]](spec: IOSpec) -> Callable[[W], W]:
     return decorator
 
 
-class _ByFlags[T](dict[frozenset[str], T]):
-    """Values by the :class:`~anndata.WriteConfig` flags they require."""
+class _ByFlags[T](dict[WriteFeatures, T]):
+    """Values by the :class:`~anndata.WriteFeatures` flags they require."""
 
-    def select(self, compat: WriteConfig) -> T | None:
+    def select(self, compat: WriteFeatures) -> T | None:
         """Pick the value requiring the most of `compat`’s enabled flags."""
-        matching = [when for when in self if when <= compat.features]
+        matching = [when for when in self if when in compat]
         if not matching:
             return None
         best = max(matching, key=len)
@@ -163,20 +160,14 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         src_type: WriteSrcType,
         spec: IOSpec | Mapping[str, str],
         *,
-        when: Iterable[str] = frozenset(),
+        when: WriteFeatures = WriteFeatures(0),
     ) -> Callable[[W], W]:
         """Register a writer.
 
-        `when` names :class:`~anndata.WriteConfig` flags that all need to be enabled
+        `when` are :class:`~anndata.WriteFeatures` flags that all need to be enabled
         for this writer to be used. If several writers apply, the one with the most flags wins.
         """
-        from anndata._write_compat import WriteConfig
-
         spec = proc_spec(spec)
-        when = frozenset(when)
-        if unknown := when - {f.name for f in fields(WriteConfig)}:
-            msg = f"Unknown `WriteConfig` flags: {sorted(unknown)}"
-            raise ValueError(msg)
 
         # Record specification for src_type
         specs = self.write_specs.setdefault(src_type, _ByFlags())
@@ -218,7 +209,7 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         return (dest_type, src_type) in self.write
 
     def writeable_types(
-        self, compat: WriteConfig, store_type: Literal["h5", "zarr"] | None = None
+        self, compat: WriteFeatures, store_type: Literal["h5", "zarr"] | None = None
     ) -> set[WriteSrcType]:
         """Source types that have a writer for `compat` (and `store_type`, if given)."""
         return {
@@ -273,7 +264,7 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         raise IORegistryError._from_read_parts(name, self.read_partial, src_type, spec)
 
     def get_spec(
-        self, elem: StorageType, compat: WriteConfig = WriteCompat.DEFAULT
+        self, elem: StorageType, compat: WriteFeatures = WriteCompat.DEFAULT.features
     ) -> IOSpec:
         patterns: list[WriteSrcType] = []
         if isinstance(elem, DaskArray):
@@ -384,11 +375,11 @@ class Writer:
         registry: IORegistry,
         callback: WriteCallback | None = None,
         *,
-        compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
+        compat: WriteCompat | WriteCompatStr | WriteFeatures = WriteCompat.DEFAULT,
     ):
         self.registry = registry
         self.callback = callback
-        self.compat = WriteCompat.or_config(compat)
+        self.compat = WriteFeatures(compat)
 
     def find_write_func(self, dest_type: type, elem: RWAble) -> Write:
         for pattern in _iter_patterns(elem):
@@ -606,7 +597,7 @@ def write_elem(
     elem: RWAble,
     *,
     dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
-    compat: WriteConfig | WriteCompatStr = WriteCompat.DEFAULT,
+    compat: WriteCompat | WriteCompatStr | WriteFeatures = WriteCompat.DEFAULT,
 ) -> None:
     """
     Write an element to a storage group using anndata encoding.
