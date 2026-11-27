@@ -92,7 +92,7 @@ class IORegistryError(Exception):
             msg += f" with the current `compat`: needs flag(s) {reqs}"
             # `WriteCompat` iterates oldest first
             if profile := next(
-                (p for p in WriteCompat if any(w <= p._features for w in whens)), None
+                (p for p in WriteCompat if any(w <= p.features for w in whens)), None
             ):
                 msg += f'. Pass `compat="{profile}"` to the write function'
         return cls(msg)
@@ -133,7 +133,7 @@ class _ByFlags[T](dict[frozenset[str], T]):
 
     def select(self, compat: WriteConfig) -> T | None:
         """Pick the value requiring the most of `compat`’s enabled flags."""
-        matching = [when for when in self if when <= compat._features]
+        matching = [when for when in self if when <= compat.features]
         if not matching:
             return None
         best = max(matching, key=len)

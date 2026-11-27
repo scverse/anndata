@@ -45,7 +45,7 @@ class _CompareFeatures:
     def __call__(self, obj: WriteConfig, other: object) -> bool:
         if not isinstance(other, WriteConfig):
             return NotImplemented
-        return self.op(obj._features, other._features)
+        return self.op(obj.features, other.features)
 
 
 @dataclass(kw_only=True, eq=False)
@@ -73,11 +73,12 @@ class WriteConfig:
     """
 
     @property
-    def _features(self) -> frozenset[str]:
+    def features(self) -> frozenset[str]:
+        """Names of all active flags. Use :func:`dataclasses.fields` to iterate over all flags instead."""
         return frozenset(f.name for f in fields(self) if getattr(self, f.name))
 
     def __hash__(self) -> int:
-        return hash(self._features)
+        return hash(self.features)
 
     __eq__ = _CompareFeatures()
     __lt__ = _CompareFeatures()
