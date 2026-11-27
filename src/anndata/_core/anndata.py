@@ -1632,7 +1632,7 @@ class AnnData:  # noqa: PLW1641
 
         writeable_elems = {
             src_type
-            for (dest_type, src_type, __) in _REGISTRY.write
+            for (dest_type, src_type) in _REGISTRY.write
             if store_type is None or store_type in dest_type.__module__
         }
 

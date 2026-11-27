@@ -77,13 +77,8 @@ class IOSpec:
 # TODO: Should this subclass from LookupError?
 class IORegistryError(Exception):
     @classmethod
-    def _from_write_parts(
-        cls, dest_type: type, typ: WriteSrcType, modifiers: frozenset[str]
-    ) -> IORegistryError:
-        msg = f"No method registered for writing {typ} into {dest_type}"
-        if modifiers:
-            msg += f" with {modifiers}"
-        return cls(msg)
+    def _from_write_parts(cls, dest_type: type, typ: WriteSrcType) -> IORegistryError:
+        return cls(f"No method registered for writing {typ} into {dest_type}")
 
     @classmethod
     def _from_read_parts(
@@ -117,9 +112,9 @@ def write_spec[W: Callable[..., Any]](spec: IOSpec) -> Callable[[W], W]:
 
 
 class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
-    read: dict[tuple[type, IOSpec, frozenset[str]], RI]
-    read_partial: dict[tuple[type, IOSpec, frozenset[str]], Callable]
-    write: dict[tuple[type, WriteSrcType, frozenset[str]], _WriteInternal]
+    read: dict[tuple[type, IOSpec], RI]
+    read_partial: dict[tuple[type, IOSpec], Callable]
+    write: dict[tuple[type, WriteSrcType], _WriteInternal]
     write_specs: dict[WriteSrcType, IOSpec]
 
     def __init__(self) -> None:
@@ -133,10 +128,8 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         dest_type: type[StorageType],
         src_type: WriteSrcType,
         spec: IOSpec | Mapping[str, str],
-        modifiers: Iterable[str] = frozenset(),
     ) -> Callable[[W], W]:
         spec = proc_spec(spec)
-        modifiers = frozenset(modifiers)
 
         # Record specification for src_type
         if src_type in self.write_specs and (spec != self.write_specs[src_type]):
@@ -151,7 +144,7 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
             self.write_specs[src_type] = spec
 
         def _register(func: W) -> W:
-            self.write[(dest_type, src_type, modifiers)] = write_spec(spec)(func)
+            self.write[dest_type, src_type] = write_spec(spec)(func)
             return func
 
         return _register
@@ -160,7 +153,6 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         self,
         dest_type: type,
         src_type: WriteSrcType,
-        modifiers: frozenset[str] = frozenset(),
         *,
         writer: Writer,
     ) -> Write:
@@ -168,30 +160,23 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
 
         if dest_type is h5py.File:
             dest_type = h5py.Group
-        if (dest_type, src_type, modifiers) not in self.write:
-            raise IORegistryError._from_write_parts(dest_type, src_type, modifiers)
-        internal = self.write[(dest_type, src_type, modifiers)]
+        if (dest_type, src_type) not in self.write:
+            raise IORegistryError._from_write_parts(dest_type, src_type)
+        internal = self.write[dest_type, src_type]
         return partial(internal, _writer=writer)
 
-    def has_write(
-        self,
-        dest_type: type,
-        src_type: WriteSrcType,
-        modifiers: frozenset[str],
-    ) -> bool:
-        return (dest_type, src_type, modifiers) in self.write
+    def has_write(self, dest_type: type, src_type: WriteSrcType) -> bool:
+        return (dest_type, src_type) in self.write
 
     def register_read(
         self,
         src_type: type,
         spec: IOSpec | Mapping[str, str],
-        modifiers: Iterable[str] = frozenset(),
     ) -> Callable[[RI], RI]:
         spec = proc_spec(spec)
-        modifiers = frozenset(modifiers)
 
         def _register(func: RI) -> RI:
-            self.read[(src_type, spec, modifiers)] = func
+            self.read[src_type, spec] = func
             return func
 
         return _register
@@ -200,41 +185,30 @@ class IORegistry[RI: (_ReadInternal, _ReadLazyInternal), R: (Read, ReadLazy)]:
         self,
         src_type: type,
         spec: IOSpec,
-        modifiers: frozenset[str] = frozenset(),
         *,
         reader: Reader,
     ) -> R:
-        if (src_type, spec, modifiers) not in self.read:
+        if (src_type, spec) not in self.read:
             raise IORegistryError._from_read_parts("read", self.read, src_type, spec)  # noqa: EM101
         # the registry cannot express that `RI`’s `_reader` type matches `reader`’s
-        internal: Callable[..., Any] = self.read[(src_type, spec, modifiers)]
+        internal: Callable[..., Any] = self.read[src_type, spec]
         return partial(internal, _reader=reader)
 
-    def has_read(
-        self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
-    ) -> bool:
-        return (src_type, spec, modifiers) in self.read
+    def has_read(self, src_type: type, spec: IOSpec) -> bool:
+        return (src_type, spec) in self.read
 
-    def register_read_partial(
-        self,
-        src_type: type,
-        spec: IOSpec | Mapping[str, str],
-        modifiers: Iterable[str] = frozenset(),
-    ):
+    def register_read_partial(self, src_type: type, spec: IOSpec | Mapping[str, str]):
         spec = proc_spec(spec)
-        modifiers = frozenset(modifiers)
 
         def _register(func):
-            self.read_partial[(src_type, spec, modifiers)] = func
+            self.read_partial[src_type, spec] = func
             return func
 
         return _register
 
-    def get_partial_read(
-        self, src_type: type, spec: IOSpec, modifiers: frozenset[str] = frozenset()
-    ):
-        if (src_type, spec, modifiers) in self.read_partial:
-            return self.read_partial[(src_type, spec, modifiers)]
+    def get_partial_read(self, src_type: type, spec: IOSpec):
+        if (src_type, spec) in self.read_partial:
+            return self.read_partial[src_type, spec]
         name = "read_partial"
         raise IORegistryError._from_read_parts(name, self.read_partial, src_type, spec)
 
@@ -306,17 +280,11 @@ class Reader:
         self.callback = callback
 
     @report_read_key_on_error
-    def read_elem(
-        self,
-        elem: StorageType,
-        modifiers: frozenset[str] = frozenset(),
-    ) -> RWAble:
+    def read_elem(self, elem: StorageType) -> RWAble:
         """Read an element from a store. See exported function for more details."""
 
         iospec = get_spec(elem)
-        read_func: Read = self.registry.get_read(
-            type(elem), iospec, modifiers, reader=self
-        )
+        read_func: Read = self.registry.get_read(type(elem), iospec, reader=self)
         if self.callback is None:
             return read_func(elem)
         return self.callback(read_func, elem.name, elem, iospec=iospec)
@@ -327,16 +295,13 @@ class LazyReader(Reader):
     def read_elem(
         self,
         elem: StorageType,
-        modifiers: frozenset[str] = frozenset(),
         chunks: tuple[int | None, ...] | None = None,
         **kwargs,
     ) -> LazyDataStructures:
         """Read a dask element from a store. See exported function for more details."""
 
         iospec = get_spec(elem)
-        read_func: ReadLazy = self.registry.get_read(
-            type(elem), iospec, modifiers, reader=self
-        )
+        read_func: ReadLazy = self.registry.get_read(type(elem), iospec, reader=self)
         if self.callback is not None:
             msg = "Dask reading does not use a callback. Ignoring callback."
             warn(msg, UserWarning)
@@ -365,16 +330,12 @@ class Writer:
         self.callback = callback
         self.compat = WriteCompat.or_config(compat)
 
-    def find_write_func(
-        self, dest_type: type, elem: RWAble, modifiers: frozenset[str]
-    ) -> Write:
+    def find_write_func(self, dest_type: type, elem: RWAble) -> Write:
         for pattern in _iter_patterns(elem):
-            if self.registry.has_write(dest_type, pattern, modifiers):
-                return self.registry.get_write(
-                    dest_type, pattern, modifiers, writer=self
-                )
+            if self.registry.has_write(dest_type, pattern):
+                return self.registry.get_write(dest_type, pattern, writer=self)
         # Raises IORegistryError
-        return self.registry.get_write(dest_type, type(elem), modifiers, writer=self)
+        return self.registry.get_write(dest_type, type(elem), writer=self)
 
     @report_write_key_on_error
     def write_elem(
@@ -384,7 +345,6 @@ class Writer:
         elem: RWAble,
         *,
         dataset_kwargs: Mapping[str, Any] = MappingProxyType({}),
-        modifiers: frozenset[str] = frozenset(),
     ):
         from pathlib import PurePosixPath
 
@@ -421,7 +381,7 @@ class Writer:
         # Normalize array-API (e.g., JAX/CuPy) even if not AnnData
         elem = normalize_nested(elem)
 
-        write_func = self.find_write_func(type(store), elem, modifiers)
+        write_func = self.find_write_func(type(store), elem)
 
         if self.callback is not None:
             write_func = partial(
@@ -617,10 +577,7 @@ def read_elem_partial(
     *,
     items=None,
     indices=(slice(None), slice(None)),
-    modifiers: frozenset[str] = frozenset(),
 ):
     """Read part of an element from an on disk store."""
-    read_partial = _REGISTRY.get_partial_read(
-        type(elem), get_spec(elem), frozenset(modifiers)
-    )
+    read_partial = _REGISTRY.get_partial_read(type(elem), get_spec(elem))
     return read_partial(elem, items=items, indices=indices)
