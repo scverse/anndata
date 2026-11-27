@@ -292,7 +292,7 @@ def written(adata: AnnData, tmp_path: Path, compat: WriteCompatStr) -> Path:
     adata[A.varm["df"].DF["a"]] = 0.0
     adata[A.varm["df"].DF["b"]] = 0.0
     # not in the store
-    adata[A.uns["new"]] = adata[A.uns["nested"]].copy()
+    adata[A.uns["new"]] = adata[A.uns["nested"].AD].copy()
     adata[A.uns["new_df"]] = pd.DataFrame(dict(c=[1]))
     adata[A.uns["foo"]["new"]] = dict(x=1)
     return path
