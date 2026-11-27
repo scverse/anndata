@@ -493,6 +493,12 @@ class BaseCompressedSparseDataset[GroupT: _GroupStorageType](
         row, col = unpack_index(index)
         if isinstance(row, Iterable) and isinstance(col, Iterable):
             row, col = np.ix_(np.asarray(row), np.asarray(col))
+        else:
+            # Normalize 1D iterables (e.g. lists from DataLoader samplers) so
+            # that is_sparse_indexing_overridden sees an ndarray and the
+            # out-of-core path is used instead of to_memory().
+            row = np.asarray(row) if isinstance(row, Iterable) else row
+            col = np.asarray(col) if isinstance(col, Iterable) else col
         return row, col
 
     # TODO: split to other classes?
